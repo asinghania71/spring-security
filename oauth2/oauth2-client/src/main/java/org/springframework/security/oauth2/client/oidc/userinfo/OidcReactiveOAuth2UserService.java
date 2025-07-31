@@ -17,15 +17,11 @@
 package org.springframework.security.oauth2.client.oidc.userinfo;
 
 import java.time.Instant;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Predicate;
-
-import org.springframework.security.oauth2.core.oidc.OidcScopes;
-import reactor.core.publisher.Mono;
 
 import org.springframework.core.convert.TypeDescriptor;
 import org.springframework.core.convert.converter.Converter;
@@ -49,6 +45,8 @@ import org.springframework.security.oauth2.core.oidc.user.OidcUserAuthority;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.util.Assert;
 
+import reactor.core.publisher.Mono;
+
 /**
  * An implementation of an {@link ReactiveOAuth2UserService} that supports OpenID Connect
  * 1.0 Provider's.
@@ -67,9 +65,6 @@ public class OidcReactiveOAuth2UserService implements ReactiveOAuth2UserService<
 
 	private static final Converter<Map<String, Object>, Map<String, Object>> DEFAULT_CLAIM_TYPE_CONVERTER = new ClaimTypeConverter(
 			createDefaultClaimTypeConverters());
-
-	private Set<String> accessibleScopes = new HashSet<>(
-			Arrays.asList(OidcScopes.PROFILE, OidcScopes.EMAIL, OidcScopes.ADDRESS, OidcScopes.PHONE));
 
 	private ReactiveOAuth2UserService<OAuth2UserRequest, OAuth2User> oauth2UserService = new DefaultReactiveOAuth2UserService();
 

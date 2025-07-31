@@ -17,9 +17,7 @@
 package org.springframework.security.oauth2.client.oidc.userinfo;
 
 import java.time.Instant;
-import java.util.Arrays;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.BiFunction;
@@ -30,7 +28,6 @@ import org.springframework.core.convert.TypeDescriptor;
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.client.registration.ClientRegistration;
-import org.springframework.security.oauth2.client.registration.ClientRegistration.ProviderDetails;
 import org.springframework.security.oauth2.client.userinfo.DefaultOAuth2UserService;
 import org.springframework.security.oauth2.client.userinfo.OAuth2UserRequest;
 import org.springframework.security.oauth2.client.userinfo.OAuth2UserService;
@@ -49,7 +46,6 @@ import org.springframework.security.oauth2.core.oidc.user.OidcUser;
 import org.springframework.security.oauth2.core.oidc.user.OidcUserAuthority;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.util.Assert;
-import org.springframework.util.StringUtils;
 
 /**
  * An implementation of an {@link OAuth2UserService} that supports OpenID Connect 1.0
@@ -71,15 +67,12 @@ public class OidcUserService implements OAuth2UserService<OidcUserRequest, OidcU
 	private static final Converter<Map<String, Object>, Map<String, Object>> DEFAULT_CLAIM_TYPE_CONVERTER = new ClaimTypeConverter(
 			createDefaultClaimTypeConverters());
 
-	private Set<String> accessibleScopes = new HashSet<>(
-			Arrays.asList(OidcScopes.PROFILE, OidcScopes.EMAIL, OidcScopes.ADDRESS, OidcScopes.PHONE));
-
 	private OAuth2UserService<OAuth2UserRequest, OAuth2User> oauth2UserService = new DefaultOAuth2UserService();
 
 	private Function<ClientRegistration, Converter<Map<String, Object>, Map<String, Object>>> claimTypeConverterFactory = (
 			clientRegistration) -> DEFAULT_CLAIM_TYPE_CONVERTER;
 
-	private Predicate<OidcUserRequest> retrieveUserInfo = this::shouldRetrieveUserInfo;
+	private Predicate<OidcUserRequest> retrieveUserInfo = OidcUserRequestUtils::shouldRetrieveUserInfo;
 
 	private BiFunction<OidcUserRequest, OidcUserInfo, OidcUser> oidcUserMapper = OidcUserRequestUtils::getUser;
 
@@ -144,37 +137,6 @@ public class OidcUserService implements OAuth2UserService<OidcUserRequest, OidcU
 		return DEFAULT_CLAIM_TYPE_CONVERTER.convert(oauth2User.getAttributes());
 	}
 
-	private boolean shouldRetrieveUserInfo(OidcUserRequest userRequest) {
-		// Auto-disabled if UserInfo Endpoint URI is not provided
-		ProviderDetails providerDetails = userRequest.getClientRegistration().getProviderDetails();
-		if (!StringUtils.hasLength(providerDetails.getUserInfoEndpoint().getUri())) {
-			return false;
-		}
-		// The Claims requested by the profile, email, address, and phone scope values
-		// are returned from the UserInfo Endpoint (as described in Section 5.3.2),
-		// when a response_type value is used that results in an Access Token being
-		// issued.
-		// However, when no Access Token is issued, which is the case for the
-		// response_type=id_token,
-		// the resulting Claims are returned in the ID Token.
-		// The Authorization Code Grant Flow, which is response_type=code, results in an
-		// Access Token being issued.
-		if (AuthorizationGrantType.AUTHORIZATION_CODE
-			.equals(userRequest.getClientRegistration().getAuthorizationGrantType())) {
-			// Return true if there is at least one match between the authorized scope(s)
-			// and accessible scope(s)
-			//
-			// Also return true if authorized scope(s) is empty, because the provider has
-			// not indicated which scopes are accessible via the access token
-			// @formatter:off
-			return this.accessibleScopes.isEmpty()
-					|| CollectionUtils.isEmpty(userRequest.getAccessToken().getScopes())
-					|| CollectionUtils.containsAny(userRequest.getAccessToken().getScopes(), this.accessibleScopes);
-			// @formatter:on
-		}
-		return false;
-	}
-
 	/**
 	 * Sets the {@link OAuth2UserService} used when requesting the user info resource.
 	 * @param oauth2UserService the {@link OAuth2UserService} used when requesting the
@@ -216,7 +178,6 @@ public class OidcUserService implements OAuth2UserService<OidcUserRequest, OidcU
 	@Deprecated(since = "6.3", forRemoval = true)
 	public final void setAccessibleScopes(Set<String> accessibleScopes) {
 		Assert.notNull(accessibleScopes, "accessibleScopes cannot be null");
-		this.accessibleScopes = accessibleScopes;
 	}
 
 	/**

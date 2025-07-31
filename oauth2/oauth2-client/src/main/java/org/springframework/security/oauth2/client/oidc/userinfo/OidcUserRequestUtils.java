@@ -16,6 +16,8 @@
 
 package org.springframework.security.oauth2.client.oidc.userinfo;
 
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.Set;
 
@@ -24,6 +26,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.client.registration.ClientRegistration;
 import org.springframework.security.oauth2.core.AuthorizationGrantType;
 import org.springframework.security.oauth2.core.OAuth2AccessToken;
+import org.springframework.security.oauth2.core.oidc.OidcScopes;
 import org.springframework.security.oauth2.core.oidc.OidcUserInfo;
 import org.springframework.security.oauth2.core.oidc.user.DefaultOidcUser;
 import org.springframework.security.oauth2.core.oidc.user.OidcUser;
@@ -39,6 +42,9 @@ import org.springframework.util.StringUtils;
  */
 final class OidcUserRequestUtils {
 
+	private static Set<String> accessibleScopes = new HashSet<>(
+			Arrays.asList(OidcScopes.PROFILE, OidcScopes.EMAIL, OidcScopes.ADDRESS, OidcScopes.PHONE));
+
 	/**
 	 * Determines if an {@link OidcUserRequest} should attempt to retrieve the user info
 	 * endpoint. Will return true if all of the following are true:
@@ -52,7 +58,7 @@ final class OidcUserRequestUtils {
 	 * @param userRequest
 	 * @return
 	 */
-	static boolean shouldRetrieveUserInfo(OidcUserRequest userRequest, Set<String> accessibleScopes) {
+	static boolean shouldRetrieveUserInfo(OidcUserRequest userRequest) {
 		// Auto-disabled if UserInfo Endpoint URI is not provided
 		ClientRegistration clientRegistration = userRequest.getClientRegistration();
 		if (!StringUtils.hasLength(clientRegistration.getProviderDetails().getUserInfoEndpoint().getUri())) {
