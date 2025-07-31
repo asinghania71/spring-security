@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2025 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,23 +20,29 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
 
-import javax.servlet.Filter;
+import jakarta.servlet.Filter;
 
 import org.springframework.security.web.access.ExceptionTranslationFilter;
 import org.springframework.security.web.access.channel.ChannelProcessingFilter;
 import org.springframework.security.web.access.intercept.AuthorizationFilter;
 import org.springframework.security.web.access.intercept.FilterSecurityInterceptor;
 import org.springframework.security.web.authentication.AnonymousAuthenticationFilter;
+import org.springframework.security.web.authentication.AuthenticationFilter;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.authentication.logout.LogoutFilter;
+import org.springframework.security.web.authentication.ott.GenerateOneTimeTokenFilter;
+import org.springframework.security.web.authentication.ott.OneTimeTokenAuthenticationFilter;
 import org.springframework.security.web.authentication.preauth.AbstractPreAuthenticatedProcessingFilter;
 import org.springframework.security.web.authentication.preauth.x509.X509AuthenticationFilter;
 import org.springframework.security.web.authentication.rememberme.RememberMeAuthenticationFilter;
 import org.springframework.security.web.authentication.switchuser.SwitchUserFilter;
 import org.springframework.security.web.authentication.ui.DefaultLoginPageGeneratingFilter;
 import org.springframework.security.web.authentication.ui.DefaultLogoutPageGeneratingFilter;
+import org.springframework.security.web.authentication.ui.DefaultOneTimeTokenSubmitPageGeneratingFilter;
+import org.springframework.security.web.authentication.ui.DefaultResourcesFilter;
 import org.springframework.security.web.authentication.www.BasicAuthenticationFilter;
 import org.springframework.security.web.authentication.www.DigestAuthenticationFilter;
+import org.springframework.security.web.context.SecurityContextHolderFilter;
 import org.springframework.security.web.context.SecurityContextPersistenceFilter;
 import org.springframework.security.web.context.request.async.WebAsyncManagerIntegrationFilter;
 import org.springframework.security.web.csrf.CsrfFilter;
@@ -45,7 +51,10 @@ import org.springframework.security.web.jaasapi.JaasApiIntegrationFilter;
 import org.springframework.security.web.savedrequest.RequestCacheAwareFilter;
 import org.springframework.security.web.servletapi.SecurityContextHolderAwareRequestFilter;
 import org.springframework.security.web.session.ConcurrentSessionFilter;
+import org.springframework.security.web.session.DisableEncodeUrlFilter;
+import org.springframework.security.web.session.ForceEagerSessionCreationFilter;
 import org.springframework.security.web.session.SessionManagementFilter;
+import org.springframework.security.web.transport.HttpsRedirectFilter;
 import org.springframework.web.filter.CorsFilter;
 
 /**
@@ -67,9 +76,13 @@ final class FilterOrderRegistration {
 
 	FilterOrderRegistration() {
 		Step order = new Step(INITIAL_ORDER, ORDER_STEP);
+		put(DisableEncodeUrlFilter.class, order.next());
+		put(ForceEagerSessionCreationFilter.class, order.next());
 		put(ChannelProcessingFilter.class, order.next());
+		put(HttpsRedirectFilter.class, order.next());
 		order.next(); // gh-8105
 		put(WebAsyncManagerIntegrationFilter.class, order.next());
+		put(SecurityContextHolderFilter.class, order.next());
 		put(SecurityContextPersistenceFilter.class, order.next());
 		put(HeaderWriterFilter.class, order.next());
 		put(CorsFilter.class, order.next());
@@ -79,27 +92,31 @@ final class FilterOrderRegistration {
 				"org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestRedirectFilter",
 				order.next());
 		this.filterToOrder.put(
-				"org.springframework.security.saml2.provider.service.servlet.filter.Saml2WebSsoAuthenticationRequestFilter",
+				"org.springframework.security.saml2.provider.service.web.Saml2WebSsoAuthenticationRequestFilter",
 				order.next());
+		put(GenerateOneTimeTokenFilter.class, order.next());
 		put(X509AuthenticationFilter.class, order.next());
 		put(AbstractPreAuthenticatedProcessingFilter.class, order.next());
 		this.filterToOrder.put("org.springframework.security.cas.web.CasAuthenticationFilter", order.next());
 		this.filterToOrder.put("org.springframework.security.oauth2.client.web.OAuth2LoginAuthenticationFilter",
 				order.next());
 		this.filterToOrder.put(
-				"org.springframework.security.saml2.provider.service.servlet.filter.Saml2WebSsoAuthenticationFilter",
+				"org.springframework.security.saml2.provider.service.web.authentication.Saml2WebSsoAuthenticationFilter",
 				order.next());
 		put(UsernamePasswordAuthenticationFilter.class, order.next());
+		put(OneTimeTokenAuthenticationFilter.class, order.next());
 		order.next(); // gh-8105
-		this.filterToOrder.put("org.springframework.security.openid.OpenIDAuthenticationFilter", order.next());
+		put(DefaultResourcesFilter.class, order.next());
 		put(DefaultLoginPageGeneratingFilter.class, order.next());
 		put(DefaultLogoutPageGeneratingFilter.class, order.next());
+		put(DefaultOneTimeTokenSubmitPageGeneratingFilter.class, order.next());
 		put(ConcurrentSessionFilter.class, order.next());
 		put(DigestAuthenticationFilter.class, order.next());
 		this.filterToOrder.put(
-				"org.springframework.security.oauth2.server.resource.web.BearerTokenAuthenticationFilter",
+				"org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter",
 				order.next());
 		put(BasicAuthenticationFilter.class, order.next());
+		put(AuthenticationFilter.class, order.next());
 		put(RequestCacheAwareFilter.class, order.next());
 		put(SecurityContextHolderAwareRequestFilter.class, order.next());
 		put(JaasApiIntegrationFilter.class, order.next());
@@ -122,11 +139,7 @@ final class FilterOrderRegistration {
 	 * @param position the position to associate with the {@link Filter}
 	 */
 	void put(Class<? extends Filter> filter, int position) {
-		String className = filter.getName();
-		if (this.filterToOrder.containsKey(className)) {
-			return;
-		}
-		this.filterToOrder.put(className, position);
+		this.filterToOrder.putIfAbsent(filter.getName(), position);
 	}
 
 	/**

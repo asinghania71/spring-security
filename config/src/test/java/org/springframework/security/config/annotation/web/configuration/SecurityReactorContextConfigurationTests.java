@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2020 the original author or authors.
+ * Copyright 2002-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,15 +17,20 @@
 package org.springframework.security.config.annotation.web.configuration;
 
 import java.net.URI;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.ThreadFactory;
 
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnJre;
+import org.junit.jupiter.api.condition.JRE;
 import org.junit.jupiter.api.extension.ExtendWith;
 import reactor.core.CoreSubscriber;
 import reactor.core.publisher.BaseSubscriber;
@@ -34,18 +39,26 @@ import reactor.core.publisher.Operators;
 import reactor.test.StepVerifier;
 import reactor.util.context.Context;
 
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.core.task.SimpleAsyncTaskExecutor;
+import org.springframework.core.task.VirtualThreadTaskExecutor;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.authentication.TestingAuthenticationToken;
+import org.springframework.security.config.annotation.SecurityContextChangedListenerConfig;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.SecurityReactorContextConfiguration.SecurityReactorContextSubscriber;
 import org.springframework.security.config.test.SpringTestContext;
 import org.springframework.security.config.test.SpringTestContextExtension;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.context.SecurityContextHolderStrategy;
 import org.springframework.security.oauth2.client.web.reactive.function.client.MockExchangeFunction;
+import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.web.context.request.RequestAttributes;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
@@ -55,6 +68,8 @@ import org.springframework.web.reactive.function.client.ExchangeFilterFunction;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.entry;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 /**
  * Tests for {@link SecurityReactorContextConfiguration}.
@@ -98,14 +113,14 @@ public class SecurityReactorContextConfigurationTests {
 			}
 		};
 		CoreSubscriber<Object> resultSubscriber = this.subscriberRegistrar
-				.createSubscriberIfNecessary(originalSubscriber);
+			.createSubscriberIfNecessary(originalSubscriber);
 		assertThat(resultSubscriber).isSameAs(originalSubscriber);
 	}
 
 	@Test
 	public void createSubscriberIfNecessaryWhenWebSecurityContextAvailableThenCreateWithParentContext() {
 		RequestContextHolder
-				.setRequestAttributes(new ServletRequestAttributes(this.servletRequest, this.servletResponse));
+			.setRequestAttributes(new ServletRequestAttributes(this.servletRequest, this.servletResponse));
 		SecurityContextHolder.getContext().setAuthentication(this.authentication);
 		String testKey = "test_key";
 		String testValue = "test_value";
@@ -119,7 +134,7 @@ public class SecurityReactorContextConfigurationTests {
 		Context resultContext = subscriber.currentContext();
 		assertThat(resultContext.getOrEmpty(testKey)).hasValue(testValue);
 		Map<Object, Object> securityContextAttributes = resultContext
-				.getOrDefault(SecurityReactorContextSubscriber.SECURITY_CONTEXT_ATTRIBUTES, null);
+			.getOrDefault(SecurityReactorContextSubscriber.SECURITY_CONTEXT_ATTRIBUTES, null);
 		assertThat(securityContextAttributes).hasSize(3);
 		assertThat(securityContextAttributes).contains(entry(HttpServletRequest.class, this.servletRequest),
 				entry(HttpServletResponse.class, this.servletResponse),
@@ -129,7 +144,7 @@ public class SecurityReactorContextConfigurationTests {
 	@Test
 	public void createSubscriberIfNecessaryWhenParentContextContainsSecurityContextAttributesThenUseParentContext() {
 		RequestContextHolder
-				.setRequestAttributes(new ServletRequestAttributes(this.servletRequest, this.servletResponse));
+			.setRequestAttributes(new ServletRequestAttributes(this.servletRequest, this.servletResponse));
 		SecurityContextHolder.getContext().setAuthentication(this.authentication);
 		Context parentContext = Context.of(SecurityReactorContextSubscriber.SECURITY_CONTEXT_ATTRIBUTES,
 				new HashMap<>());
@@ -185,7 +200,7 @@ public class SecurityReactorContextConfigurationTests {
 			}
 		});
 		CoreSubscriber<Object> subscriber = this.subscriberRegistrar
-				.createSubscriberIfNecessary(Operators.emptySubscriber());
+			.createSubscriberIfNecessary(Operators.emptySubscriber());
 		assertThat(subscriber).isInstanceOf(SecurityReactorContextConfiguration.SecurityReactorContextSubscriber.class);
 	}
 
@@ -196,11 +211,11 @@ public class SecurityReactorContextConfigurationTests {
 		this.spring.register(SecurityConfig.class).autowire();
 		// Setup for SecurityReactorContextSubscriberRegistrar
 		RequestContextHolder
-				.setRequestAttributes(new ServletRequestAttributes(this.servletRequest, this.servletResponse));
+			.setRequestAttributes(new ServletRequestAttributes(this.servletRequest, this.servletResponse));
 		SecurityContextHolder.getContext().setAuthentication(this.authentication);
 		ClientResponse clientResponseOk = ClientResponse.create(HttpStatus.OK).build();
 		// @formatter:off
-		ExchangeFilterFunction filter = (req, next) -> Mono.subscriberContext()
+		ExchangeFilterFunction filter = (req, next) -> Mono.deferContextual(Mono::just)
 				.filter((ctx) -> ctx.hasKey(SecurityReactorContextSubscriber.SECURITY_CONTEXT_ATTRIBUTES))
 				.map((ctx) -> ctx.get(SecurityReactorContextSubscriber.SECURITY_CONTEXT_ATTRIBUTES))
 				.cast(Map.class)
@@ -222,7 +237,7 @@ public class SecurityReactorContextConfigurationTests {
 		expectedContextAttributes.put(HttpServletResponse.class, this.servletResponse);
 		expectedContextAttributes.put(Authentication.class, this.authentication);
 		Mono<ClientResponse> clientResponseMono = filter.filter(clientRequest, exchange)
-				.flatMap((response) -> filter.filter(clientRequest, exchange));
+			.flatMap((response) -> filter.filter(clientRequest, exchange));
 		// @formatter:off
 		StepVerifier.create(clientResponseMono)
 				.expectAccessibleContext()
@@ -233,11 +248,97 @@ public class SecurityReactorContextConfigurationTests {
 		// @formatter:on
 	}
 
-	@EnableWebSecurity
-	static class SecurityConfig extends WebSecurityConfigurerAdapter {
+	@Test
+	public void createPublisherWhenCustomSecurityContextHolderStrategyThenUses() {
+		this.spring.register(SecurityConfig.class, SecurityContextChangedListenerConfig.class).autowire();
+		SecurityContextHolderStrategy strategy = this.spring.getContext().getBean(SecurityContextHolderStrategy.class);
+		strategy.getContext().setAuthentication(this.authentication);
+		ClientResponse clientResponseOk = ClientResponse.create(HttpStatus.OK).build();
+		// @formatter:off
+		ExchangeFilterFunction filter = (req, next) -> Mono.deferContextual(Mono::just)
+				.filter((ctx) -> ctx.hasKey(SecurityReactorContextSubscriber.SECURITY_CONTEXT_ATTRIBUTES))
+				.map((ctx) -> ctx.get(SecurityReactorContextSubscriber.SECURITY_CONTEXT_ATTRIBUTES))
+				.cast(Map.class)
+				.map((attributes) -> clientResponseOk);
+		// @formatter:on
+		ClientRequest clientRequest = ClientRequest.create(HttpMethod.GET, URI.create("https://example.com")).build();
+		MockExchangeFunction exchange = new MockExchangeFunction();
+		Map<Object, Object> expectedContextAttributes = new HashMap<>();
+		expectedContextAttributes.put(HttpServletRequest.class, null);
+		expectedContextAttributes.put(HttpServletResponse.class, null);
+		expectedContextAttributes.put(Authentication.class, this.authentication);
+		Mono<ClientResponse> clientResponseMono = filter.filter(clientRequest, exchange)
+			.flatMap((response) -> filter.filter(clientRequest, exchange));
+		// @formatter:off
+		StepVerifier.create(clientResponseMono)
+				.expectAccessibleContext()
+				.contains(SecurityReactorContextSubscriber.SECURITY_CONTEXT_ATTRIBUTES, expectedContextAttributes)
+				.then()
+				.expectNext(clientResponseOk)
+				.verifyComplete();
+		// @formatter:on
+		verify(strategy, times(2)).getContext();
+	}
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+	@Test
+	public void createPublisherWhenThreadFactoryIsPlatformThenSecurityContextAttributesAvailable() throws Exception {
+		this.spring.register(SecurityConfig.class).autowire();
+
+		ThreadFactory threadFactory = Executors.defaultThreadFactory();
+		assertContextAttributesAvailable(threadFactory);
+	}
+
+	@Test
+	@DisabledOnJre(JRE.JAVA_17)
+	public void createPublisherWhenThreadFactoryIsVirtualThenSecurityContextAttributesAvailable() throws Exception {
+		this.spring.register(SecurityConfig.class).autowire();
+
+		ThreadFactory threadFactory = new VirtualThreadTaskExecutor().getVirtualThreadFactory();
+		assertContextAttributesAvailable(threadFactory);
+	}
+
+	private void assertContextAttributesAvailable(ThreadFactory threadFactory) throws Exception {
+		Map<Object, Object> expectedContextAttributes = new HashMap<>();
+		expectedContextAttributes.put(HttpServletRequest.class, this.servletRequest);
+		expectedContextAttributes.put(HttpServletResponse.class, this.servletResponse);
+		expectedContextAttributes.put(Authentication.class, this.authentication);
+
+		try (SimpleAsyncTaskExecutor taskExecutor = new SimpleAsyncTaskExecutor(threadFactory)) {
+			Future<Map<Object, Object>> future = taskExecutor.submit(this::propagateRequestAttributes);
+			assertThat(future.get()).isEqualTo(expectedContextAttributes);
+		}
+	}
+
+	private Map<Object, Object> propagateRequestAttributes() {
+		RequestAttributes requestAttributes = new ServletRequestAttributes(this.servletRequest, this.servletResponse);
+		RequestContextHolder.setRequestAttributes(requestAttributes);
+
+		SecurityContext securityContext = SecurityContextHolder.createEmptyContext();
+		securityContext.setAuthentication(this.authentication);
+		SecurityContextHolder.setContext(securityContext);
+
+		// @formatter:off
+		return Mono.deferContextual(Mono::just)
+				.filter((ctx) -> ctx.hasKey(SecurityReactorContextSubscriber.SECURITY_CONTEXT_ATTRIBUTES))
+				.map((ctx) -> ctx.<Map<Object, Object>>get(SecurityReactorContextSubscriber.SECURITY_CONTEXT_ATTRIBUTES))
+				.map((attributes) -> {
+					Map<Object, Object> map = new HashMap<>();
+					// Copy over items from lazily loaded map
+					Arrays.asList(HttpServletRequest.class, HttpServletResponse.class, Authentication.class)
+							.forEach((key) -> map.put(key, attributes.get(key)));
+					return map;
+				})
+				.block();
+		// @formatter:on
+	}
+
+	@Configuration
+	@EnableWebSecurity
+	static class SecurityConfig {
+
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+			return http.build();
 		}
 
 	}

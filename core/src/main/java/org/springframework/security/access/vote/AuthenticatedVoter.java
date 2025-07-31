@@ -45,7 +45,11 @@ import org.springframework.util.Assert;
  * All comparisons and prefixes are case sensitive.
  *
  * @author Ben Alex
+ * @deprecated Use
+ * {@link org.springframework.security.authorization.AuthorityAuthorizationManager}
+ * instead
  */
+@Deprecated
 public class AuthenticatedVoter implements AccessDecisionVoter<Object> {
 
 	public static final String IS_AUTHENTICATED_FULLY = "IS_AUTHENTICATED_FULLY";
@@ -57,8 +61,7 @@ public class AuthenticatedVoter implements AccessDecisionVoter<Object> {
 	private AuthenticationTrustResolver authenticationTrustResolver = new AuthenticationTrustResolverImpl();
 
 	private boolean isFullyAuthenticated(Authentication authentication) {
-		return (!this.authenticationTrustResolver.isAnonymous(authentication)
-				&& !this.authenticationTrustResolver.isRememberMe(authentication));
+		return this.authenticationTrustResolver.isFullyAuthenticated(authentication);
 	}
 
 	public void setAuthenticationTrustResolver(AuthenticationTrustResolver authenticationTrustResolver) {

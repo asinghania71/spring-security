@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2013 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,9 +16,11 @@
 
 package org.springframework.security.config.annotation.web.configurers;
 
+import org.springframework.http.HttpMethod;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.HttpSecurityBuilder;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.authentication.ForwardAuthenticationFailureHandler;
 import org.springframework.security.web.authentication.ForwardAuthenticationSuccessHandler;
@@ -26,7 +28,6 @@ import org.springframework.security.web.authentication.RememberMeServices;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.authentication.session.SessionAuthenticationStrategy;
 import org.springframework.security.web.authentication.ui.DefaultLoginPageGeneratingFilter;
-import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 import org.springframework.security.web.util.matcher.RequestMatcher;
 
 /**
@@ -73,7 +74,7 @@ public final class FormLoginConfigurer<H extends HttpSecurityBuilder<H>> extends
 
 	/**
 	 * Creates a new instance
-	 * @see HttpSecurity#formLogin()
+	 * @see HttpSecurity#formLogin(Customizer)
 	 */
 	public FormLoginConfigurer() {
 		super(new UsernamePasswordAuthenticationFilter(), null);
@@ -84,15 +85,15 @@ public final class FormLoginConfigurer<H extends HttpSecurityBuilder<H>> extends
 	/**
 	 * <p>
 	 * Specifies the URL to send users to if login is required. If used with
-	 * {@link WebSecurityConfigurerAdapter} a default login page will be generated when
-	 * this attribute is not specified.
+	 * {@link EnableWebSecurity} a default login page will be generated when this
+	 * attribute is not specified.
 	 * </p>
 	 *
 	 * <p>
 	 * If a URL is specified or this is not being used in conjunction with
-	 * {@link WebSecurityConfigurerAdapter}, users are required to process the specified
-	 * URL to generate a login page. In general, the login page should create a form that
-	 * submits a request with the following requirements to work with
+	 * {@link EnableWebSecurity}, users are required to process the specified URL to
+	 * generate a login page. In general, the login page should create a form that submits
+	 * a request with the following requirements to work with
 	 * {@link UsernamePasswordAuthenticationFilter}:
 	 * </p>
 	 *
@@ -234,7 +235,7 @@ public final class FormLoginConfigurer<H extends HttpSecurityBuilder<H>> extends
 
 	@Override
 	protected RequestMatcher createLoginProcessingUrlMatcher(String loginProcessingUrl) {
-		return new AntPathRequestMatcher(loginProcessingUrl, "POST");
+		return getRequestMatcherBuilder().matcher(HttpMethod.POST, loginProcessingUrl);
 	}
 
 	/**
@@ -260,7 +261,7 @@ public final class FormLoginConfigurer<H extends HttpSecurityBuilder<H>> extends
 	 */
 	private void initDefaultLoginFilter(H http) {
 		DefaultLoginPageGeneratingFilter loginPageGeneratingFilter = http
-				.getSharedObject(DefaultLoginPageGeneratingFilter.class);
+			.getSharedObject(DefaultLoginPageGeneratingFilter.class);
 		if (loginPageGeneratingFilter != null && !isCustomLoginPage()) {
 			loginPageGeneratingFilter.setFormLoginEnabled(true);
 			loginPageGeneratingFilter.setUsernameParameter(getUsernameParameter());

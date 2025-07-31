@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2019 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,7 @@
 
 package org.springframework.security.test.web.servlet.setup;
 
-import javax.servlet.Filter;
-
+import jakarta.servlet.Filter;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
@@ -57,8 +56,10 @@ public class SecurityMockMvcConfigurersTests {
 	 */
 	@Test
 	public void applySpringSecurityWhenAddFilterFirstThenFilterFirst() throws Exception {
-		MockMvc mockMvc = MockMvcBuilders.webAppContextSetup(this.wac).addFilters(this.noOpFilter)
-				.apply(springSecurity()).build();
+		MockMvc mockMvc = MockMvcBuilders.webAppContextSetup(this.wac)
+			.addFilters(this.noOpFilter)
+			.apply(springSecurity())
+			.build();
 		mockMvc.perform(get("/")).andExpect(status().isOk());
 	}
 
@@ -70,8 +71,10 @@ public class SecurityMockMvcConfigurersTests {
 	 */
 	@Test
 	public void applySpringSecurityWhenAddFilterSecondThenSecurityFirst() throws Exception {
-		MockMvc mockMvc = MockMvcBuilders.webAppContextSetup(this.wac).apply(springSecurity())
-				.addFilters(this.noOpFilter).build();
+		MockMvc mockMvc = MockMvcBuilders.webAppContextSetup(this.wac)
+			.apply(springSecurity())
+			.addFilters(this.noOpFilter)
+			.build();
 		mockMvc.perform(get("/")).andExpect(status().is4xxClientError());
 	}
 

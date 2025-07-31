@@ -18,10 +18,9 @@ package org.springframework.security.config.http;
 
 import java.util.List;
 
-import javax.servlet.Filter;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-
+import jakarta.servlet.Filter;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
@@ -34,7 +33,9 @@ import org.springframework.security.config.test.SpringTestContext;
 import org.springframework.security.config.test.SpringTestContextExtension;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.core.context.SecurityContextHolderStrategy;
 import org.springframework.security.web.FilterChainProxy;
+import org.springframework.security.web.PortResolver;
 import org.springframework.security.web.authentication.AuthenticationFailureHandler;
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
 import org.springframework.security.web.authentication.ui.DefaultLoginPageGeneratingFilter;
@@ -45,6 +46,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.verify;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -68,7 +72,7 @@ public class FormLoginConfigTests {
 
 	@Test
 	public void getProtectedPageWhenFormLoginConfiguredThenRedirectsToDefaultLoginPage() throws Exception {
-		this.spring.configLocations(this.xml("WithAntRequestMatcher")).autowire();
+		this.spring.configLocations(this.xml("WithRequestMatcher")).autowire();
 		// @formatter:off
 		this.mvc.perform(get("/"))
 				.andExpect(redirectedUrl("http://localhost/login"));
@@ -112,13 +116,13 @@ public class FormLoginConfigTests {
 	@Test
 	public void autowireWhenLoginPageIsMisconfiguredThenDetects() {
 		assertThatExceptionOfType(BeanCreationException.class)
-				.isThrownBy(() -> this.spring.configLocations(this.xml("NoLeadingSlashLoginPage")).autowire());
+			.isThrownBy(() -> this.spring.configLocations(this.xml("NoLeadingSlashLoginPage")).autowire());
 	}
 
 	@Test
 	public void autowireWhenDefaultTargetUrlIsMisconfiguredThenDetects() {
 		assertThatExceptionOfType(BeanCreationException.class)
-				.isThrownBy(() -> this.spring.configLocations(this.xml("NoLeadingSlashDefaultTargetUrl")).autowire());
+			.isThrownBy(() -> this.spring.configLocations(this.xml("NoLeadingSlashDefaultTargetUrl")).autowire());
 	}
 
 	@Test
@@ -144,7 +148,15 @@ public class FormLoginConfigTests {
 	public void authenticateWhenCustomUsernameAndPasswordParametersThenSucceeds() throws Exception {
 		this.spring.configLocations(this.xml("WithUsernameAndPasswordParameters")).autowire();
 		this.mvc.perform(post("/login").param("xname", "user").param("xpass", "password").with(csrf()))
-				.andExpect(redirectedUrl("/"));
+			.andExpect(redirectedUrl("/"));
+	}
+
+	@Test
+	public void authenticateWhenCustomSecurityContextHolderStrategyThenUses() throws Exception {
+		this.spring.configLocations(this.xml("WithCustomSecurityContextHolderStrategy")).autowire();
+		SecurityContextHolderStrategy strategy = this.spring.getContext().getBean(SecurityContextHolderStrategy.class);
+		this.mvc.perform(post("/login").with(csrf())).andExpect(redirectedUrl("/login?error"));
+		verify(strategy, atLeastOnce()).getContext();
 	}
 
 	/**
@@ -198,6 +210,17 @@ public class FormLoginConfigTests {
 		this.mvc.perform(loginRequest)
 				.andExpect(redirectedUrl("/login?error"));
 		// @formatter:on
+	}
+
+	@Test
+	public void portResolver() throws Exception {
+		this.spring.configLocations(this.xml("PortResolverBean")).autowire();
+		// @formatter:off
+		this.mvc.perform(get("/requires-authentication"))
+				.andExpect(status().is3xxRedirection());
+		// @formatter:on
+		PortResolver portResolver = this.spring.getContext().getBean(PortResolver.class);
+		verify(portResolver, atLeastOnce()).getServerPort(any());
 	}
 
 	private Filter getFilter(ApplicationContext context, Class<? extends Filter> filterClass) {

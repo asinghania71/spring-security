@@ -16,8 +16,7 @@
 
 package org.springframework.security.web.access.channel;
 
-import javax.servlet.FilterChain;
-
+import jakarta.servlet.FilterChain;
 import org.junit.jupiter.api.Test;
 
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -28,6 +27,7 @@ import org.springframework.security.web.FilterInvocation;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.mockito.Mockito.mock;
+import static org.springframework.security.web.servlet.TestMockHttpServletRequests.get;
 
 /**
  * Tests {@link SecureChannelProcessor}.
@@ -38,14 +38,9 @@ public class SecureChannelProcessorTests {
 
 	@Test
 	public void testDecideDetectsAcceptableChannel() throws Exception {
-		MockHttpServletRequest request = new MockHttpServletRequest();
-		request.setQueryString("info=true");
-		request.setServerName("localhost");
-		request.setContextPath("/bigapp");
-		request.setServletPath("/servlet");
-		request.setScheme("https");
-		request.setSecure(true);
-		request.setServerPort(8443);
+		MockHttpServletRequest request = get("https://localhost:8443").requestUri("/bigapp", "/servlet", null)
+			.queryString("info=true")
+			.build();
 		MockHttpServletResponse response = new MockHttpServletResponse();
 		FilterInvocation fi = new FilterInvocation(request, response, mock(FilterChain.class));
 		SecureChannelProcessor processor = new SecureChannelProcessor();
@@ -55,13 +50,9 @@ public class SecureChannelProcessorTests {
 
 	@Test
 	public void testDecideDetectsUnacceptableChannel() throws Exception {
-		MockHttpServletRequest request = new MockHttpServletRequest();
-		request.setQueryString("info=true");
-		request.setServerName("localhost");
-		request.setContextPath("/bigapp");
-		request.setServletPath("/servlet");
-		request.setScheme("http");
-		request.setServerPort(8080);
+		MockHttpServletRequest request = get("http://localhost:8080").requestUri("/bigapp", "/servlet", null)
+			.queryString("info=true")
+			.build();
 		MockHttpServletResponse response = new MockHttpServletResponse();
 		FilterInvocation fi = new FilterInvocation(request, response, mock(FilterChain.class));
 		SecureChannelProcessor processor = new SecureChannelProcessor();
@@ -93,7 +84,7 @@ public class SecureChannelProcessorTests {
 		SecureChannelProcessor processor = new SecureChannelProcessor();
 		processor.setEntryPoint(null);
 		assertThatIllegalArgumentException().isThrownBy(processor::afterPropertiesSet)
-				.withMessage("entryPoint required");
+			.withMessage("entryPoint required");
 	}
 
 	@Test
@@ -101,10 +92,10 @@ public class SecureChannelProcessorTests {
 		SecureChannelProcessor processor = new SecureChannelProcessor();
 		processor.setSecureKeyword(null);
 		assertThatIllegalArgumentException().isThrownBy(processor::afterPropertiesSet)
-				.withMessage("secureKeyword required");
+			.withMessage("secureKeyword required");
 		processor.setSecureKeyword("");
 		assertThatIllegalArgumentException().isThrownBy(() -> processor.afterPropertiesSet())
-				.withMessage("secureKeyword required");
+			.withMessage("secureKeyword required");
 	}
 
 	@Test

@@ -16,8 +16,7 @@
 
 package org.springframework.security.test.web.servlet.request;
 
-import javax.servlet.http.HttpServletResponse;
-
+import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -62,7 +61,7 @@ public class SecurityMockMvcRequestPostProcessorsAuthenticationTests {
 	public void setup() {
 		this.request = new MockHttpServletRequest();
 		this.webTestUtils.when(() -> WebTestUtils.getSecurityContextRepository(this.request))
-				.thenReturn(this.repository);
+			.thenReturn(this.repository);
 	}
 
 	@AfterEach

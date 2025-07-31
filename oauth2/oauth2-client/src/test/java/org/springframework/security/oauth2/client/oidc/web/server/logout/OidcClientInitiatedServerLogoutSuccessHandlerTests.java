@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2020 the original author or authors.
+ * Copyright 2002-2025 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,9 +19,9 @@ package org.springframework.security.oauth2.client.oidc.web.server.logout;
 import java.io.IOException;
 import java.net.URI;
 import java.util.Collections;
+import java.util.Objects;
 
-import javax.servlet.ServletException;
-
+import jakarta.servlet.ServletException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import reactor.core.publisher.Mono;
@@ -37,14 +37,18 @@ import org.springframework.security.oauth2.client.registration.ReactiveClientReg
 import org.springframework.security.oauth2.client.registration.TestClientRegistrations;
 import org.springframework.security.oauth2.core.oidc.user.TestOidcUsers;
 import org.springframework.security.oauth2.core.user.TestOAuth2Users;
+import org.springframework.security.web.server.ServerRedirectStrategy;
 import org.springframework.security.web.server.WebFilterExchange;
 import org.springframework.web.server.ServerWebExchange;
 import org.springframework.web.server.WebFilterChain;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 /**
  * Tests for {@link OidcClientInitiatedServerLogoutSuccessHandler}
@@ -124,19 +128,7 @@ public class OidcClientInitiatedServerLogoutSuccessHandlerTests {
 	}
 
 	@Test
-	public void logoutWhenUsingPostLogoutRedirectUriThenIncludesItInRedirect() {
-		OAuth2AuthenticationToken token = new OAuth2AuthenticationToken(TestOidcUsers.create(),
-				AuthorityUtils.NO_AUTHORITIES, this.registration.getRegistrationId());
-		given(this.exchange.getPrincipal()).willReturn(Mono.just(token));
-		WebFilterExchange f = new WebFilterExchange(this.exchange, this.chain);
-		this.handler.setPostLogoutRedirectUri(URI.create("https://postlogout?encodedparam=value"));
-		this.handler.onLogoutSuccess(f, token).block();
-		assertThat(redirectedUrl(this.exchange)).isEqualTo("https://endpoint?" + "id_token_hint=id-token&"
-				+ "post_logout_redirect_uri=https://postlogout?encodedparam%3Dvalue");
-	}
-
-	@Test
-	public void logoutWhenUsingPostLogoutRedirectUriTemplateThenBuildsItForRedirect()
+	public void logoutWhenUsingPostLogoutBaseUrlRedirectUriTemplateThenBuildsItForRedirect()
 			throws IOException, ServletException {
 		OAuth2AuthenticationToken token = new OAuth2AuthenticationToken(TestOidcUsers.create(),
 				AuthorityUtils.NO_AUTHORITIES, this.registration.getRegistrationId());
@@ -164,13 +156,92 @@ public class OidcClientInitiatedServerLogoutSuccessHandlerTests {
 	}
 
 	@Test
-	public void setPostLogoutRedirectUriWhenGivenNullThenThrowsException() {
-		assertThatIllegalArgumentException().isThrownBy(() -> this.handler.setPostLogoutRedirectUri((URI) null));
+	public void logoutWhenUsingPostLogoutRedirectUriTemplateThenBuildsItForRedirect() {
+		OAuth2AuthenticationToken token = new OAuth2AuthenticationToken(TestOidcUsers.create(),
+				AuthorityUtils.NO_AUTHORITIES, this.registration.getRegistrationId());
+		given(this.exchange.getPrincipal()).willReturn(Mono.just(token));
+		MockServerHttpRequest request = MockServerHttpRequest.get("https://rp.example.org/").build();
+		given(this.exchange.getRequest()).willReturn(request);
+		WebFilterExchange f = new WebFilterExchange(this.exchange, this.chain);
+		this.handler.setPostLogoutRedirectUri("{baseScheme}://{baseHost}{basePort}{basePath}");
+		this.handler.onLogoutSuccess(f, token).block();
+		assertThat(redirectedUrl(this.exchange)).isEqualTo(
+				"https://endpoint?" + "id_token_hint=id-token&" + "post_logout_redirect_uri=https://rp.example.org");
+	}
+
+	@Test
+	public void logoutWhenUsingPostLogoutRedirectUriTemplateWithOtherPortThenBuildsItForRedirect() {
+		OAuth2AuthenticationToken token = new OAuth2AuthenticationToken(TestOidcUsers.create(),
+				AuthorityUtils.NO_AUTHORITIES, this.registration.getRegistrationId());
+		given(this.exchange.getPrincipal()).willReturn(Mono.just(token));
+		MockServerHttpRequest request = MockServerHttpRequest.get("https://rp.example.org:400").build();
+		given(this.exchange.getRequest()).willReturn(request);
+		WebFilterExchange f = new WebFilterExchange(this.exchange, this.chain);
+		this.handler.setPostLogoutRedirectUri("{baseScheme}://{baseHost}{basePort}{basePath}");
+		this.handler.onLogoutSuccess(f, token).block();
+		assertThat(redirectedUrl(this.exchange)).isEqualTo("https://endpoint?" + "id_token_hint=id-token&"
+				+ "post_logout_redirect_uri=https://rp.example.org:400");
+	}
+
+	@Test
+	public void logoutWhenUsingPostLogoutRedirectUriTemplateThenBuildsItForRedirectExpanded()
+			throws IOException, ServletException {
+		OAuth2AuthenticationToken token = new OAuth2AuthenticationToken(TestOidcUsers.create(),
+				AuthorityUtils.NO_AUTHORITIES, this.registration.getRegistrationId());
+		given(this.exchange.getPrincipal()).willReturn(Mono.just(token));
+		MockServerHttpRequest request = MockServerHttpRequest.get("https://rp.example.org/").build();
+		given(this.exchange.getRequest()).willReturn(request);
+		WebFilterExchange f = new WebFilterExchange(this.exchange, this.chain);
+		this.handler.setPostLogoutRedirectUri("{baseUrl}/{registrationId}");
+		this.handler.onLogoutSuccess(f, token).block();
+		assertThat(redirectedUrl(this.exchange)).isEqualTo(String.format(
+				"https://endpoint?" + "id_token_hint=id-token&" + "post_logout_redirect_uri=https://rp.example.org/%s",
+				this.registration.getRegistrationId()));
 	}
 
 	@Test
 	public void setPostLogoutRedirectUriTemplateWhenGivenNullThenThrowsException() {
 		assertThatIllegalArgumentException().isThrownBy(() -> this.handler.setPostLogoutRedirectUri((String) null));
+	}
+
+	@Test
+	public void logoutWhenCustomRedirectUriResolverSetThenRedirects() {
+		OAuth2AuthenticationToken token = new OAuth2AuthenticationToken(TestOidcUsers.create(),
+				AuthorityUtils.NO_AUTHORITIES, this.registration.getRegistrationId());
+		WebFilterExchange filterExchange = new WebFilterExchange(this.exchange, this.chain);
+		given(this.exchange.getRequest())
+			.willReturn(MockServerHttpRequest.get("/").queryParam("location", "https://test.com").build());
+		// @formatter:off
+		this.handler.setRedirectUriResolver((params) -> Mono.just(
+						Objects.requireNonNull(params.getServerWebExchange()
+								.getRequest()
+								.getQueryParams()
+								.getFirst("location"))));
+		// @formatter:on
+		this.handler.onLogoutSuccess(filterExchange, token).block();
+
+		assertThat(redirectedUrl(this.exchange)).isEqualTo("https://test.com");
+	}
+
+	@Test
+	public void setRedirectStrategyWhenGivenNullThenThrowsException() {
+		assertThatIllegalArgumentException().isThrownBy(() -> this.handler.setRedirectStrategy(null));
+	}
+
+	@Test
+	public void logoutWhenCustomRedirectStrategySetThenCustomRedirectStrategyUsed() {
+		ServerRedirectStrategy redirectStrategy = mock(ServerRedirectStrategy.class);
+		given(redirectStrategy.sendRedirect(any(), any())).willReturn(Mono.empty());
+		OAuth2AuthenticationToken token = new OAuth2AuthenticationToken(TestOidcUsers.create(),
+				AuthorityUtils.NO_AUTHORITIES, this.registration.getRegistrationId());
+		WebFilterExchange filterExchange = new WebFilterExchange(this.exchange, this.chain);
+		given(this.exchange.getRequest())
+			.willReturn(MockServerHttpRequest.get("/").queryParam("location", "https://test.com").build());
+		this.handler.setRedirectStrategy(redirectStrategy);
+
+		this.handler.onLogoutSuccess(filterExchange, token).block();
+
+		verify(redirectStrategy, times(1)).sendRedirect(any(), any());
 	}
 
 	private String redirectedUrl(ServerWebExchange exchange) {

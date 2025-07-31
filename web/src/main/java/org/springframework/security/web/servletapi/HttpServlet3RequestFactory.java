@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,19 +19,19 @@ package org.springframework.security.web.servletapi;
 import java.io.IOException;
 import java.util.List;
 
-import javax.servlet.AsyncContext;
-import javax.servlet.AsyncListener;
-import javax.servlet.ServletContext;
-import javax.servlet.ServletException;
-import javax.servlet.ServletRequest;
-import javax.servlet.ServletResponse;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-
+import jakarta.servlet.AsyncContext;
+import jakarta.servlet.AsyncListener;
+import jakarta.servlet.ServletContext;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.ServletRequest;
+import jakarta.servlet.ServletResponse;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
 import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
+import org.springframework.security.authentication.AuthenticationDetailsSource;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.AuthenticationTrustResolver;
 import org.springframework.security.authentication.AuthenticationTrustResolverImpl;
@@ -41,8 +41,11 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.context.SecurityContextHolderStrategy;
 import org.springframework.security.web.AuthenticationEntryPoint;
+import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.security.web.authentication.logout.LogoutHandler;
+import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.util.Assert;
 import org.springframework.util.CollectionUtils;
 
@@ -75,9 +78,14 @@ final class HttpServlet3RequestFactory implements HttpServletRequestFactory {
 
 	private Log logger = LogFactory.getLog(getClass());
 
+	private SecurityContextHolderStrategy securityContextHolderStrategy = SecurityContextHolder
+		.getContextHolderStrategy();
+
 	private final String rolePrefix;
 
 	private AuthenticationTrustResolver trustResolver = new AuthenticationTrustResolverImpl();
+
+	private final AuthenticationDetailsSource<HttpServletRequest, ?> authenticationDetailsSource = new WebAuthenticationDetailsSource();
 
 	private AuthenticationEntryPoint authenticationEntryPoint;
 
@@ -85,8 +93,11 @@ final class HttpServlet3RequestFactory implements HttpServletRequestFactory {
 
 	private List<LogoutHandler> logoutHandlers;
 
-	HttpServlet3RequestFactory(String rolePrefix) {
+	private SecurityContextRepository securityContextRepository;
+
+	HttpServlet3RequestFactory(String rolePrefix, SecurityContextRepository securityContextRepository) {
 		this.rolePrefix = rolePrefix;
+		this.securityContextRepository = securityContextRepository;
 	}
 
 	/**
@@ -158,9 +169,17 @@ final class HttpServlet3RequestFactory implements HttpServletRequestFactory {
 		this.trustResolver = trustResolver;
 	}
 
+	void setSecurityContextHolderStrategy(SecurityContextHolderStrategy securityContextHolderStrategy) {
+		Assert.notNull(securityContextHolderStrategy, "securityContextHolderStrategy cannot be null");
+		this.securityContextHolderStrategy = securityContextHolderStrategy;
+	}
+
 	@Override
 	public HttpServletRequest create(HttpServletRequest request, HttpServletResponse response) {
-		return new Servlet3SecurityContextHolderAwareRequestWrapper(request, this.rolePrefix, response);
+		Servlet3SecurityContextHolderAwareRequestWrapper wrapper = new Servlet3SecurityContextHolderAwareRequestWrapper(
+				request, this.rolePrefix, response);
+		wrapper.setSecurityContextHolderStrategy(this.securityContextHolderStrategy);
+		return wrapper;
 	}
 
 	private class Servlet3SecurityContextHolderAwareRequestWrapper extends SecurityContextHolderAwareRequestWrapper {
@@ -219,24 +238,30 @@ final class HttpServlet3RequestFactory implements HttpServletRequestFactory {
 			}
 			AuthenticationManager authManager = HttpServlet3RequestFactory.this.authenticationManager;
 			if (authManager == null) {
-				HttpServlet3RequestFactory.this.logger.debug(
-						"authenticationManager is null, so allowing original HttpServletRequest to handle login");
+				HttpServlet3RequestFactory.this.logger
+					.debug("authenticationManager is null, so allowing original HttpServletRequest to handle login");
 				super.login(username, password);
 				return;
 			}
 			Authentication authentication = getAuthentication(authManager, username, password);
-			SecurityContext context = SecurityContextHolder.createEmptyContext();
+			SecurityContext context = HttpServlet3RequestFactory.this.securityContextHolderStrategy
+				.createEmptyContext();
 			context.setAuthentication(authentication);
-			SecurityContextHolder.setContext(context);
+			HttpServlet3RequestFactory.this.securityContextHolderStrategy.setContext(context);
+			HttpServlet3RequestFactory.this.securityContextRepository.saveContext(context, this, this.response);
 		}
 
 		private Authentication getAuthentication(AuthenticationManager authManager, String username, String password)
 				throws ServletException {
 			try {
-				return authManager.authenticate(new UsernamePasswordAuthenticationToken(username, password));
+				UsernamePasswordAuthenticationToken authentication = UsernamePasswordAuthenticationToken
+					.unauthenticated(username, password);
+				Object details = HttpServlet3RequestFactory.this.authenticationDetailsSource.buildDetails(this);
+				authentication.setDetails(details);
+				return authManager.authenticate(authentication);
 			}
 			catch (AuthenticationException ex) {
-				SecurityContextHolder.clearContext();
+				HttpServlet3RequestFactory.this.securityContextHolderStrategy.clearContext();
 				throw new ServletException(ex.getMessage(), ex);
 			}
 		}
@@ -246,11 +271,12 @@ final class HttpServlet3RequestFactory implements HttpServletRequestFactory {
 			List<LogoutHandler> handlers = HttpServlet3RequestFactory.this.logoutHandlers;
 			if (CollectionUtils.isEmpty(handlers)) {
 				HttpServlet3RequestFactory.this.logger
-						.debug("logoutHandlers is null, so allowing original HttpServletRequest to handle logout");
+					.debug("logoutHandlers is null, so allowing original HttpServletRequest to handle logout");
 				super.logout();
 				return;
 			}
-			Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+			Authentication authentication = HttpServlet3RequestFactory.this.securityContextHolderStrategy.getContext()
+				.getAuthentication();
 			for (LogoutHandler handler : handlers) {
 				handler.logout(this, this.response, authentication);
 			}

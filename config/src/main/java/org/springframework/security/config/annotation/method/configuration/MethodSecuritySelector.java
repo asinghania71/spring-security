@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2025 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@ import org.springframework.context.annotation.AutoProxyRegistrar;
 import org.springframework.context.annotation.ImportSelector;
 import org.springframework.core.type.AnnotationMetadata;
 import org.springframework.lang.NonNull;
+import org.springframework.util.ClassUtils;
 
 /**
  * Dynamically determines which imports to include using the {@link EnableMethodSecurity}
@@ -37,11 +38,21 @@ import org.springframework.lang.NonNull;
  */
 final class MethodSecuritySelector implements ImportSelector {
 
+	private static final boolean isDataPresent = ClassUtils
+		.isPresent("org.springframework.security.data.aot.hint.AuthorizeReturnObjectDataHintsRegistrar", null);
+
+	private static final boolean isWebPresent = ClassUtils
+		.isPresent("org.springframework.web.servlet.DispatcherServlet", null);
+
+	private static final boolean isObservabilityPresent = ClassUtils
+		.isPresent("io.micrometer.observation.ObservationRegistry", null);
+
 	private final ImportSelector autoProxy = new AutoProxyRegistrarSelector();
 
 	@Override
 	public String[] selectImports(@NonNull AnnotationMetadata importMetadata) {
-		if (!importMetadata.hasAnnotation(EnableMethodSecurity.class.getName())) {
+		if (!importMetadata.hasAnnotation(EnableMethodSecurity.class.getName())
+				&& !importMetadata.hasMetaAnnotation(EnableMethodSecurity.class.getName())) {
 			return new String[0];
 		}
 		EnableMethodSecurity annotation = importMetadata.getAnnotations().get(EnableMethodSecurity.class).synthesize();
@@ -55,17 +66,34 @@ final class MethodSecuritySelector implements ImportSelector {
 		if (annotation.jsr250Enabled()) {
 			imports.add(Jsr250MethodSecurityConfiguration.class.getName());
 		}
+		imports.add(AuthorizationProxyConfiguration.class.getName());
+		if (isDataPresent) {
+			imports.add(AuthorizationProxyDataConfiguration.class.getName());
+		}
+		if (isWebPresent) {
+			imports.add(AuthorizationProxyWebConfiguration.class.getName());
+		}
+		if (isObservabilityPresent) {
+			imports.add(MethodObservationConfiguration.class.getName());
+		}
 		return imports.toArray(new String[0]);
 	}
 
 	private static final class AutoProxyRegistrarSelector extends AdviceModeImportSelector<EnableMethodSecurity> {
 
-		private static final String[] IMPORTS = new String[] { AutoProxyRegistrar.class.getName() };
+		private static final String[] IMPORTS = new String[] { AutoProxyRegistrar.class.getName(),
+				MethodSecurityAdvisorRegistrar.class.getName() };
+
+		private static final String[] ASPECTJ_IMPORTS = new String[] {
+				MethodSecurityAspectJAutoProxyRegistrar.class.getName() };
 
 		@Override
 		protected String[] selectImports(@NonNull AdviceMode adviceMode) {
 			if (adviceMode == AdviceMode.PROXY) {
 				return IMPORTS;
+			}
+			if (adviceMode == AdviceMode.ASPECTJ) {
+				return ASPECTJ_IMPORTS;
 			}
 			throw new IllegalStateException("AdviceMode '" + adviceMode + "' is not supported");
 		}

@@ -16,20 +16,20 @@
 
 package org.springframework.security.web;
 
-import javax.servlet.FilterChain;
-
+import jakarta.servlet.FilterChain;
 import org.junit.jupiter.api.Test;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
-import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.springframework.security.web.servlet.TestMockHttpServletRequests.get;
+import static org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher.pathPattern;
 
 /**
  * Tests for {@link RequestMatcherRedirectFilter}.
@@ -40,12 +40,9 @@ public class RequestMatcherRedirectFilterTests {
 
 	@Test
 	public void doFilterWhenRequestMatchThenRedirectToSpecifiedUrl() throws Exception {
-		RequestMatcherRedirectFilter filter = new RequestMatcherRedirectFilter(new AntPathRequestMatcher("/context"),
-				"/test");
+		RequestMatcherRedirectFilter filter = new RequestMatcherRedirectFilter(pathPattern("/context"), "/test");
 
-		MockHttpServletRequest request = new MockHttpServletRequest();
-		request.setServletPath("/context");
-
+		MockHttpServletRequest request = get("/context").build();
 		MockHttpServletResponse response = new MockHttpServletResponse();
 		FilterChain filterChain = mock(FilterChain.class);
 
@@ -59,11 +56,9 @@ public class RequestMatcherRedirectFilterTests {
 
 	@Test
 	public void doFilterWhenRequestNotMatchThenNextFilter() throws Exception {
-		RequestMatcherRedirectFilter filter = new RequestMatcherRedirectFilter(new AntPathRequestMatcher("/context"),
-				"/test");
+		RequestMatcherRedirectFilter filter = new RequestMatcherRedirectFilter(pathPattern("/context"), "/test");
 
-		MockHttpServletRequest request = new MockHttpServletRequest();
-		request.setServletPath("/test");
+		MockHttpServletRequest request = get("/test").build();
 
 		MockHttpServletResponse response = new MockHttpServletResponse();
 		FilterChain filterChain = mock(FilterChain.class);
@@ -78,28 +73,26 @@ public class RequestMatcherRedirectFilterTests {
 	@Test
 	public void constructWhenRequestMatcherNull() {
 		assertThatIllegalArgumentException().isThrownBy(() -> new RequestMatcherRedirectFilter(null, "/test"))
-				.withMessage("requestMatcher cannot be null");
+			.withMessage("requestMatcher cannot be null");
 	}
 
 	@Test
 	public void constructWhenRedirectUrlNull() {
 		assertThatIllegalArgumentException()
-				.isThrownBy(() -> new RequestMatcherRedirectFilter(new AntPathRequestMatcher("/**"), null))
-				.withMessage("redirectUrl cannot be empty");
+			.isThrownBy(() -> new RequestMatcherRedirectFilter(pathPattern("/**"), null))
+			.withMessage("redirectUrl cannot be empty");
 	}
 
 	@Test
 	public void constructWhenRedirectUrlEmpty() {
-		assertThatIllegalArgumentException()
-				.isThrownBy(() -> new RequestMatcherRedirectFilter(new AntPathRequestMatcher("/**"), ""))
-				.withMessage("redirectUrl cannot be empty");
+		assertThatIllegalArgumentException().isThrownBy(() -> new RequestMatcherRedirectFilter(pathPattern("/**"), ""))
+			.withMessage("redirectUrl cannot be empty");
 	}
 
 	@Test
 	public void constructWhenRedirectUrlBlank() {
-		assertThatIllegalArgumentException()
-				.isThrownBy(() -> new RequestMatcherRedirectFilter(new AntPathRequestMatcher("/**"), " "))
-				.withMessage("redirectUrl cannot be empty");
+		assertThatIllegalArgumentException().isThrownBy(() -> new RequestMatcherRedirectFilter(pathPattern("/**"), " "))
+			.withMessage("redirectUrl cannot be empty");
 	}
 
 }

@@ -34,7 +34,8 @@ import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException
  */
 public class AuthorizationFailureEventTests {
 
-	private final UsernamePasswordAuthenticationToken foo = new UsernamePasswordAuthenticationToken("foo", "bar");
+	private final UsernamePasswordAuthenticationToken foo = UsernamePasswordAuthenticationToken.unauthenticated("foo",
+			"bar");
 
 	private List<ConfigAttribute> attributes = SecurityConfig.createList("TEST");
 
@@ -43,7 +44,7 @@ public class AuthorizationFailureEventTests {
 	@Test
 	public void rejectsNullSecureObject() {
 		assertThatIllegalArgumentException()
-				.isThrownBy(() -> new AuthorizationFailureEvent(null, this.attributes, this.foo, this.exception));
+			.isThrownBy(() -> new AuthorizationFailureEvent(null, this.attributes, this.foo, this.exception));
 	}
 
 	@Test
@@ -55,8 +56,8 @@ public class AuthorizationFailureEventTests {
 	@Test
 	public void rejectsNullAuthentication() {
 		assertThatIllegalArgumentException()
-				.isThrownBy(() -> new AuthorizationFailureEvent(new SimpleMethodInvocation(), this.attributes, null,
-						this.exception));
+			.isThrownBy(() -> new AuthorizationFailureEvent(new SimpleMethodInvocation(), this.attributes, null,
+					this.exception));
 	}
 
 	@Test

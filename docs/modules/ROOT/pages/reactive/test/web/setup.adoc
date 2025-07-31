@@ -8,6 +8,9 @@ Java::
 +
 [source,java,role="primary"]
 ----
+import static org.springframework.security.test.web.reactive.server.SecurityMockServerConfigurers.springSecurity;
+import static org.springframework.web.reactive.function.client.ExchangeFilterFunctions.basicAuthentication;
+
 @ExtendWith(SpringExtension.class)
 @ContextConfiguration(classes = HelloWebfluxMethodApplication.class)
 public class HelloWebfluxMethodApplicationTests {
@@ -34,6 +37,9 @@ Kotlin::
 +
 [source,kotlin,role="secondary"]
 ----
+import org.springframework.security.test.web.reactive.server.SecurityMockServerConfigurers.springSecurity
+import org.springframework.web.reactive.function.client.ExchangeFilterFunctions.basicAuthentication
+
 @ExtendWith(SpringExtension::class)
 @ContextConfiguration(classes = [HelloWebfluxMethodApplication::class])
 class HelloWebfluxMethodApplicationTests {

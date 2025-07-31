@@ -19,9 +19,8 @@ package org.springframework.security.web.authentication.logout;
 import java.util.Arrays;
 import java.util.List;
 
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
 
@@ -46,7 +45,7 @@ public class CompositeLogoutHandlerTests {
 	@Test
 	public void buildEmptyCompositeLogoutHandlerThrowsException() {
 		assertThatIllegalArgumentException().isThrownBy(() -> new CompositeLogoutHandler())
-				.withMessage("LogoutHandlers are required");
+			.withMessage("LogoutHandlers are required");
 	}
 
 	@Test
@@ -78,17 +77,17 @@ public class CompositeLogoutHandlerTests {
 	public void callLogoutHandlersThrowException() {
 		LogoutHandler firstLogoutHandler = mock(LogoutHandler.class);
 		LogoutHandler secondLogoutHandler = mock(LogoutHandler.class);
-		willThrow(new IllegalArgumentException()).given(firstLogoutHandler).logout(any(HttpServletRequest.class),
-				any(HttpServletResponse.class), any(Authentication.class));
+		willThrow(new IllegalArgumentException()).given(firstLogoutHandler)
+			.logout(any(HttpServletRequest.class), any(HttpServletResponse.class), any(Authentication.class));
 		List<LogoutHandler> logoutHandlers = Arrays.asList(firstLogoutHandler, secondLogoutHandler);
 		LogoutHandler handler = new CompositeLogoutHandler(logoutHandlers);
 		assertThatIllegalArgumentException().isThrownBy(() -> handler.logout(mock(HttpServletRequest.class),
 				mock(HttpServletResponse.class), mock(Authentication.class)));
 		InOrder logoutHandlersInOrder = inOrder(firstLogoutHandler, secondLogoutHandler);
-		logoutHandlersInOrder.verify(firstLogoutHandler, times(1)).logout(any(HttpServletRequest.class),
-				any(HttpServletResponse.class), any(Authentication.class));
-		logoutHandlersInOrder.verify(secondLogoutHandler, never()).logout(any(HttpServletRequest.class),
-				any(HttpServletResponse.class), any(Authentication.class));
+		logoutHandlersInOrder.verify(firstLogoutHandler, times(1))
+			.logout(any(HttpServletRequest.class), any(HttpServletResponse.class), any(Authentication.class));
+		logoutHandlersInOrder.verify(secondLogoutHandler, never())
+			.logout(any(HttpServletRequest.class), any(HttpServletResponse.class), any(Authentication.class));
 	}
 
 }

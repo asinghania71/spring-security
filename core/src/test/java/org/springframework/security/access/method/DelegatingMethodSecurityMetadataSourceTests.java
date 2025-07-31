@@ -46,11 +46,11 @@ public class DelegatingMethodSecurityMetadataSourceTests {
 		List sources = new ArrayList();
 		MethodSecurityMetadataSource delegate = mock(MethodSecurityMetadataSource.class);
 		given(delegate.getAttributes(ArgumentMatchers.<Method>any(), ArgumentMatchers.any(Class.class)))
-				.willReturn(null);
+			.willReturn(null);
 		sources.add(delegate);
 		this.mds = new DelegatingMethodSecurityMetadataSource(sources);
 		assertThat(this.mds.getMethodSecurityMetadataSources()).isSameAs(sources);
-		assertThat(this.mds.getAllConfigAttributes().isEmpty()).isTrue();
+		assertThat(this.mds.getAllConfigAttributes()).isEmpty();
 		MethodInvocation mi = new SimpleMethodInvocation(null, String.class.getMethod("toString"));
 		assertThat(this.mds.getAttributes(mi)).isEqualTo(Collections.emptyList());
 		// Exercise the cached case
@@ -68,13 +68,13 @@ public class DelegatingMethodSecurityMetadataSourceTests {
 		sources.add(delegate);
 		this.mds = new DelegatingMethodSecurityMetadataSource(sources);
 		assertThat(this.mds.getMethodSecurityMetadataSources()).isSameAs(sources);
-		assertThat(this.mds.getAllConfigAttributes().isEmpty()).isTrue();
+		assertThat(this.mds.getAllConfigAttributes()).isEmpty();
 		MethodInvocation mi = new SimpleMethodInvocation("", toString);
 		assertThat(this.mds.getAttributes(mi)).isSameAs(attributes);
 		// Exercise the cached case
 		assertThat(this.mds.getAttributes(mi)).isSameAs(attributes);
 		assertThat(this.mds.getAttributes(new SimpleMethodInvocation(null, String.class.getMethod("length"))))
-				.isEmpty();
+			.isEmpty();
 	}
 
 }

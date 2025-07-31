@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2018 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,7 +32,9 @@ import org.springframework.util.MultiValueMap;
  * @author Rob Winch
  * @since 4.0.2
  * @see GlobalMethodSecuritySelector
+ * @deprecated Use {@link MethodSecuritySelector} instead
  */
+@Deprecated
 class MethodSecurityMetadataSourceAdvisorRegistrar implements ImportBeanDefinitionRegistrar {
 
 	/**
@@ -43,13 +45,13 @@ class MethodSecurityMetadataSourceAdvisorRegistrar implements ImportBeanDefiniti
 	@Override
 	public void registerBeanDefinitions(AnnotationMetadata importingClassMetadata, BeanDefinitionRegistry registry) {
 		BeanDefinitionBuilder advisor = BeanDefinitionBuilder
-				.rootBeanDefinition(MethodSecurityMetadataSourceAdvisor.class);
+			.rootBeanDefinition(MethodSecurityMetadataSourceAdvisor.class);
 		advisor.setRole(BeanDefinition.ROLE_INFRASTRUCTURE);
 		advisor.addConstructorArgValue("methodSecurityInterceptor");
 		advisor.addConstructorArgReference("methodSecurityMetadataSource");
 		advisor.addConstructorArgValue("methodSecurityMetadataSource");
 		MultiValueMap<String, Object> attributes = importingClassMetadata
-				.getAllAnnotationAttributes(EnableGlobalMethodSecurity.class.getName());
+			.getAllAnnotationAttributes(EnableGlobalMethodSecurity.class.getName());
 		Integer order = (Integer) attributes.getFirst("order");
 		if (order != null) {
 			advisor.addPropertyValue("order", order);

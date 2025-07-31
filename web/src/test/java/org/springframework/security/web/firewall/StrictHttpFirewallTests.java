@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,8 +19,7 @@ package org.springframework.security.web.firewall;
 import java.util.Arrays;
 import java.util.List;
 
-import javax.servlet.http.HttpServletRequest;
-
+import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.Test;
 
 import org.springframework.http.HttpMethod;
@@ -28,10 +27,12 @@ import org.springframework.mock.web.MockHttpServletRequest;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.springframework.security.web.servlet.TestMockHttpServletRequests.get;
 
 /**
  * @author Rob Winch
  * @author Eddú Meléndez
+ * @author Jinwoo Bae
  */
 public class StrictHttpFirewallTests {
 
@@ -46,7 +47,7 @@ public class StrictHttpFirewallTests {
 	public void getFirewalledRequestWhenInvalidMethodThenThrowsRequestRejectedException() {
 		this.request.setMethod("INVALID");
 		assertThatExceptionOfType(RequestRejectedException.class)
-				.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
+			.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
 	}
 
 	// blocks XST attacks
@@ -54,7 +55,7 @@ public class StrictHttpFirewallTests {
 	public void getFirewalledRequestWhenTraceMethodThenThrowsRequestRejectedException() {
 		this.request.setMethod(HttpMethod.TRACE.name());
 		assertThatExceptionOfType(RequestRejectedException.class)
-				.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
+			.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
 	}
 
 	@Test
@@ -62,7 +63,7 @@ public class StrictHttpFirewallTests {
 	public void getFirewalledRequestWhenTrackMethodThenThrowsRequestRejectedException() {
 		this.request.setMethod("TRACK");
 		assertThatExceptionOfType(RequestRejectedException.class)
-				.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
+			.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
 	}
 
 	@Test
@@ -70,7 +71,7 @@ public class StrictHttpFirewallTests {
 	public void getFirewalledRequestWhenLowercaseGetThenThrowsRequestRejectedException() {
 		this.request.setMethod("get");
 		assertThatExceptionOfType(RequestRejectedException.class)
-				.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
+			.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
 	}
 
 	@Test
@@ -95,7 +96,7 @@ public class StrictHttpFirewallTests {
 			this.request = new MockHttpServletRequest("GET", "");
 			this.request.setRequestURI(path);
 			assertThatExceptionOfType(RequestRejectedException.class)
-					.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
+				.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
 		}
 	}
 
@@ -105,17 +106,16 @@ public class StrictHttpFirewallTests {
 			this.request = new MockHttpServletRequest("GET", "");
 			this.request.setContextPath(path);
 			assertThatExceptionOfType(RequestRejectedException.class)
-					.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
+				.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
 		}
 	}
 
 	@Test
 	public void getFirewalledRequestWhenServletPathNotNormalizedThenThrowsRequestRejectedException() {
 		for (String path : this.unnormalizedPaths) {
-			this.request = new MockHttpServletRequest("GET", "");
-			this.request.setServletPath(path);
+			this.request = get().requestUri(path).build();
 			assertThatExceptionOfType(RequestRejectedException.class)
-					.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
+				.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
 		}
 	}
 
@@ -125,7 +125,7 @@ public class StrictHttpFirewallTests {
 			this.request = new MockHttpServletRequest("GET", "");
 			this.request.setPathInfo(path);
 			assertThatExceptionOfType(RequestRejectedException.class)
-					.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
+				.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
 		}
 	}
 
@@ -133,84 +133,84 @@ public class StrictHttpFirewallTests {
 	public void getFirewalledRequestWhenSemicolonInContextPathThenThrowsRequestRejectedException() {
 		this.request.setContextPath(";/context");
 		assertThatExceptionOfType(RequestRejectedException.class)
-				.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
+			.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
 	}
 
 	@Test
 	public void getFirewalledRequestWhenSemicolonInServletPathThenThrowsRequestRejectedException() {
 		this.request.setServletPath("/spring;/");
 		assertThatExceptionOfType(RequestRejectedException.class)
-				.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
+			.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
 	}
 
 	@Test
 	public void getFirewalledRequestWhenSemicolonInPathInfoThenThrowsRequestRejectedException() {
 		this.request.setPathInfo("/path;/");
 		assertThatExceptionOfType(RequestRejectedException.class)
-				.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
+			.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
 	}
 
 	@Test
 	public void getFirewalledRequestWhenSemicolonInRequestUriThenThrowsRequestRejectedException() {
 		this.request.setRequestURI("/path;/");
 		assertThatExceptionOfType(RequestRejectedException.class)
-				.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
+			.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
 	}
 
 	@Test
 	public void getFirewalledRequestWhenEncodedSemicolonInContextPathThenThrowsRequestRejectedException() {
 		this.request.setContextPath("%3B/context");
 		assertThatExceptionOfType(RequestRejectedException.class)
-				.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
+			.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
 	}
 
 	@Test
 	public void getFirewalledRequestWhenEncodedSemicolonInServletPathThenThrowsRequestRejectedException() {
 		this.request.setServletPath("/spring%3B/");
 		assertThatExceptionOfType(RequestRejectedException.class)
-				.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
+			.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
 	}
 
 	@Test
 	public void getFirewalledRequestWhenEncodedSemicolonInPathInfoThenThrowsRequestRejectedException() {
 		this.request.setPathInfo("/path%3B/");
 		assertThatExceptionOfType(RequestRejectedException.class)
-				.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
+			.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
 	}
 
 	@Test
 	public void getFirewalledRequestWhenEncodedSemicolonInRequestUriThenThrowsRequestRejectedException() {
 		this.request.setRequestURI("/path%3B/");
 		assertThatExceptionOfType(RequestRejectedException.class)
-				.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
+			.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
 	}
 
 	@Test
 	public void getFirewalledRequestWhenLowercaseEncodedSemicolonInContextPathThenThrowsRequestRejectedException() {
 		this.request.setContextPath("%3b/context");
 		assertThatExceptionOfType(RequestRejectedException.class)
-				.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
+			.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
 	}
 
 	@Test
 	public void getFirewalledRequestWhenLowercaseEncodedSemicolonInServletPathThenThrowsRequestRejectedException() {
 		this.request.setServletPath("/spring%3b/");
 		assertThatExceptionOfType(RequestRejectedException.class)
-				.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
+			.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
 	}
 
 	@Test
 	public void getFirewalledRequestWhenLowercaseEncodedSemicolonInPathInfoThenThrowsRequestRejectedException() {
 		this.request.setPathInfo("/path%3b/");
 		assertThatExceptionOfType(RequestRejectedException.class)
-				.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
+			.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
 	}
 
 	@Test
 	public void getFirewalledRequestWhenLowercaseEncodedSemicolonInRequestUriThenThrowsRequestRejectedException() {
 		this.request.setRequestURI("/path%3b/");
 		assertThatExceptionOfType(RequestRejectedException.class)
-				.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
+			.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
 	}
 
 	@Test
@@ -307,14 +307,14 @@ public class StrictHttpFirewallTests {
 	public void getFirewalledRequestWhenEncodedPeriodInThenThrowsRequestRejectedException() {
 		this.request.setRequestURI("/%2E/");
 		assertThatExceptionOfType(RequestRejectedException.class)
-				.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
+			.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
 	}
 
 	@Test
 	public void getFirewalledRequestWhenLowercaseEncodedPeriodInThenThrowsRequestRejectedException() {
 		this.request.setRequestURI("/%2e/");
 		assertThatExceptionOfType(RequestRejectedException.class)
-				.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
+			.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
 	}
 
 	@Test
@@ -328,7 +328,7 @@ public class StrictHttpFirewallTests {
 	public void getFirewalledRequestWhenExceedsLowerboundAsciiThenException() {
 		this.request.setRequestURI("/\u0019");
 		assertThatExceptionOfType(RequestRejectedException.class)
-				.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
+			.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
 	}
 
 	@Test
@@ -353,91 +353,91 @@ public class StrictHttpFirewallTests {
 	public void getFirewalledRequestWhenExceedsUpperboundAsciiThenException() {
 		this.request.setRequestURI("/\u007f");
 		assertThatExceptionOfType(RequestRejectedException.class)
-				.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
+			.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
 	}
 
 	@Test
 	public void getFirewalledRequestWhenContainsNullThenException() {
 		this.request.setRequestURI("/\0");
 		assertThatExceptionOfType(RequestRejectedException.class)
-				.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
+			.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
 	}
 
 	@Test
 	public void getFirewalledRequestWhenContainsEncodedNullThenException() {
 		this.request.setRequestURI("/something%00/");
 		assertThatExceptionOfType(RequestRejectedException.class)
-				.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
+			.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
 	}
 
 	@Test
 	public void getFirewalledRequestWhenContainsLowercaseEncodedLineFeedThenException() {
 		this.request.setRequestURI("/something%0a/");
 		assertThatExceptionOfType(RequestRejectedException.class)
-				.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
+			.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
 	}
 
 	@Test
 	public void getFirewalledRequestWhenContainsUppercaseEncodedLineFeedThenException() {
 		this.request.setRequestURI("/something%0A/");
 		assertThatExceptionOfType(RequestRejectedException.class)
-				.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
+			.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
 	}
 
 	@Test
 	public void getFirewalledRequestWhenContainsLineFeedThenException() {
 		this.request.setRequestURI("/something\n/");
 		assertThatExceptionOfType(RequestRejectedException.class)
-				.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
+			.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
 	}
 
 	@Test
 	public void getFirewalledRequestWhenServletPathContainsLineFeedThenException() {
 		this.request.setServletPath("/something\n/");
 		assertThatExceptionOfType(RequestRejectedException.class)
-				.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
+			.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
 	}
 
 	@Test
 	public void getFirewalledRequestWhenContainsLowercaseEncodedCarriageReturnThenException() {
 		this.request.setRequestURI("/something%0d/");
 		assertThatExceptionOfType(RequestRejectedException.class)
-				.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
+			.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
 	}
 
 	@Test
 	public void getFirewalledRequestWhenContainsUppercaseEncodedCarriageReturnThenException() {
 		this.request.setRequestURI("/something%0D/");
 		assertThatExceptionOfType(RequestRejectedException.class)
-				.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
+			.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
 	}
 
 	@Test
 	public void getFirewalledRequestWhenContainsCarriageReturnThenException() {
 		this.request.setRequestURI("/something\r/");
 		assertThatExceptionOfType(RequestRejectedException.class)
-				.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
+			.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
 	}
 
 	@Test
 	public void getFirewalledRequestWhenServletPathContainsCarriageReturnThenException() {
 		this.request.setServletPath("/something\r/");
 		assertThatExceptionOfType(RequestRejectedException.class)
-				.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
+			.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
 	}
 
 	@Test
 	public void getFirewalledRequestWhenServletPathContainsLineSeparatorThenException() {
 		this.request.setServletPath("/something\u2028/");
 		assertThatExceptionOfType(RequestRejectedException.class)
-				.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
+			.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
 	}
 
 	@Test
 	public void getFirewalledRequestWhenServletPathContainsParagraphSeparatorThenException() {
 		this.request.setServletPath("/something\u2029/");
 		assertThatExceptionOfType(RequestRejectedException.class)
-				.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
+			.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
 	}
 
 	@Test
@@ -461,7 +461,7 @@ public class StrictHttpFirewallTests {
 		// Expected an error because the line feed is decoded in an encoded part of the
 		// URL
 		assertThatExceptionOfType(RequestRejectedException.class)
-				.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
+			.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
 	}
 
 	@Test
@@ -492,7 +492,7 @@ public class StrictHttpFirewallTests {
 		// Expected an error because the carriage return is decoded in an encoded part of
 		// the URL
 		assertThatExceptionOfType(RequestRejectedException.class)
-				.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
+			.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
 	}
 
 	@Test
@@ -528,7 +528,7 @@ public class StrictHttpFirewallTests {
 		this.request.setServletPath("");
 		this.request.setPathInfo("/a/b;/1/c"); // URL decoded requestURI
 		assertThatExceptionOfType(RequestRejectedException.class)
-				.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
+			.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
 	}
 
 	@Test
@@ -538,7 +538,7 @@ public class StrictHttpFirewallTests {
 		this.request.setServletPath("");
 		this.request.setPathInfo("/a/b;/1/c"); // URL decoded requestURI
 		assertThatExceptionOfType(RequestRejectedException.class)
-				.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
+			.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
 	}
 
 	@Test
@@ -714,7 +714,7 @@ public class StrictHttpFirewallTests {
 		this.request.addHeader("Host", "example.org");
 		this.firewall.setAllowedHostnames((hostname) -> hostname.equals("myexample.org"));
 		assertThatExceptionOfType(RequestRejectedException.class)
-				.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
+			.isThrownBy(() -> this.firewall.getFirewalledRequest(this.request));
 	}
 
 	@Test
@@ -725,9 +725,26 @@ public class StrictHttpFirewallTests {
 	}
 
 	@Test
+	public void getFirewalledRequestWhenHeaderNameNotAllowedWithAugmentedHeaderNamesThenException() {
+		this.firewall
+			.setAllowedHeaderNames(StrictHttpFirewall.ALLOWED_HEADER_NAMES.and((name) -> !name.equals("bad name")));
+		HttpServletRequest request = this.firewall.getFirewalledRequest(this.request);
+		assertThatExceptionOfType(RequestRejectedException.class).isThrownBy(() -> request.getHeader("bad name"));
+	}
+
+	@Test
 	public void getFirewalledRequestGetHeaderWhenNotAllowedHeaderValueThenException() {
 		this.request.addHeader("good name", "bad value");
 		this.firewall.setAllowedHeaderValues((value) -> !value.equals("bad value"));
+		HttpServletRequest request = this.firewall.getFirewalledRequest(this.request);
+		assertThatExceptionOfType(RequestRejectedException.class).isThrownBy(() -> request.getHeader("good name"));
+	}
+
+	@Test
+	public void getFirewalledRequestWhenHeaderValueNotAllowedWithAugmentedHeaderValuesThenException() {
+		this.request.addHeader("good name", "bad value");
+		this.firewall.setAllowedHeaderValues(
+				StrictHttpFirewall.ALLOWED_HEADER_VALUES.and((value) -> !value.equals("bad value")));
 		HttpServletRequest request = this.firewall.getFirewalledRequest(this.request);
 		assertThatExceptionOfType(RequestRejectedException.class).isThrownBy(() -> request.getHeader("good name"));
 	}
@@ -772,7 +789,7 @@ public class StrictHttpFirewallTests {
 		this.request.addHeader("Bad\0Name", "some value");
 		HttpServletRequest request = this.firewall.getFirewalledRequest(this.request);
 		assertThatExceptionOfType(RequestRejectedException.class)
-				.isThrownBy(() -> request.getHeaderNames().nextElement());
+			.isThrownBy(() -> request.getHeaderNames().nextElement());
 	}
 
 	@Test
@@ -780,6 +797,13 @@ public class StrictHttpFirewallTests {
 		this.request.addHeader("Something", "bad\0value");
 		HttpServletRequest request = this.firewall.getFirewalledRequest(this.request);
 		assertThatExceptionOfType(RequestRejectedException.class).isThrownBy(() -> request.getHeader("Something"));
+	}
+
+	@Test
+	public void getFirewalledRequestGetHeaderWhenHorizontalTabInHeaderValueThenNoException() {
+		this.request.addHeader("Something", "tab\tvalue");
+		HttpServletRequest request = this.firewall.getFirewalledRequest(this.request);
+		assertThat(request.getHeader("Something")).isEqualTo("tab\tvalue");
 	}
 
 	@Test
@@ -794,7 +818,7 @@ public class StrictHttpFirewallTests {
 		this.request.addHeader("Something", "bad\0value");
 		HttpServletRequest request = this.firewall.getFirewalledRequest(this.request);
 		assertThatExceptionOfType(RequestRejectedException.class)
-				.isThrownBy(() -> request.getHeaders("Something").nextElement());
+			.isThrownBy(() -> request.getHeaders("Something").nextElement());
 	}
 
 	@Test
@@ -831,7 +855,17 @@ public class StrictHttpFirewallTests {
 		this.request.addParameter("Something", "bad value");
 		HttpServletRequest request = this.firewall.getFirewalledRequest(this.request);
 		assertThatExceptionOfType(RequestRejectedException.class)
-				.isThrownBy(() -> request.getParameterValues("Something"));
+			.isThrownBy(() -> request.getParameterValues("Something"));
+	}
+
+	@Test
+	public void getFirewalledRequestWhenParameterValueNotAllowedWithAugmentedParameterValuesThenException() {
+		this.request.addParameter("Something", "bad value");
+		this.firewall.setAllowedParameterValues(
+				StrictHttpFirewall.ALLOWED_PARAMETER_VALUES.and((value) -> !value.equals("bad value")));
+		HttpServletRequest request = this.firewall.getFirewalledRequest(this.request);
+		assertThatExceptionOfType(RequestRejectedException.class)
+			.isThrownBy(() -> request.getParameterValues("Something"));
 	}
 
 	@Test
@@ -840,7 +874,17 @@ public class StrictHttpFirewallTests {
 		this.request.addParameter("bad name", "good value");
 		HttpServletRequest request = this.firewall.getFirewalledRequest(this.request);
 		assertThatExceptionOfType(RequestRejectedException.class)
-				.isThrownBy(() -> request.getParameterValues("bad name"));
+			.isThrownBy(() -> request.getParameterValues("bad name"));
+	}
+
+	@Test
+	public void getFirewalledRequestWhenParameterNameNotAllowedWithAugmentedParameterNamesThenException() {
+		this.request.addParameter("bad name", "good value");
+		this.firewall.setAllowedParameterNames(
+				StrictHttpFirewall.ALLOWED_PARAMETER_NAMES.and((value) -> !value.equals("bad name")));
+		HttpServletRequest request = this.firewall.getFirewalledRequest(this.request);
+		assertThatExceptionOfType(RequestRejectedException.class)
+			.isThrownBy(() -> request.getParameterValues("bad name"));
 	}
 
 	// gh-9598

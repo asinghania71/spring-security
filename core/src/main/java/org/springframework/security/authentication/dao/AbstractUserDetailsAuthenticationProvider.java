@@ -23,6 +23,7 @@ import org.springframework.beans.factory.InitializingBean;
 import org.springframework.context.MessageSource;
 import org.springframework.context.MessageSourceAware;
 import org.springframework.context.support.MessageSourceAccessor;
+import org.springframework.core.log.LogMessage;
 import org.springframework.security.authentication.AccountExpiredException;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -116,6 +117,8 @@ public abstract class AbstractUserDetailsAuthenticationProvider
 	public final void afterPropertiesSet() throws Exception {
 		Assert.notNull(this.userCache, "A user cache must be set");
 		Assert.notNull(this.messages, "A message source must be set");
+		Assert.notNull(this.preAuthenticationChecks, "A pre authentication checks must be set");
+		Assert.notNull(this.postAuthenticationChecks, "A post authentication checks must be set");
 		doAfterPropertiesSet();
 	}
 
@@ -133,12 +136,13 @@ public abstract class AbstractUserDetailsAuthenticationProvider
 				user = retrieveUser(username, (UsernamePasswordAuthenticationToken) authentication);
 			}
 			catch (UsernameNotFoundException ex) {
-				this.logger.debug("Failed to find user '" + username + "'");
+				this.logger.debug(LogMessage.format("Failed to find user '%s'", username));
+				String message = this.messages.getMessage("AbstractUserDetailsAuthenticationProvider.badCredentials",
+						"Bad credentials");
 				if (!this.hideUserNotFoundExceptions) {
 					throw ex;
 				}
-				throw new BadCredentialsException(this.messages
-						.getMessage("AbstractUserDetailsAuthenticationProvider.badCredentials", "Bad credentials"));
+				throw new BadCredentialsException(message, ex);
 			}
 			Assert.notNull(user, "retrieveUser returned null - a violation of the interface contract");
 		}
@@ -193,7 +197,7 @@ public abstract class AbstractUserDetailsAuthenticationProvider
 		// so subsequent attempts are successful even with encoded passwords.
 		// Also ensure we return the original getDetails(), so that future
 		// authentication events after cache expiry contain the details
-		UsernamePasswordAuthenticationToken result = new UsernamePasswordAuthenticationToken(principal,
+		UsernamePasswordAuthenticationToken result = UsernamePasswordAuthenticationToken.authenticated(principal,
 				authentication.getCredentials(), this.authoritiesMapper.mapAuthorities(user.getAuthorities()));
 		result.setDetails(authentication.getDetails());
 		this.logger.debug("Authenticated user");
@@ -320,21 +324,21 @@ public abstract class AbstractUserDetailsAuthenticationProvider
 		public void check(UserDetails user) {
 			if (!user.isAccountNonLocked()) {
 				AbstractUserDetailsAuthenticationProvider.this.logger
-						.debug("Failed to authenticate since user account is locked");
+					.debug("Failed to authenticate since user account is locked");
 				throw new LockedException(AbstractUserDetailsAuthenticationProvider.this.messages
-						.getMessage("AbstractUserDetailsAuthenticationProvider.locked", "User account is locked"));
+					.getMessage("AbstractUserDetailsAuthenticationProvider.locked", "User account is locked"));
 			}
 			if (!user.isEnabled()) {
 				AbstractUserDetailsAuthenticationProvider.this.logger
-						.debug("Failed to authenticate since user account is disabled");
+					.debug("Failed to authenticate since user account is disabled");
 				throw new DisabledException(AbstractUserDetailsAuthenticationProvider.this.messages
-						.getMessage("AbstractUserDetailsAuthenticationProvider.disabled", "User is disabled"));
+					.getMessage("AbstractUserDetailsAuthenticationProvider.disabled", "User is disabled"));
 			}
 			if (!user.isAccountNonExpired()) {
 				AbstractUserDetailsAuthenticationProvider.this.logger
-						.debug("Failed to authenticate since user account has expired");
+					.debug("Failed to authenticate since user account has expired");
 				throw new AccountExpiredException(AbstractUserDetailsAuthenticationProvider.this.messages
-						.getMessage("AbstractUserDetailsAuthenticationProvider.expired", "User account has expired"));
+					.getMessage("AbstractUserDetailsAuthenticationProvider.expired", "User account has expired"));
 			}
 		}
 
@@ -346,10 +350,10 @@ public abstract class AbstractUserDetailsAuthenticationProvider
 		public void check(UserDetails user) {
 			if (!user.isCredentialsNonExpired()) {
 				AbstractUserDetailsAuthenticationProvider.this.logger
-						.debug("Failed to authenticate since user account credentials have expired");
+					.debug("Failed to authenticate since user account credentials have expired");
 				throw new CredentialsExpiredException(AbstractUserDetailsAuthenticationProvider.this.messages
-						.getMessage("AbstractUserDetailsAuthenticationProvider.credentialsExpired",
-								"User credentials have expired"));
+					.getMessage("AbstractUserDetailsAuthenticationProvider.credentialsExpired",
+							"User credentials have expired"));
 			}
 		}
 

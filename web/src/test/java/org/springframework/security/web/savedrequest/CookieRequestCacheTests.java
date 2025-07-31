@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2020 the original author or authors.
+ * Copyright 2002-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,11 +16,14 @@
 
 package org.springframework.security.web.savedrequest;
 
+import java.util.Arrays;
 import java.util.Base64;
+import java.util.Collections;
+import java.util.Locale;
+import java.util.function.Consumer;
 
-import javax.servlet.http.Cookie;
-import javax.servlet.http.HttpServletRequest;
-
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.Test;
 
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -183,12 +186,57 @@ public class CookieRequestCacheTests {
 		assertThat(expiredCookie.getMaxAge()).isZero();
 	}
 
+	// gh-13792
+	@Test
+	public void matchingRequestWhenMatchThenKeepOriginalRequestLocale() {
+		CookieRequestCache cookieRequestCache = new CookieRequestCache();
+		MockHttpServletRequest request = new MockHttpServletRequest();
+		request.setServerPort(443);
+		request.setSecure(true);
+		request.setScheme("https");
+		request.setServerName("example.com");
+		request.setRequestURI("/destination");
+		request.setPreferredLocales(Arrays.asList(Locale.FRENCH, Locale.GERMANY));
+		String redirectUrl = "https://example.com/destination";
+		request.setCookies(new Cookie(DEFAULT_COOKIE_NAME, encodeCookie(redirectUrl)));
+		MockHttpServletResponse response = new MockHttpServletResponse();
+		HttpServletRequest matchingRequest = cookieRequestCache.getMatchingRequest(request, response);
+		assertThat(matchingRequest).isNotNull();
+		assertThat(Collections.list(matchingRequest.getLocales())).contains(Locale.FRENCH, Locale.GERMANY);
+	}
+
+	@Test
+	public void setCookieCustomizer() {
+		Consumer<Cookie> cookieCustomizer = (cookie) -> {
+			cookie.setAttribute("SameSite", "Strict");
+			cookie.setAttribute("CustomAttribute", "CustomValue");
+		};
+		CookieRequestCache cookieRequestCache = new CookieRequestCache();
+		cookieRequestCache.setCookieCustomizer(cookieCustomizer);
+		MockHttpServletResponse response = new MockHttpServletResponse();
+		cookieRequestCache.saveRequest(new MockHttpServletRequest(), response);
+		Cookie savedCookie = response.getCookie(DEFAULT_COOKIE_NAME);
+		assertThat(savedCookie).isNotNull();
+		assertThat(savedCookie.getAttribute("SameSite")).isEqualTo("Strict");
+		assertThat(savedCookie.getAttribute("CustomAttribute")).isEqualTo("CustomValue");
+	}
+
 	private static String encodeCookie(String cookieValue) {
 		return Base64.getEncoder().encodeToString(cookieValue.getBytes());
 	}
 
 	private static String decodeCookie(String encodedCookieValue) {
 		return new String(Base64.getDecoder().decode(encodedCookieValue.getBytes()));
+	}
+
+	// gh-15905
+	@Test
+	public void illegalCookieValueReturnNull() {
+		CookieRequestCache cookieRequestCache = new CookieRequestCache();
+		MockHttpServletRequest request = new MockHttpServletRequest();
+		request.setCookies(new Cookie(DEFAULT_COOKIE_NAME, "123^456"));
+		SavedRequest savedRequest = cookieRequestCache.getRequest(request, new MockHttpServletResponse());
+		assertThat(savedRequest).isNull();
 	}
 
 }

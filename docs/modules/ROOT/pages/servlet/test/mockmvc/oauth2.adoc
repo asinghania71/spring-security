@@ -228,7 +228,7 @@ Java::
 mvc
     .perform(get("/endpoint")
         .with(oidcLogin()
-                .idToken(token -> token.claim("user_id", "1234"))
+                .idToken((token) -> token.claim("user_id", "1234"))
         )
     );
 ----
@@ -329,7 +329,7 @@ fun foo(@AuthenticationPrincipal oauth2User: OAuth2User): String? {
 ----
 ======
 
-In that case, we can tell Spring Security to include a default `OAuth2User` using the `oauth2User` xref:servlet/test/mockmvc/request-post-processors.adoc[`RequestPostProcessor`], like so:
+In that case, we can tell Spring Security to include a default `OAuth2User` using the `oauth2Login` xref:servlet/test/mockmvc/request-post-processors.adoc[`RequestPostProcessor`], like so:
 
 [tabs]
 ======
@@ -475,7 +475,7 @@ Java::
 mvc
     .perform(get("/endpoint")
         .with(oauth2Login()
-                .attributes(attrs -> attrs.put("user_id", "1234"))
+                .attributes((attrs) -> attrs.put("user_id", "1234"))
         )
     );
 ----
@@ -875,7 +875,7 @@ Java::
 ----
 mvc
     .perform(get("/endpoint")
-        .with(jwt().jwt(jwt -> jwt.header("kid", "one").claim("iss", "https://idp.example.org"))));
+        .with(jwt().jwt((jwt) -> jwt.header("kid", "one").claim("iss", "https://idp.example.org"))));
 ----
 
 Kotlin::
@@ -898,7 +898,7 @@ Java::
 ----
 mvc
     .perform(get("/endpoint")
-        .with(jwt().jwt(jwt -> jwt.claims(claims -> claims.remove("scope")))));
+        .with(jwt().jwt((jwt) -> jwt.claims((claims) -> claims.remove("scope")))));
 ----
 
 Kotlin::
@@ -964,7 +964,7 @@ mvc.get("/endpoint") {
 ----
 ======
 
-You can also specify a complete `Jwt`, for which `{security-api-url}org/springframework/security/oauth2/jwt/Jwt.Builder.html[Jwt.Builder]` comes quite handy:
+You can also specify a complete `Jwt`, for which javadoc:org.springframework.security.oauth2.jwt.Jwt$Builder[] comes quite handy:
 
 [tabs]
 ======
@@ -1219,7 +1219,7 @@ Java::
 mvc
     .perform(get("/endpoint")
         .with(opaqueToken()
-                .attributes(attrs -> attrs.put("user_id", "1234"))
+                .attributes((attrs) -> attrs.put("user_id", "1234"))
         )
     );
 ----

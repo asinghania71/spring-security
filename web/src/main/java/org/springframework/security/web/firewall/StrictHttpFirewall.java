@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,8 +27,8 @@ import java.util.Set;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
 
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 
 import org.springframework.http.HttpMethod;
 import org.springframework.util.Assert;
@@ -75,6 +75,7 @@ import org.springframework.util.Assert;
  *
  * @author Rob Winch
  * @author Eddú Meléndez
+ * @author Jinwoo Bae
  * @since 4.2.4
  * @see DefaultHttpFirewall
  */
@@ -91,19 +92,19 @@ public class StrictHttpFirewall implements HttpFirewall {
 	private static final String PERCENT = "%";
 
 	private static final List<String> FORBIDDEN_ENCODED_PERIOD = Collections
-			.unmodifiableList(Arrays.asList("%2e", "%2E"));
+		.unmodifiableList(Arrays.asList("%2e", "%2E"));
 
 	private static final List<String> FORBIDDEN_SEMICOLON = Collections
-			.unmodifiableList(Arrays.asList(";", "%3b", "%3B"));
+		.unmodifiableList(Arrays.asList(";", "%3b", "%3B"));
 
 	private static final List<String> FORBIDDEN_FORWARDSLASH = Collections
-			.unmodifiableList(Arrays.asList("%2f", "%2F"));
+		.unmodifiableList(Arrays.asList("%2f", "%2F"));
 
 	private static final List<String> FORBIDDEN_DOUBLE_FORWARDSLASH = Collections
-			.unmodifiableList(Arrays.asList("//", "%2f%2f", "%2f%2F", "%2F%2f", "%2F%2F"));
+		.unmodifiableList(Arrays.asList("//", "%2f%2f", "%2f%2F", "%2F%2f", "%2F%2F"));
 
 	private static final List<String> FORBIDDEN_BACKSLASH = Collections
-			.unmodifiableList(Arrays.asList("\\", "%5c", "%5C"));
+		.unmodifiableList(Arrays.asList("\\", "%5c", "%5C"));
 
 	private static final List<String> FORBIDDEN_NULL = Collections.unmodifiableList(Arrays.asList("\0", "%00"));
 
@@ -114,7 +115,7 @@ public class StrictHttpFirewall implements HttpFirewall {
 	private static final List<String> FORBIDDEN_LINE_SEPARATOR = Collections.unmodifiableList(Arrays.asList("\u2028"));
 
 	private static final List<String> FORBIDDEN_PARAGRAPH_SEPARATOR = Collections
-			.unmodifiableList(Arrays.asList("\u2029"));
+		.unmodifiableList(Arrays.asList("\u2029"));
 
 	private Set<String> encodedUrlBlocklist = new HashSet<>();
 
@@ -125,18 +126,30 @@ public class StrictHttpFirewall implements HttpFirewall {
 	private Predicate<String> allowedHostnames = (hostname) -> true;
 
 	private static final Pattern ASSIGNED_AND_NOT_ISO_CONTROL_PATTERN = Pattern
-			.compile("[\\p{IsAssigned}&&[^\\p{IsControl}]]*");
+		.compile("[\\p{IsAssigned}&&[^\\p{IsControl}]]*");
 
 	private static final Predicate<String> ASSIGNED_AND_NOT_ISO_CONTROL_PREDICATE = (
 			s) -> ASSIGNED_AND_NOT_ISO_CONTROL_PATTERN.matcher(s).matches();
 
-	private Predicate<String> allowedHeaderNames = ASSIGNED_AND_NOT_ISO_CONTROL_PREDICATE;
+	private static final Pattern HEADER_VALUE_PATTERN = Pattern.compile("[\\p{IsAssigned}&&[[^\\p{IsControl}]||\\t]]*");
 
-	private Predicate<String> allowedHeaderValues = ASSIGNED_AND_NOT_ISO_CONTROL_PREDICATE;
+	private static final Predicate<String> HEADER_VALUE_PREDICATE = (s) -> HEADER_VALUE_PATTERN.matcher(s).matches();
 
-	private Predicate<String> allowedParameterNames = ASSIGNED_AND_NOT_ISO_CONTROL_PREDICATE;
+	private Predicate<String> allowedHeaderNames = ALLOWED_HEADER_NAMES;
 
-	private Predicate<String> allowedParameterValues = (value) -> true;
+	public static final Predicate<String> ALLOWED_HEADER_NAMES = ASSIGNED_AND_NOT_ISO_CONTROL_PREDICATE;
+
+	private Predicate<String> allowedHeaderValues = ALLOWED_HEADER_VALUES;
+
+	public static final Predicate<String> ALLOWED_HEADER_VALUES = HEADER_VALUE_PREDICATE;
+
+	private Predicate<String> allowedParameterNames = ALLOWED_PARAMETER_NAMES;
+
+	public static final Predicate<String> ALLOWED_PARAMETER_NAMES = ASSIGNED_AND_NOT_ISO_CONTROL_PREDICATE;
+
+	private Predicate<String> allowedParameterValues = ALLOWED_PARAMETER_VALUES;
+
+	public static final Predicate<String> ALLOWED_PARAMETER_VALUES = (value) -> true;
 
 	public StrictHttpFirewall() {
 		urlBlocklistsAddAll(FORBIDDEN_SEMICOLON);
@@ -513,8 +526,8 @@ public class StrictHttpFirewall implements HttpFirewall {
 
 	private void rejectNonPrintableAsciiCharactersInFieldName(String toCheck, String propertyName) {
 		if (!containsOnlyPrintableAsciiCharacters(toCheck)) {
-			throw new RequestRejectedException(String.format(
-					"The %s was rejected because it can only contain printable ASCII characters.", propertyName));
+			throw new RequestRejectedException(String
+				.format("The %s was rejected because it can only contain printable ASCII characters.", propertyName));
 		}
 	}
 
@@ -598,10 +611,7 @@ public class StrictHttpFirewall implements HttpFirewall {
 		if (valueContains(request.getServletPath(), value)) {
 			return true;
 		}
-		if (valueContains(request.getPathInfo(), value)) {
-			return true;
-		}
-		return false;
+		return valueContains(request.getPathInfo(), value);
 	}
 
 	private static boolean containsOnlyPrintableAsciiCharacters(String uri) {
@@ -713,7 +723,7 @@ public class StrictHttpFirewall implements HttpFirewall {
 			}
 			String value = super.getHeader(name);
 			if (value != null) {
-				validateAllowedHeaderValue(value);
+				validateAllowedHeaderValue(name, value);
 			}
 			return value;
 		}
@@ -724,7 +734,7 @@ public class StrictHttpFirewall implements HttpFirewall {
 				validateAllowedHeaderName(name);
 			}
 			Enumeration<String> headers = super.getHeaders(name);
-			return new Enumeration<String>() {
+			return new Enumeration<>() {
 
 				@Override
 				public boolean hasMoreElements() {
@@ -734,7 +744,7 @@ public class StrictHttpFirewall implements HttpFirewall {
 				@Override
 				public String nextElement() {
 					String value = headers.nextElement();
-					validateAllowedHeaderValue(value);
+					validateAllowedHeaderValue(name, value);
 					return value;
 				}
 
@@ -744,7 +754,7 @@ public class StrictHttpFirewall implements HttpFirewall {
 		@Override
 		public Enumeration<String> getHeaderNames() {
 			Enumeration<String> names = super.getHeaderNames();
-			return new Enumeration<String>() {
+			return new Enumeration<>() {
 
 				@Override
 				public boolean hasMoreElements() {
@@ -768,7 +778,7 @@ public class StrictHttpFirewall implements HttpFirewall {
 			}
 			String value = super.getParameter(name);
 			if (value != null) {
-				validateAllowedParameterValue(value);
+				validateAllowedParameterValue(name, value);
 			}
 			return value;
 		}
@@ -781,7 +791,7 @@ public class StrictHttpFirewall implements HttpFirewall {
 				String[] values = entry.getValue();
 				validateAllowedParameterName(name);
 				for (String value : values) {
-					validateAllowedParameterValue(value);
+					validateAllowedParameterValue(name, value);
 				}
 			}
 			return parameterMap;
@@ -790,7 +800,7 @@ public class StrictHttpFirewall implements HttpFirewall {
 		@Override
 		public Enumeration<String> getParameterNames() {
 			Enumeration<String> paramaterNames = super.getParameterNames();
-			return new Enumeration<String>() {
+			return new Enumeration<>() {
 
 				@Override
 				public boolean hasMoreElements() {
@@ -815,7 +825,7 @@ public class StrictHttpFirewall implements HttpFirewall {
 			String[] values = super.getParameterValues(name);
 			if (values != null) {
 				for (String value : values) {
-					validateAllowedParameterValue(value);
+					validateAllowedParameterValue(name, value);
 				}
 			}
 			return values;
@@ -828,10 +838,10 @@ public class StrictHttpFirewall implements HttpFirewall {
 			}
 		}
 
-		private void validateAllowedHeaderValue(String value) {
+		private void validateAllowedHeaderValue(String name, String value) {
 			if (!StrictHttpFirewall.this.allowedHeaderValues.test(value)) {
-				throw new RequestRejectedException(
-						"The request was rejected because the header value \"" + value + "\" is not allowed.");
+				throw new RequestRejectedException("The request was rejected because the header: \"" + name
+						+ " \" has a value \"" + value + "\" that is not allowed.");
 			}
 		}
 
@@ -842,10 +852,10 @@ public class StrictHttpFirewall implements HttpFirewall {
 			}
 		}
 
-		private void validateAllowedParameterValue(String value) {
+		private void validateAllowedParameterValue(String name, String value) {
 			if (!StrictHttpFirewall.this.allowedParameterValues.test(value)) {
-				throw new RequestRejectedException(
-						"The request was rejected because the parameter value \"" + value + "\" is not allowed.");
+				throw new RequestRejectedException("The request was rejected because the parameter: \"" + name
+						+ " \" has a value \"" + value + "\" that is not allowed.");
 			}
 		}
 

@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,15 +25,19 @@ import org.junit.jupiter.api.extension.ExtendWith
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.context.ApplicationContext
 import org.springframework.context.annotation.Bean
+import org.springframework.context.annotation.Configuration
 import org.springframework.http.HttpHeaders
 import org.springframework.security.authentication.ReactiveAuthenticationManager
 import org.springframework.security.authentication.TestingAuthenticationToken
 import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity
 import org.springframework.security.config.test.SpringTestContext
 import org.springframework.security.config.test.SpringTestContextExtension
+import org.springframework.security.core.Authentication
 import org.springframework.security.web.header.writers.frameoptions.XFrameOptionsHeaderWriter
 import org.springframework.security.web.server.SecurityWebFilterChain
+import org.springframework.security.web.server.context.NoOpServerSecurityContextRepository
 import org.springframework.security.web.server.context.SecurityContextServerWebExchangeWebFilter
+import org.springframework.security.web.server.context.ServerSecurityContextRepository
 import org.springframework.security.web.server.header.ContentTypeOptionsServerHttpHeadersWriter
 import org.springframework.security.web.server.header.StrictTransportSecurityServerHttpHeadersWriter
 import org.springframework.security.web.server.header.XFrameOptionsServerHttpHeadersWriter
@@ -86,6 +90,7 @@ class ServerHttpSecurityDslTests {
                 .expectStatus().isUnauthorized
     }
 
+    @Configuration
     @EnableWebFluxSecurity
     @EnableWebFlux
     open class PatternMatcherConfig {
@@ -123,9 +128,10 @@ class ServerHttpSecurityDslTests {
                 .expectHeader().valueEquals(HttpHeaders.CACHE_CONTROL, "no-cache, no-store, max-age=0, must-revalidate")
                 .expectHeader().valueEquals(HttpHeaders.EXPIRES, "0")
                 .expectHeader().valueEquals(HttpHeaders.PRAGMA, "no-cache")
-                .expectHeader().valueEquals(XXssProtectionServerHttpHeadersWriter.X_XSS_PROTECTION, "1 ; mode=block")
+                .expectHeader().valueEquals(XXssProtectionServerHttpHeadersWriter.X_XSS_PROTECTION, "0")
     }
 
+    @Configuration
     @EnableWebFluxSecurity
     @EnableWebFlux
     open class DefaultSecurityConfig {
@@ -145,6 +151,7 @@ class ServerHttpSecurityDslTests {
         assertThat(filters).last().isExactlyInstanceOf(CustomWebFilter::class.java)
     }
 
+    @Configuration
     @EnableWebFluxSecurity
     @EnableWebFlux
     open class CustomWebFilterAtConfig {
@@ -168,6 +175,7 @@ class ServerHttpSecurityDslTests {
         )
     }
 
+    @Configuration
     @EnableWebFluxSecurity
     @EnableWebFlux
     open class CustomWebFilterBeforeConfig {
@@ -191,6 +199,7 @@ class ServerHttpSecurityDslTests {
         )
     }
 
+    @Configuration
     @EnableWebFluxSecurity
     @EnableWebFlux
     open class CustomWebFilterAfterConfig {
@@ -219,11 +228,12 @@ class ServerHttpSecurityDslTests {
         verify(exactly = 1) { AuthenticationManagerConfig.AUTHENTICATION_MANAGER.authenticate(any()) }
     }
 
+    @Configuration
     @EnableWebFlux
     @EnableWebFluxSecurity
     open class AuthenticationManagerConfig {
         companion object {
-            val AUTHENTICATION_MANAGER: ReactiveAuthenticationManager = ReactiveAuthenticationManager { Mono.empty() }
+            val AUTHENTICATION_MANAGER: ReactiveAuthenticationManager = NoopReactiveAuthenticationManager()
         }
 
         @Bean
@@ -234,6 +244,39 @@ class ServerHttpSecurityDslTests {
                     authorize(anyExchange, authenticated)
                 }
                 httpBasic { }
+            }
+        }
+    }
+
+    class NoopReactiveAuthenticationManager: ReactiveAuthenticationManager {
+        override fun authenticate(authentication: Authentication?): Mono<Authentication> {
+            return Mono.empty()
+        }
+    }
+
+    @Test
+    fun `security context repository when configured in DSL then used`() {
+        this.spring.register(SecurityContextRepositoryConfig::class.java).autowire()
+        mockkObject(SecurityContextRepositoryConfig.SECURITY_CONTEXT_REPOSITORY)
+        every {
+            SecurityContextRepositoryConfig.SECURITY_CONTEXT_REPOSITORY.load(any())
+        } returns Mono.empty()
+        this.client.get().uri("/").exchange()
+        verify(exactly = 1) { SecurityContextRepositoryConfig.SECURITY_CONTEXT_REPOSITORY.load(any()) }
+    }
+
+    @Configuration
+    @EnableWebFlux
+    @EnableWebFluxSecurity
+    open class SecurityContextRepositoryConfig {
+        companion object {
+            val SECURITY_CONTEXT_REPOSITORY: ServerSecurityContextRepository = NoOpServerSecurityContextRepository.getInstance()
+        }
+
+        @Bean
+        open fun springWebFilterChain(http: ServerHttpSecurity): SecurityWebFilterChain {
+            return http {
+                securityContextRepository = SECURITY_CONTEXT_REPOSITORY
             }
         }
     }

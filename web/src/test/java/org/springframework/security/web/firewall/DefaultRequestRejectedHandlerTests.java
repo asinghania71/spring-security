@@ -16,9 +16,8 @@
 
 package org.springframework.security.web.firewall;
 
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
@@ -30,9 +29,10 @@ public class DefaultRequestRejectedHandlerTests {
 	public void defaultRequestRejectedHandlerRethrowsTheException() throws Exception {
 		RequestRejectedException requestRejectedException = new RequestRejectedException("rejected");
 		DefaultRequestRejectedHandler sut = new DefaultRequestRejectedHandler();
-		assertThatExceptionOfType(RequestRejectedException.class).isThrownBy(() -> sut
-				.handle(mock(HttpServletRequest.class), mock(HttpServletResponse.class), requestRejectedException))
-				.withMessage("rejected");
+		assertThatExceptionOfType(RequestRejectedException.class)
+			.isThrownBy(() -> sut.handle(mock(HttpServletRequest.class), mock(HttpServletResponse.class),
+					requestRejectedException))
+			.withMessage("rejected");
 	}
 
 }

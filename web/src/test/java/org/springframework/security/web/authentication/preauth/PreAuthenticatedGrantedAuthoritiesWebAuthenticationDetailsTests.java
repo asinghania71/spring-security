@@ -21,8 +21,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-import javax.servlet.http.HttpServletRequest;
-
+import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.Test;
 
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -52,9 +51,10 @@ public class PreAuthenticatedGrantedAuthoritiesWebAuthenticationDetailsTests {
 		PreAuthenticatedGrantedAuthoritiesWebAuthenticationDetails details = new PreAuthenticatedGrantedAuthoritiesWebAuthenticationDetails(
 				getRequest("testUser", new String[] {}), this.gas);
 		List<GrantedAuthority> returnedGas = details.getGrantedAuthorities();
-		assertThat(this.gas.containsAll(returnedGas) && returnedGas.containsAll(this.gas)).withFailMessage(
-				"Collections do not contain same elements; expected: " + this.gas + ", returned: " + returnedGas)
-				.isTrue();
+		assertThat(this.gas.containsAll(returnedGas) && returnedGas.containsAll(this.gas))
+			.withFailMessage(
+					"Collections do not contain same elements; expected: " + this.gas + ", returned: " + returnedGas)
+			.isTrue();
 	}
 
 	private HttpServletRequest getRequest(final String userName, final String[] aRoles) {

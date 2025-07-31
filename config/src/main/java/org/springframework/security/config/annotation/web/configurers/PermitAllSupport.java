@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2013 the original author or authors.
+ * Copyright 2002-2025 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,11 +16,10 @@
 
 package org.springframework.security.config.annotation.web.configurers;
 
-import javax.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletRequest;
 
-import org.springframework.security.access.SecurityConfig;
+import org.springframework.security.authorization.SingleResultAuthorizationManager;
 import org.springframework.security.config.annotation.web.HttpSecurityBuilder;
-import org.springframework.security.config.annotation.web.configurers.AbstractConfigAttributeRequestMatcherRegistry.UrlMapping;
 import org.springframework.security.web.util.matcher.RequestMatcher;
 import org.springframework.util.Assert;
 
@@ -46,13 +45,14 @@ final class PermitAllSupport {
 	@SuppressWarnings("unchecked")
 	static void permitAll(HttpSecurityBuilder<? extends HttpSecurityBuilder<?>> http,
 			RequestMatcher... requestMatchers) {
-		ExpressionUrlAuthorizationConfigurer<?> configurer = http
-				.getConfigurer(ExpressionUrlAuthorizationConfigurer.class);
-		Assert.state(configurer != null, "permitAll only works with HttpSecurity.authorizeRequests()");
+		AuthorizeHttpRequestsConfigurer<?> httpConfigurer = http.getConfigurer(AuthorizeHttpRequestsConfigurer.class);
+
+		Assert.state(httpConfigurer != null,
+				"permitAll only works with HttpSecurity.authorizeHttpRequests(). Please define one.");
+
 		for (RequestMatcher matcher : requestMatchers) {
 			if (matcher != null) {
-				configurer.getRegistry().addMapping(0, new UrlMapping(matcher,
-						SecurityConfig.createList(ExpressionUrlAuthorizationConfigurer.permitAll)));
+				httpConfigurer.addFirst(matcher, SingleResultAuthorizationManager.permitAll());
 			}
 		}
 	}

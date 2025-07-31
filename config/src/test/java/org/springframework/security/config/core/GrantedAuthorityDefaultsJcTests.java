@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2016 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,12 +18,11 @@ package org.springframework.security.config.core;
 
 import java.io.IOException;
 
-import javax.servlet.ServletException;
-import javax.servlet.ServletRequest;
-import javax.servlet.ServletResponse;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-
+import jakarta.servlet.ServletException;
+import jakarta.servlet.ServletRequest;
+import jakarta.servlet.ServletResponse;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -41,10 +40,10 @@ import org.springframework.security.config.annotation.authentication.builders.Au
 import org.springframework.security.config.annotation.method.configuration.EnableGlobalMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.FilterChainProxy;
+import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
@@ -85,8 +84,8 @@ public class GrantedAuthorityDefaultsJcTests {
 	@Test
 	public void doFilter() throws Exception {
 		SecurityContext context = SecurityContextHolder.getContext();
-		this.request.getSession().setAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY,
-				context);
+		this.request.getSession()
+			.setAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY, context);
 		this.springSecurityFilterChain.doFilter(this.request, this.response, this.chain);
 		assertThat(this.response.getStatus()).isEqualTo(HttpServletResponse.SC_OK);
 	}
@@ -95,8 +94,8 @@ public class GrantedAuthorityDefaultsJcTests {
 	public void doFilterDenied() throws Exception {
 		setup("DENIED");
 		SecurityContext context = SecurityContextHolder.getContext();
-		this.request.getSession().setAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY,
-				context);
+		this.request.getSession()
+			.setAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY, context);
 		this.springSecurityFilterChain.doFilter(this.request, this.response, this.chain);
 		assertThat(this.response.getStatus()).isEqualTo(HttpServletResponse.SC_FORBIDDEN);
 	}
@@ -127,8 +126,8 @@ public class GrantedAuthorityDefaultsJcTests {
 	@Test
 	public void doFilterIsUserInRole() throws Exception {
 		SecurityContext context = SecurityContextHolder.getContext();
-		this.request.getSession().setAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY,
-				context);
+		this.request.getSession()
+			.setAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY, context);
 		this.chain = new MockFilterChain() {
 			@Override
 			public void doFilter(ServletRequest request, ServletResponse response)
@@ -151,7 +150,7 @@ public class GrantedAuthorityDefaultsJcTests {
 	@Configuration
 	@EnableWebSecurity
 	@EnableGlobalMethodSecurity(prePostEnabled = true, jsr250Enabled = true)
-	static class Config extends WebSecurityConfigurerAdapter {
+	static class Config {
 
 		@Autowired
 		void configureGlobal(AuthenticationManagerBuilder auth) throws Exception {
@@ -162,12 +161,12 @@ public class GrantedAuthorityDefaultsJcTests {
 			// @formatter:on
 		}
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.authorizeRequests()
-					.anyRequest().access("hasRole('USER')");
+				.authorizeHttpRequests((requests) -> requests.anyRequest().hasRole("USER"));
+			return http.build();
 			// @formatter:on
 		}
 

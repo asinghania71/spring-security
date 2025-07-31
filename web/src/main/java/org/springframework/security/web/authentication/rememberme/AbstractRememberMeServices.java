@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2020 the original author or authors.
+ * Copyright 2002-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,11 +21,11 @@ import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
+import java.util.function.Consumer;
 
-import javax.servlet.http.Cookie;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -98,6 +98,9 @@ public abstract class AbstractRememberMeServices
 
 	private GrantedAuthoritiesMapper authoritiesMapper = new NullAuthoritiesMapper();
 
+	private Consumer<Cookie> cookieCustomizer = (cookie) -> {
+	};
+
 	protected AbstractRememberMeServices(String key, UserDetailsService userDetailsService) {
 		Assert.hasLength(key, "key cannot be empty or null");
 		Assert.notNull(userDetailsService, "UserDetailsService cannot be null");
@@ -120,7 +123,7 @@ public abstract class AbstractRememberMeServices
 	 * which in turn is used to create a valid authentication token.
 	 */
 	@Override
-	public final Authentication autoLogin(HttpServletRequest request, HttpServletResponse response) {
+	public Authentication autoLogin(HttpServletRequest request, HttpServletResponse response) {
 		String rememberMeCookie = extractRememberMeCookie(request);
 		if (rememberMeCookie == null) {
 			return null;
@@ -254,7 +257,7 @@ public abstract class AbstractRememberMeServices
 	}
 
 	@Override
-	public final void loginFail(HttpServletRequest request, HttpServletResponse response) {
+	public void loginFail(HttpServletRequest request, HttpServletResponse response) {
 		this.logger.debug("Interactive login attempt was unsuccessful.");
 		cancelCookie(request, response);
 		onLoginFail(request, response);
@@ -269,11 +272,11 @@ public abstract class AbstractRememberMeServices
 	 * <p>
 	 * Examines the incoming request and checks for the presence of the configured
 	 * "remember me" parameter. If it's present, or if <tt>alwaysRemember</tt> is set to
-	 * true, calls <tt>onLoginSucces</tt>.
+	 * true, calls <tt>onLoginSuccess</tt>.
 	 * </p>
 	 */
 	@Override
-	public final void loginSuccess(HttpServletRequest request, HttpServletResponse response,
+	public void loginSuccess(HttpServletRequest request, HttpServletResponse response,
 			Authentication successfulAuthentication) {
 		if (!rememberMeRequested(request, this.parameter)) {
 			this.logger.debug("Remember-me login not requested.");
@@ -369,11 +372,11 @@ public abstract class AbstractRememberMeServices
 		if (this.cookieDomain != null) {
 			cookie.setDomain(this.cookieDomain);
 		}
-		if (maxAge < 1) {
-			cookie.setVersion(1);
-		}
 		cookie.setSecure((this.useSecureCookie != null) ? this.useSecureCookie : request.isSecure());
 		cookie.setHttpOnly(true);
+
+		this.cookieCustomizer.accept(cookie);
+
 		response.addCookie(cookie);
 	}
 
@@ -389,7 +392,7 @@ public abstract class AbstractRememberMeServices
 	@Override
 	public void logout(HttpServletRequest request, HttpServletResponse response, Authentication authentication) {
 		this.logger.debug(LogMessage
-				.of(() -> "Logout of user " + ((authentication != null) ? authentication.getName() : "Unknown")));
+			.of(() -> "Logout of user " + ((authentication != null) ? authentication.getName() : "Unknown")));
 		cancelCookie(request, response);
 	}
 
@@ -491,6 +494,16 @@ public abstract class AbstractRememberMeServices
 	public void setMessageSource(MessageSource messageSource) {
 		Assert.notNull(messageSource, "messageSource cannot be null");
 		this.messages = new MessageSourceAccessor(messageSource);
+	}
+
+	/**
+	 * Sets the {@link Consumer}, allowing customization of cookie.
+	 * @param cookieCustomizer customize for cookie
+	 * @since 6.4
+	 */
+	public void setCookieCustomizer(Consumer<Cookie> cookieCustomizer) {
+		Assert.notNull(cookieCustomizer, "cookieCustomizer cannot be null");
+		this.cookieCustomizer = cookieCustomizer;
 	}
 
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,11 +16,16 @@
 
 package org.springframework.security.authorization;
 
+import java.io.Serial;
+
 /**
  * @author Rob Winch
  * @since 5.0
  */
-public class AuthorizationDecision {
+public class AuthorizationDecision implements AuthorizationResult {
+
+	@Serial
+	private static final long serialVersionUID = -3226018324649244416L;
 
 	private final boolean granted;
 
@@ -28,6 +33,7 @@ public class AuthorizationDecision {
 		this.granted = granted;
 	}
 
+	@Override
 	public boolean isGranted() {
 		return this.granted;
 	}

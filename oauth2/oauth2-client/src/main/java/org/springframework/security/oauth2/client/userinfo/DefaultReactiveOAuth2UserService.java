@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,8 +26,9 @@ import net.minidev.json.JSONObject;
 import reactor.core.publisher.Mono;
 
 import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.core.convert.converter.Converter;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -72,11 +73,14 @@ public class DefaultReactiveOAuth2UserService implements ReactiveOAuth2UserServi
 
 	private static final String MISSING_USER_NAME_ATTRIBUTE_ERROR_CODE = "missing_user_name_attribute";
 
-	private static final ParameterizedTypeReference<Map<String, Object>> STRING_OBJECT_MAP = new ParameterizedTypeReference<Map<String, Object>>() {
+	private static final ParameterizedTypeReference<Map<String, Object>> STRING_OBJECT_MAP = new ParameterizedTypeReference<>() {
 	};
 
-	private static final ParameterizedTypeReference<Map<String, String>> STRING_STRING_MAP = new ParameterizedTypeReference<Map<String, String>>() {
+	private static final ParameterizedTypeReference<Map<String, String>> STRING_STRING_MAP = new ParameterizedTypeReference<>() {
 	};
+
+	private Converter<OAuth2UserRequest, Converter<Map<String, Object>, Map<String, Object>>> attributesConverter = (
+			request) -> (attributes) -> attributes;
 
 	private WebClient webClient = WebClient.create();
 
@@ -84,8 +88,10 @@ public class DefaultReactiveOAuth2UserService implements ReactiveOAuth2UserServi
 	public Mono<OAuth2User> loadUser(OAuth2UserRequest userRequest) throws OAuth2AuthenticationException {
 		return Mono.defer(() -> {
 			Assert.notNull(userRequest, "userRequest cannot be null");
-			String userInfoUri = userRequest.getClientRegistration().getProviderDetails().getUserInfoEndpoint()
-					.getUri();
+			String userInfoUri = userRequest.getClientRegistration()
+				.getProviderDetails()
+				.getUserInfoEndpoint()
+				.getUri();
 			if (!StringUtils.hasText(userInfoUri)) {
 				OAuth2Error oauth2Error = new OAuth2Error(MISSING_USER_INFO_URI_ERROR_CODE,
 						"Missing required UserInfo Uri in UserInfoEndpoint for Client Registration: "
@@ -93,8 +99,10 @@ public class DefaultReactiveOAuth2UserService implements ReactiveOAuth2UserServi
 						null);
 				throw new OAuth2AuthenticationException(oauth2Error, oauth2Error.toString());
 			}
-			String userNameAttributeName = userRequest.getClientRegistration().getProviderDetails()
-					.getUserInfoEndpoint().getUserNameAttributeName();
+			String userNameAttributeName = userRequest.getClientRegistration()
+				.getProviderDetails()
+				.getUserInfoEndpoint()
+				.getUserNameAttributeName();
 			if (!StringUtils.hasText(userNameAttributeName)) {
 				OAuth2Error oauth2Error = new OAuth2Error(MISSING_USER_NAME_ATTRIBUTE_ERROR_CODE,
 						"Missing required \"user name\" attribute name in UserInfoEndpoint for Client Registration: "
@@ -102,13 +110,15 @@ public class DefaultReactiveOAuth2UserService implements ReactiveOAuth2UserServi
 						null);
 				throw new OAuth2AuthenticationException(oauth2Error, oauth2Error.toString());
 			}
-			AuthenticationMethod authenticationMethod = userRequest.getClientRegistration().getProviderDetails()
-					.getUserInfoEndpoint().getAuthenticationMethod();
+			AuthenticationMethod authenticationMethod = userRequest.getClientRegistration()
+				.getProviderDetails()
+				.getUserInfoEndpoint()
+				.getAuthenticationMethod();
 			WebClient.RequestHeadersSpec<?> requestHeadersSpec = getRequestHeaderSpec(userRequest, userInfoUri,
 					authenticationMethod);
 			// @formatter:off
 			Mono<Map<String, Object>> userAttributes = requestHeadersSpec.retrieve()
-					.onStatus(HttpStatus::isError, (response) ->
+					.onStatus(HttpStatusCode::isError, (response) ->
 						parse(response)
 							.map((userInfoErrorResponse) -> {
 								String description = userInfoErrorResponse.getErrorObject().getDescription();
@@ -117,9 +127,10 @@ public class DefaultReactiveOAuth2UserService implements ReactiveOAuth2UserServi
 								throw new OAuth2AuthenticationException(oauth2Error, oauth2Error.toString());
 							})
 					)
-					.bodyToMono(DefaultReactiveOAuth2UserService.STRING_OBJECT_MAP);
+					.bodyToMono(DefaultReactiveOAuth2UserService.STRING_OBJECT_MAP)
+					.mapNotNull((attributes) -> this.attributesConverter.convert(userRequest).convert(attributes));
 			return userAttributes.map((attrs) -> {
-				GrantedAuthority authority = new OAuth2UserAuthority(attrs);
+				GrantedAuthority authority = new OAuth2UserAuthority(attrs, userNameAttributeName);
 				Set<GrantedAuthority> authorities = new HashSet<>();
 				authorities.add(authority);
 				OAuth2AccessToken token = userRequest.getAccessToken();
@@ -179,6 +190,32 @@ public class DefaultReactiveOAuth2UserService implements ReactiveOAuth2UserServi
 	}
 
 	/**
+	 * Use this strategy to adapt user attributes into a format understood by Spring
+	 * Security; by default, the original attributes are preserved.
+	 *
+	 * <p>
+	 * This can be helpful, for example, if the user attribute is nested. Since Spring
+	 * Security needs the username attribute to be at the top level, you can use this
+	 * method to do:
+	 *
+	 * <pre>
+	 *     DefaultReactiveOAuth2UserService userService = new DefaultReactiveOAuth2UserService();
+	 *     userService.setAttributesConverter((userRequest) -> (attributes) ->
+	 *         Map&lt;String, Object&gt; userObject = (Map&lt;String, Object&gt;) attributes.get("user");
+	 *         attributes.put("user-name", userObject.get("user-name"));
+	 *         return attributes;
+	 *     });
+	 * </pre>
+	 * @param attributesConverter the attribute adaptation strategy to use
+	 * @since 6.3
+	 */
+	public void setAttributesConverter(
+			Converter<OAuth2UserRequest, Converter<Map<String, Object>, Map<String, Object>>> attributesConverter) {
+		Assert.notNull(attributesConverter, "attributesConverter cannot be null");
+		this.attributesConverter = attributesConverter;
+	}
+
+	/**
 	 * Sets the {@link WebClient} used for retrieving the user endpoint
 	 * @param webClient the client to use
 	 */
@@ -189,13 +226,13 @@ public class DefaultReactiveOAuth2UserService implements ReactiveOAuth2UserServi
 
 	private static Mono<UserInfoErrorResponse> parse(ClientResponse httpResponse) {
 		String wwwAuth = httpResponse.headers().asHttpHeaders().getFirst(HttpHeaders.WWW_AUTHENTICATE);
-		if (!StringUtils.isEmpty(wwwAuth)) {
+		if (StringUtils.hasLength(wwwAuth)) {
 			// Bearer token error?
 			return Mono.fromCallable(() -> UserInfoErrorResponse.parse(wwwAuth));
 		}
 		// Other error?
 		return httpResponse.bodyToMono(STRING_STRING_MAP)
-				.map((body) -> new UserInfoErrorResponse(ErrorObject.parse(new JSONObject(body))));
+			.map((body) -> new UserInfoErrorResponse(ErrorObject.parse(new JSONObject(body))));
 	}
 
 }

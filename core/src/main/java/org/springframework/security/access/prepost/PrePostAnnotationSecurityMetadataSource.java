@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2016 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,7 +48,13 @@ import org.springframework.util.ClassUtils;
  * @author Luke Taylor
  * @since 3.0
  * @see PreInvocationAuthorizationAdviceVoter
+ * @deprecated Use
+ * {@link org.springframework.security.authorization.method.PreAuthorizeAuthorizationManager}
+ * and
+ * {@link org.springframework.security.authorization.method.PostAuthorizeAuthorizationManager}
+ * instead
  */
+@Deprecated
 public class PrePostAnnotationSecurityMetadataSource extends AbstractMethodSecurityMetadataSource {
 
 	private final PrePostInvocationAttributeFactory attributeFactory;
@@ -124,8 +130,8 @@ public class PrePostAnnotationSecurityMetadataSource extends AbstractMethodSecur
 		// actually implement the method)
 		annotation = AnnotationUtils.findAnnotation(specificMethod.getDeclaringClass(), annotationClass);
 		if (annotation != null) {
-			this.logger.debug(
-					LogMessage.format("%s found on: %s", annotation, specificMethod.getDeclaringClass().getName()));
+			this.logger
+				.debug(LogMessage.format("%s found on: %s", annotation, specificMethod.getDeclaringClass().getName()));
 			return annotation;
 		}
 		return null;

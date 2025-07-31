@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2018 the original author or authors.
+ * Copyright 2002-2025 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 
 package org.springframework.security.provisioning;
 
+import java.sql.SQLException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -28,6 +29,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowMapper;
 import org.springframework.security.PopulatedDatabase;
 import org.springframework.security.TestDataSource;
 import org.springframework.security.access.AccessDeniedException;
@@ -39,6 +41,8 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.AuthorityUtils;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.context.SecurityContextHolderStrategy;
+import org.springframework.security.core.context.SecurityContextImpl;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserCache;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -46,13 +50,17 @@ import org.springframework.security.core.userdetails.UserDetails;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.mock;
+import static org.mockito.BDDMockito.mock;
+import static org.mockito.BDDMockito.verify;
 
 /**
  * Tests for {@link JdbcUserDetailsManager}
  *
  * @author Luke Taylor
+ * @author dae won
+ * @author Junhyeok Lee
  */
 public class JdbcUserDetailsManagerTests {
 
@@ -100,8 +108,8 @@ public class JdbcUserDetailsManagerTests {
 		this.template.execute("create table users(username varchar(20) not null primary key,"
 				+ "password varchar(20) not null, enabled boolean not null)");
 		this.template
-				.execute("create table authorities (username varchar(20) not null, authority varchar(20) not null, "
-						+ "constraint fk_authorities_users foreign key(username) references users(username))");
+			.execute("create table authorities (username varchar(20) not null, authority varchar(20) not null, "
+					+ "constraint fk_authorities_users foreign key(username) references users(username))");
 		PopulatedDatabase.createGroupTables(this.template);
 		PopulatedDatabase.insertGroupData(this.template);
 	}
@@ -142,7 +150,7 @@ public class JdbcUserDetailsManagerTests {
 				AuthorityUtils.createAuthorityList("A", "B"));
 		this.manager.createUser(user);
 		UserDetails user2 = this.manager.loadUserByUsername(user.getUsername());
-		assertThat(user2).isEqualToComparingFieldByField(user);
+		assertThat(user2).usingRecursiveComparison().isEqualTo(user);
 	}
 
 	@Test
@@ -173,7 +181,7 @@ public class JdbcUserDetailsManagerTests {
 				AuthorityUtils.createAuthorityList("D", "F", "E"));
 		this.manager.updateUser(newJoe);
 		UserDetails joe = this.manager.loadUserByUsername(newJoe.getUsername());
-		assertThat(joe).isEqualToComparingFieldByField(newJoe);
+		assertThat(joe).usingRecursiveComparison().isEqualTo(newJoe);
 		assertThat(this.cache.getUserMap().containsKey(newJoe.getUsername())).isFalse();
 	}
 
@@ -183,16 +191,21 @@ public class JdbcUserDetailsManagerTests {
 	}
 
 	@Test
+	public void userExistsReturnsFalseForNullUsername() {
+		assertThat(this.manager.userExists(null)).isFalse();
+	}
+
+	@Test
 	public void userExistsReturnsTrueForExistingUsername() {
 		insertJoe();
 		assertThat(this.manager.userExists("joe")).isTrue();
-		assertThat(this.cache.getUserMap().containsKey("joe")).isTrue();
+		assertThat(this.cache.getUserMap()).containsKey("joe");
 	}
 
 	@Test
 	public void changePasswordFailsForUnauthenticatedUser() {
 		assertThatExceptionOfType(AccessDeniedException.class)
-				.isThrownBy(() -> this.manager.changePassword("password", "newPassword"));
+			.isThrownBy(() -> this.manager.changePassword("password", "newPassword"));
 	}
 
 	@Test
@@ -203,6 +216,18 @@ public class JdbcUserDetailsManagerTests {
 		UserDetails newJoe = this.manager.loadUserByUsername("joe");
 		assertThat(newJoe.getPassword()).isEqualTo("newPassword");
 		assertThat(this.cache.getUserMap().containsKey("joe")).isFalse();
+	}
+
+	@Test
+	public void changePasswordWhenCustomSecurityContextHolderStrategyThenUses() {
+		insertJoe();
+		Authentication authentication = authenticateJoe();
+		SecurityContextHolderStrategy strategy = mock(SecurityContextHolderStrategy.class);
+		given(strategy.getContext()).willReturn(new SecurityContextImpl(authentication));
+		given(strategy.createEmptyContext()).willReturn(new SecurityContextImpl());
+		this.manager.setSecurityContextHolderStrategy(strategy);
+		this.manager.changePassword("wrongpassword", "newPassword");
+		verify(strategy).getContext();
 	}
 
 	@Test
@@ -231,12 +256,12 @@ public class JdbcUserDetailsManagerTests {
 		given(am.authenticate(any(Authentication.class))).willThrow(new BadCredentialsException(""));
 		this.manager.setAuthenticationManager(am);
 		assertThatExceptionOfType(BadCredentialsException.class)
-				.isThrownBy(() -> this.manager.changePassword("password", "newPassword"));
+			.isThrownBy(() -> this.manager.changePassword("password", "newPassword"));
 		// Check password hasn't changed.
 		UserDetails newJoe = this.manager.loadUserByUsername("joe");
 		assertThat(newJoe.getPassword()).isEqualTo("password");
 		assertThat(SecurityContextHolder.getContext().getAuthentication().getCredentials()).isEqualTo("password");
-		assertThat(this.cache.getUserMap().containsKey("joe")).isTrue();
+		assertThat(this.cache.getUserMap()).containsKey("joe");
 	}
 
 	@Test
@@ -260,10 +285,9 @@ public class JdbcUserDetailsManagerTests {
 	}
 
 	@Test
-	@SuppressWarnings("unchecked")
 	public void createGroupInsertsCorrectData() {
 		this.manager.createGroup("TEST_GROUP", AuthorityUtils.createAuthorityList("ROLE_X", "ROLE_Y"));
-		List roles = this.template.queryForList("select ga.authority from groups g, group_authorities ga "
+		List<?> roles = this.template.queryForList("select ga.authority from groups g, group_authorities ga "
 				+ "where ga.group_id = g.id " + "and g.group_name = 'TEST_GROUP'");
 		assertThat(roles).hasSize(2);
 	}
@@ -283,7 +307,7 @@ public class JdbcUserDetailsManagerTests {
 	public void renameGroupIsSuccessful() {
 		this.manager.renameGroup("GROUP_0", "GROUP_X");
 		assertThat(this.template.queryForObject("select id from groups where group_name = 'GROUP_X'", Integer.class))
-				.isZero();
+			.isZero();
 	}
 
 	@Test
@@ -296,13 +320,13 @@ public class JdbcUserDetailsManagerTests {
 	public void removeUserFromGroupDeletesGroupMemberRow() {
 		this.manager.removeUserFromGroup("jerry", "GROUP_1");
 		assertThat(this.template.queryForList("select group_id from group_members where username = 'jerry'"))
-				.hasSize(1);
+			.hasSize(1);
 	}
 
 	@Test
 	public void findGroupAuthoritiesReturnsCorrectAuthorities() {
 		assertThat(AuthorityUtils.createAuthorityList("ROLE_A"))
-				.isEqualTo(this.manager.findGroupAuthorities("GROUP_0"));
+			.isEqualTo(this.manager.findGroupAuthorities("GROUP_0"));
 	}
 
 	@Test
@@ -342,16 +366,69 @@ public class JdbcUserDetailsManagerTests {
 
 	// SEC-2166
 	@Test
-	public void createNewAuthenticationUsesNullPasswordToKeepPassordsSave() {
+	public void createNewAuthenticationUsesNullPasswordToKeepPasswordSave() {
 		insertJoe();
-		UsernamePasswordAuthenticationToken currentAuth = new UsernamePasswordAuthenticationToken("joe", null,
+		UsernamePasswordAuthenticationToken currentAuth = UsernamePasswordAuthenticationToken.authenticated("joe", null,
 				AuthorityUtils.createAuthorityList("ROLE_USER"));
 		Authentication updatedAuth = this.manager.createNewAuthentication(currentAuth, "new");
 		assertThat(updatedAuth.getCredentials()).isNull();
 	}
 
+	@Test
+	public void setUserDetailsMapperWithNullMapperThrowsException() {
+		assertThatExceptionOfType(IllegalArgumentException.class)
+			.isThrownBy(() -> this.manager.setUserDetailsMapper(null))
+			.withMessage("userDetailsMapper cannot be null");
+	}
+
+	@Test
+	public void setUserDetailsMapperWithMockMapper() throws SQLException {
+		RowMapper<UserDetails> mockMapper = mock(RowMapper.class);
+		given(mockMapper.mapRow(any(), anyInt())).willReturn(joe);
+		this.manager.setUserDetailsMapper(mockMapper);
+		insertJoe();
+		UserDetails newJoe = this.manager.loadUserByUsername("joe");
+		assertThat(joe).isEqualTo(newJoe);
+		verify(mockMapper).mapRow(any(), anyInt());
+	}
+
+	@Test
+	public void setGrantedAuthorityMapperWithNullMapperThrowsException() {
+		assertThatExceptionOfType(IllegalArgumentException.class)
+			.isThrownBy(() -> this.manager.setGrantedAuthorityMapper(null))
+			.withMessage("grantedAuthorityMapper cannot be null");
+	}
+
+	@Test
+	public void setGrantedAuthorityMapperWithMockMapper() throws SQLException {
+		RowMapper<GrantedAuthority> mockMapper = mock(RowMapper.class);
+		GrantedAuthority mockAuthority = new SimpleGrantedAuthority("ROLE_MOCK");
+		given(mockMapper.mapRow(any(), anyInt())).willReturn(mockAuthority);
+		this.manager.setGrantedAuthorityMapper(mockMapper);
+		List<GrantedAuthority> authGroup = this.manager.findGroupAuthorities("GROUP_0");
+		assertThat(authGroup.get(0)).isEqualTo(mockAuthority);
+		verify(mockMapper).mapRow(any(), anyInt());
+	}
+
+	@Test
+	void updatePasswordWhenDisabledReturnOriginalUser() {
+		insertJoe();
+		this.manager.updatePassword(joe, "new");
+		UserDetails newJoe = this.manager.loadUserByUsername("joe");
+		assertThat(newJoe.getPassword()).isEqualTo("password");
+	}
+
+	@Test
+	void updatePasswordWhenEnabledShouldUpdatePassword() {
+		insertJoe();
+		this.manager.setEnableUpdatePassword(true);
+		this.manager.updatePassword(joe, "new");
+		UserDetails newJoe = this.manager.loadUserByUsername("joe");
+		assertThat(newJoe.getPassword()).isEqualTo("new");
+	}
+
 	private Authentication authenticateJoe() {
-		UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken("joe", "password",
+		UsernamePasswordAuthenticationToken auth = UsernamePasswordAuthenticationToken.authenticated("joe", "password",
 				joe.getAuthorities());
 		SecurityContextHolder.getContext().setAuthentication(auth);
 		return auth;
@@ -365,9 +442,9 @@ public class JdbcUserDetailsManagerTests {
 		this.cache.putUserInCache(joe);
 	}
 
-	private class MockUserCache implements UserCache {
+	private static class MockUserCache implements UserCache {
 
-		private Map<String, UserDetails> cache = new HashMap<>();
+		private final Map<String, UserDetails> cache = new HashMap<>();
 
 		@Override
 		public UserDetails getUserFromCache(String username) {

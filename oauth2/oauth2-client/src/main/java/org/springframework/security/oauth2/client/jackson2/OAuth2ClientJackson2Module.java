@@ -16,8 +16,6 @@
 
 package org.springframework.security.oauth2.client.jackson2;
 
-import java.util.Collections;
-
 import com.fasterxml.jackson.core.Version;
 import com.fasterxml.jackson.databind.module.SimpleModule;
 
@@ -88,6 +86,7 @@ import org.springframework.security.oauth2.core.user.OAuth2UserAuthority;
  * @see OAuth2AuthenticationExceptionMixin
  * @see OAuth2ErrorMixin
  */
+@SuppressWarnings("serial")
 public class OAuth2ClientJackson2Module extends SimpleModule {
 
 	public OAuth2ClientJackson2Module() {
@@ -97,8 +96,6 @@ public class OAuth2ClientJackson2Module extends SimpleModule {
 	@Override
 	public void setupModule(SetupContext context) {
 		SecurityJackson2Modules.enableDefaultTyping(context.getOwner());
-		context.setMixInAnnotations(Collections.unmodifiableMap(Collections.emptyMap()).getClass(),
-				UnmodifiableMapMixin.class);
 		context.setMixInAnnotations(OAuth2AuthorizationRequest.class, OAuth2AuthorizationRequestMixin.class);
 		context.setMixInAnnotations(ClientRegistration.class, ClientRegistrationMixin.class);
 		context.setMixInAnnotations(OAuth2AccessToken.class, OAuth2AccessTokenMixin.class);

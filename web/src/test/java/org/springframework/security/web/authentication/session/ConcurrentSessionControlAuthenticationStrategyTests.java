@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2019 the original author or authors.
+ * Copyright 2002-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,9 +41,11 @@ import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 /**
  * @author Rob Winch
+ * @author Claudenir Freitas
  *
  */
 @ExtendWith(MockitoExtension.class)
@@ -80,7 +82,7 @@ public class ConcurrentSessionControlAuthenticationStrategyTests {
 	@Test
 	public void noRegisteredSession() {
 		given(this.sessionRegistry.getAllSessions(any(), anyBoolean()))
-				.willReturn(Collections.<SessionInformation>emptyList());
+			.willReturn(Collections.<SessionInformation>emptyList());
 		this.strategy.setMaximumSessions(1);
 		this.strategy.setExceptionIfMaximumExceeded(true);
 		this.strategy.onAuthentication(this.authentication, this.request, this.response);
@@ -92,7 +94,7 @@ public class ConcurrentSessionControlAuthenticationStrategyTests {
 		MockHttpSession session = new MockHttpSession(new MockServletContext(), this.sessionInformation.getSessionId());
 		this.request.setSession(session);
 		given(this.sessionRegistry.getAllSessions(any(), anyBoolean()))
-				.willReturn(Collections.<SessionInformation>singletonList(this.sessionInformation));
+			.willReturn(Collections.<SessionInformation>singletonList(this.sessionInformation));
 		this.strategy.setMaximumSessions(1);
 		this.strategy.setExceptionIfMaximumExceeded(true);
 		this.strategy.onAuthentication(this.authentication, this.request, this.response);
@@ -102,17 +104,17 @@ public class ConcurrentSessionControlAuthenticationStrategyTests {
 	@Test
 	public void maxSessionsWithException() {
 		given(this.sessionRegistry.getAllSessions(any(), anyBoolean()))
-				.willReturn(Collections.<SessionInformation>singletonList(this.sessionInformation));
+			.willReturn(Collections.<SessionInformation>singletonList(this.sessionInformation));
 		this.strategy.setMaximumSessions(1);
 		this.strategy.setExceptionIfMaximumExceeded(true);
 		assertThatExceptionOfType(SessionAuthenticationException.class)
-				.isThrownBy(() -> this.strategy.onAuthentication(this.authentication, this.request, this.response));
+			.isThrownBy(() -> this.strategy.onAuthentication(this.authentication, this.request, this.response));
 	}
 
 	@Test
 	public void maxSessionsExpireExistingUser() {
 		given(this.sessionRegistry.getAllSessions(any(), anyBoolean()))
-				.willReturn(Collections.<SessionInformation>singletonList(this.sessionInformation));
+			.willReturn(Collections.<SessionInformation>singletonList(this.sessionInformation));
 		this.strategy.setMaximumSessions(1);
 		this.strategy.onAuthentication(this.authentication, this.request, this.response);
 		assertThat(this.sessionInformation.isExpired()).isTrue();
@@ -123,7 +125,7 @@ public class ConcurrentSessionControlAuthenticationStrategyTests {
 		SessionInformation moreRecentSessionInfo = new SessionInformation(this.authentication.getPrincipal(), "unique",
 				new Date(1374766999999L));
 		given(this.sessionRegistry.getAllSessions(any(), anyBoolean()))
-				.willReturn(Arrays.<SessionInformation>asList(moreRecentSessionInfo, this.sessionInformation));
+			.willReturn(Arrays.<SessionInformation>asList(moreRecentSessionInfo, this.sessionInformation));
 		this.strategy.setMaximumSessions(2);
 		this.strategy.onAuthentication(this.authentication, this.request, this.response);
 		assertThat(this.sessionInformation.isExpired()).isTrue();
@@ -142,6 +144,86 @@ public class ConcurrentSessionControlAuthenticationStrategyTests {
 		assertThat(oldestSessionInfo.isExpired()).isTrue();
 		assertThat(secondOldestSessionInfo.isExpired()).isTrue();
 		assertThat(this.sessionInformation.isExpired()).isFalse();
+	}
+
+	@Test
+	public void setMaximumSessionsWithNullValue() {
+		assertThatExceptionOfType(IllegalArgumentException.class)
+			.isThrownBy(() -> this.strategy.setMaximumSessions(null))
+			.withMessage("sessionLimit cannot be null");
+	}
+
+	@Test
+	public void noRegisteredSessionUsingSessionLimit() {
+		given(this.sessionRegistry.getAllSessions(any(), anyBoolean())).willReturn(Collections.emptyList());
+		this.strategy.setMaximumSessions(SessionLimit.of(1));
+		this.strategy.setExceptionIfMaximumExceeded(true);
+		this.strategy.onAuthentication(this.authentication, this.request, this.response);
+		// no exception
+	}
+
+	@Test
+	public void maxSessionsSameSessionIdUsingSessionLimit() {
+		MockHttpSession session = new MockHttpSession(new MockServletContext(), this.sessionInformation.getSessionId());
+		this.request.setSession(session);
+		given(this.sessionRegistry.getAllSessions(any(), anyBoolean()))
+			.willReturn(Collections.singletonList(this.sessionInformation));
+		this.strategy.setMaximumSessions(SessionLimit.of(1));
+		this.strategy.setExceptionIfMaximumExceeded(true);
+		this.strategy.onAuthentication(this.authentication, this.request, this.response);
+		// no exception
+	}
+
+	@Test
+	public void maxSessionsWithExceptionUsingSessionLimit() {
+		given(this.sessionRegistry.getAllSessions(any(), anyBoolean()))
+			.willReturn(Collections.singletonList(this.sessionInformation));
+		this.strategy.setMaximumSessions(SessionLimit.of(1));
+		this.strategy.setExceptionIfMaximumExceeded(true);
+		assertThatExceptionOfType(SessionAuthenticationException.class)
+			.isThrownBy(() -> this.strategy.onAuthentication(this.authentication, this.request, this.response));
+	}
+
+	@Test
+	public void maxSessionsExpireExistingUserUsingSessionLimit() {
+		given(this.sessionRegistry.getAllSessions(any(), anyBoolean()))
+			.willReturn(Collections.singletonList(this.sessionInformation));
+		this.strategy.setMaximumSessions(SessionLimit.of(1));
+		this.strategy.onAuthentication(this.authentication, this.request, this.response);
+		assertThat(this.sessionInformation.isExpired()).isTrue();
+	}
+
+	@Test
+	public void maxSessionsExpireLeastRecentExistingUserUsingSessionLimit() {
+		SessionInformation moreRecentSessionInfo = new SessionInformation(this.authentication.getPrincipal(), "unique",
+				new Date(1374766999999L));
+		given(this.sessionRegistry.getAllSessions(any(), anyBoolean()))
+			.willReturn(Arrays.asList(moreRecentSessionInfo, this.sessionInformation));
+		this.strategy.setMaximumSessions(SessionLimit.of(2));
+		this.strategy.onAuthentication(this.authentication, this.request, this.response);
+		assertThat(this.sessionInformation.isExpired()).isTrue();
+	}
+
+	@Test
+	public void onAuthenticationWhenMaxSessionsExceededByTwoThenTwoSessionsExpiredUsingSessionLimit() {
+		SessionInformation oldestSessionInfo = new SessionInformation(this.authentication.getPrincipal(), "unique1",
+				new Date(1374766134214L));
+		SessionInformation secondOldestSessionInfo = new SessionInformation(this.authentication.getPrincipal(),
+				"unique2", new Date(1374766134215L));
+		given(this.sessionRegistry.getAllSessions(any(), anyBoolean()))
+			.willReturn(Arrays.asList(oldestSessionInfo, secondOldestSessionInfo, this.sessionInformation));
+		this.strategy.setMaximumSessions(SessionLimit.of(2));
+		this.strategy.onAuthentication(this.authentication, this.request, this.response);
+		assertThat(oldestSessionInfo.isExpired()).isTrue();
+		assertThat(secondOldestSessionInfo.isExpired()).isTrue();
+		assertThat(this.sessionInformation.isExpired()).isFalse();
+	}
+
+	@Test
+	public void onAuthenticationWhenSessionLimitIsUnlimited() {
+		this.strategy.setMaximumSessions(SessionLimit.UNLIMITED);
+		this.strategy.onAuthentication(this.authentication, this.request, this.response);
+		verifyNoInteractions(this.sessionRegistry);
 	}
 
 	@Test

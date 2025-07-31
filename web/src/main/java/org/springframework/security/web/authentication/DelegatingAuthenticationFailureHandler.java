@@ -20,9 +20,9 @@ import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-import javax.servlet.ServletException;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.util.Assert;
@@ -66,7 +66,7 @@ public class DelegatingAuthenticationFailureHandler implements AuthenticationFai
 	public void onAuthenticationFailure(HttpServletRequest request, HttpServletResponse response,
 			AuthenticationException exception) throws IOException, ServletException {
 		for (Map.Entry<Class<? extends AuthenticationException>, AuthenticationFailureHandler> entry : this.handlers
-				.entrySet()) {
+			.entrySet()) {
 			Class<? extends AuthenticationException> handlerMappedExceptionClass = entry.getKey();
 			if (handlerMappedExceptionClass.isAssignableFrom(exception.getClass())) {
 				AuthenticationFailureHandler handler = entry.getValue();

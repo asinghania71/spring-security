@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2019 the original author or authors.
+ * Copyright 2002-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,16 +19,17 @@ package org.springframework.security.config.annotation.web.configurers;
 import java.util.Arrays;
 import java.util.Collections;
 
-import javax.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletRequest;
 
+import org.springframework.context.ApplicationContext;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.AuthenticationDetailsSource;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.web.HttpSecurityBuilder;
-import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
-import org.springframework.security.config.annotation.web.configurers.openid.OpenIDLoginConfigurer;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.PortMapper;
+import org.springframework.security.web.PortResolver;
 import org.springframework.security.web.authentication.AbstractAuthenticationProcessingFilter;
 import org.springframework.security.web.authentication.AuthenticationFailureHandler;
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
@@ -38,6 +39,7 @@ import org.springframework.security.web.authentication.SavedRequestAwareAuthenti
 import org.springframework.security.web.authentication.SimpleUrlAuthenticationFailureHandler;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.security.web.authentication.session.SessionAuthenticationStrategy;
+import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.security.web.savedrequest.RequestCache;
 import org.springframework.security.web.util.matcher.AndRequestMatcher;
 import org.springframework.security.web.util.matcher.MediaTypeRequestMatcher;
@@ -51,13 +53,12 @@ import org.springframework.web.accept.HeaderContentNegotiationStrategy;
  * Base class for configuring {@link AbstractAuthenticationFilterConfigurer}. This is
  * intended for internal use only.
  *
- * @param T refers to "this" for returning the current configurer
- * @param F refers to the {@link AbstractAuthenticationProcessingFilter} that is being
+ * @param <T> refers to "this" for returning the current configurer
+ * @param <F> refers to the {@link AbstractAuthenticationProcessingFilter} that is being
  * built
  * @author Rob Winch
  * @since 3.2
  * @see FormLoginConfigurer
- * @see OpenIDLoginConfigurer
  */
 public abstract class AbstractAuthenticationFilterConfigurer<B extends HttpSecurityBuilder<B>, T extends AbstractAuthenticationFilterConfigurer<B, T, F>, F extends AbstractAuthenticationProcessingFilter>
 		extends AbstractHttpConfigurer<T, B> {
@@ -123,7 +124,7 @@ public abstract class AbstractAuthenticationFilterConfigurer<B extends HttpSecur
 	 * true. This is a shortcut for calling
 	 * {@link #successHandler(AuthenticationSuccessHandler)}.
 	 * @param defaultSuccessUrl the default success url
-	 * @param alwaysUse true if the {@code defaultSuccesUrl} should be used after
+	 * @param alwaysUse true if the {@code defaultSuccessUrl} should be used after
 	 * authentication despite if a protected page had been previously visited
 	 * @return the {@link FormLoginConfigurer} for additional customization
 	 */
@@ -143,6 +144,11 @@ public abstract class AbstractAuthenticationFilterConfigurer<B extends HttpSecur
 	public T loginProcessingUrl(String loginProcessingUrl) {
 		this.loginProcessingUrl = loginProcessingUrl;
 		this.authFilter.setRequiresAuthenticationRequestMatcher(createLoginProcessingUrlMatcher(loginProcessingUrl));
+		return getSelf();
+	}
+
+	public T securityContextRepository(SecurityContextRepository securityContextRepository) {
+		this.authFilter.setSecurityContextRepository(securityContextRepository);
 		return getSelf();
 	}
 
@@ -268,6 +274,10 @@ public abstract class AbstractAuthenticationFilterConfigurer<B extends HttpSecur
 		if (portMapper != null) {
 			this.authenticationEntryPoint.setPortMapper(portMapper);
 		}
+		PortResolver portResolver = getBeanOrNull(http, PortResolver.class);
+		if (portResolver != null) {
+			this.authenticationEntryPoint.setPortResolver(portResolver);
+		}
 		RequestCache requestCache = http.getSharedObject(RequestCache.class);
 		if (requestCache != null) {
 			this.defaultSuccessHandler.setRequestCache(requestCache);
@@ -279,7 +289,7 @@ public abstract class AbstractAuthenticationFilterConfigurer<B extends HttpSecur
 			this.authFilter.setAuthenticationDetailsSource(this.authenticationDetailsSource);
 		}
 		SessionAuthenticationStrategy sessionAuthenticationStrategy = http
-				.getSharedObject(SessionAuthenticationStrategy.class);
+			.getSharedObject(SessionAuthenticationStrategy.class);
 		if (sessionAuthenticationStrategy != null) {
 			this.authFilter.setSessionAuthenticationStrategy(sessionAuthenticationStrategy);
 		}
@@ -287,6 +297,13 @@ public abstract class AbstractAuthenticationFilterConfigurer<B extends HttpSecur
 		if (rememberMeServices != null) {
 			this.authFilter.setRememberMeServices(rememberMeServices);
 		}
+		SecurityContextConfigurer securityContextConfigurer = http.getConfigurer(SecurityContextConfigurer.class);
+		if (securityContextConfigurer != null && securityContextConfigurer.isRequireExplicitSave()) {
+			SecurityContextRepository securityContextRepository = securityContextConfigurer
+				.getSecurityContextRepository();
+			this.authFilter.setSecurityContextRepository(securityContextRepository);
+		}
+		this.authFilter.setSecurityContextHolderStrategy(getSecurityContextHolderStrategy());
 		F filter = postProcess(this.authFilter);
 		http.addFilter(filter);
 	}
@@ -294,14 +311,14 @@ public abstract class AbstractAuthenticationFilterConfigurer<B extends HttpSecur
 	/**
 	 * <p>
 	 * Specifies the URL to send users to if login is required. If used with
-	 * {@link WebSecurityConfigurerAdapter} a default login page will be generated when
-	 * this attribute is not specified.
+	 * {@link EnableWebSecurity} a default login page will be generated when this
+	 * attribute is not specified.
 	 * </p>
 	 *
 	 * <p>
 	 * If a URL is specified or this is not being used in conjunction with
-	 * {@link WebSecurityConfigurerAdapter}, users are required to process the specified
-	 * URL to generate a login page.
+	 * {@link EnableWebSecurity}, users are required to process the specified URL to
+	 * generate a login page.
 	 * </p>
 	 */
 	protected T loginPage(String loginPage) {
@@ -369,7 +386,6 @@ public abstract class AbstractAuthenticationFilterConfigurer<B extends HttpSecur
 
 	/**
 	 * Updates the default values for authentication.
-	 * @throws Exception
 	 */
 	protected final void updateAuthenticationDefaults() {
 		if (this.loginProcessingUrl == null) {
@@ -400,6 +416,14 @@ public abstract class AbstractAuthenticationFilterConfigurer<B extends HttpSecur
 	private void setLoginPage(String loginPage) {
 		this.loginPage = loginPage;
 		this.authenticationEntryPoint = new LoginUrlAuthenticationEntryPoint(loginPage);
+	}
+
+	private <C> C getBeanOrNull(B http, Class<C> clazz) {
+		ApplicationContext context = http.getSharedObject(ApplicationContext.class);
+		if (context == null) {
+			return null;
+		}
+		return context.getBeanProvider(clazz).getIfUnique();
 	}
 
 	@SuppressWarnings("unchecked")

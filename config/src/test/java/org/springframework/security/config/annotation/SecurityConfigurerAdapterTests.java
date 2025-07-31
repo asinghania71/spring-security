@@ -20,6 +20,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import org.springframework.core.Ordered;
+import org.springframework.security.config.ObjectPostProcessor;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -37,7 +38,7 @@ public class SecurityConfigurerAdapterTests {
 		this.adapter.addObjectPostProcessor(new OrderedObjectPostProcessor(Ordered.LOWEST_PRECEDENCE));
 		this.adapter.addObjectPostProcessor(new OrderedObjectPostProcessor(Ordered.HIGHEST_PRECEDENCE));
 		assertThat(this.adapter.postProcess("hi"))
-				.isEqualTo("hi " + Ordered.HIGHEST_PRECEDENCE + " " + Ordered.LOWEST_PRECEDENCE);
+			.isEqualTo("hi " + Ordered.HIGHEST_PRECEDENCE + " " + Ordered.LOWEST_PRECEDENCE);
 	}
 
 	static class OrderedObjectPostProcessor implements ObjectPostProcessor<String>, Ordered {

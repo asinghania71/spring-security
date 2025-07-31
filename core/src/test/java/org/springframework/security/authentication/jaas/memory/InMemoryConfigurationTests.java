@@ -59,19 +59,19 @@ public class InMemoryConfigurationTests {
 	@Test
 	public void constructorNullMapped() {
 		assertThatIllegalArgumentException()
-				.isThrownBy(() -> new InMemoryConfiguration((Map<String, AppConfigurationEntry[]>) null));
+			.isThrownBy(() -> new InMemoryConfiguration((Map<String, AppConfigurationEntry[]>) null));
 	}
 
 	@Test
 	public void constructorEmptyMap() {
 		assertThat(new InMemoryConfiguration(Collections.<String, AppConfigurationEntry[]>emptyMap())
-				.getAppConfigurationEntry("name")).isNull();
+			.getAppConfigurationEntry("name")).isNull();
 	}
 
 	@Test
 	public void constructorEmptyMapNullDefault() {
 		assertThat(new InMemoryConfiguration(Collections.<String, AppConfigurationEntry[]>emptyMap(), null)
-				.getAppConfigurationEntry("name")).isNull();
+			.getAppConfigurationEntry("name")).isNull();
 	}
 
 	@Test
@@ -89,7 +89,7 @@ public class InMemoryConfigurationTests {
 	public void mappedNonnullDefault() {
 		InMemoryConfiguration configuration = new InMemoryConfiguration(this.mappedEntries, this.defaultEntries);
 		assertThat(this.defaultEntries).isEqualTo(configuration.getAppConfigurationEntry("missing"));
-		assertThat(this.mappedEntries.get("name")).isEqualTo(configuration.getAppConfigurationEntry("name"));
+		assertThat(this.mappedEntries).containsEntry("name", configuration.getAppConfigurationEntry("name"));
 	}
 
 	@Test

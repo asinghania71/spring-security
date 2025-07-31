@@ -48,9 +48,9 @@ public class ReferrerPolicyServerHttpHeadersWriterTests {
 	public void writeHeadersWhenUsingDefaultsThenDoesNotWrite() {
 		this.writer.writeHttpHeaders(this.exchange);
 		HttpHeaders headers = this.exchange.getResponse().getHeaders();
-		assertThat(headers).hasSize(1);
+		assertThat(headers.headerNames()).hasSize(1);
 		assertThat(headers.get(ReferrerPolicyServerHttpHeadersWriter.REFERRER_POLICY))
-				.containsOnly(ReferrerPolicy.NO_REFERRER.getPolicy());
+			.containsOnly(ReferrerPolicy.NO_REFERRER.getPolicy());
 	}
 
 	@Test
@@ -58,19 +58,20 @@ public class ReferrerPolicyServerHttpHeadersWriterTests {
 		this.writer.setPolicy(ReferrerPolicy.SAME_ORIGIN);
 		this.writer.writeHttpHeaders(this.exchange);
 		HttpHeaders headers = this.exchange.getResponse().getHeaders();
-		assertThat(headers).hasSize(1);
+		assertThat(headers.headerNames()).hasSize(1);
 		assertThat(headers.get(ReferrerPolicyServerHttpHeadersWriter.REFERRER_POLICY))
-				.containsOnly(ReferrerPolicy.SAME_ORIGIN.getPolicy());
+			.containsOnly(ReferrerPolicy.SAME_ORIGIN.getPolicy());
 	}
 
 	@Test
 	public void writeHeadersWhenAlreadyWrittenThenWritesHeader() {
 		String headerValue = ReferrerPolicy.SAME_ORIGIN.getPolicy();
-		this.exchange.getResponse().getHeaders().set(ReferrerPolicyServerHttpHeadersWriter.REFERRER_POLICY,
-				headerValue);
+		this.exchange.getResponse()
+			.getHeaders()
+			.set(ReferrerPolicyServerHttpHeadersWriter.REFERRER_POLICY, headerValue);
 		this.writer.writeHttpHeaders(this.exchange);
 		HttpHeaders headers = this.exchange.getResponse().getHeaders();
-		assertThat(headers).hasSize(1);
+		assertThat(headers.headerNames()).hasSize(1);
 		assertThat(headers.get(ReferrerPolicyServerHttpHeadersWriter.REFERRER_POLICY)).containsOnly(headerValue);
 	}
 

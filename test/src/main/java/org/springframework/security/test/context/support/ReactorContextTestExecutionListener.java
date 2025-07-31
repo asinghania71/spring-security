@@ -84,7 +84,7 @@ public class ReactorContextTestExecutionListener extends DelegatingTestExecution
 		private static class SecuritySubContext<T> implements CoreSubscriber<T> {
 
 			private static String CONTEXT_DEFAULTED_ATTR_NAME = SecuritySubContext.class.getName()
-					.concat(".CONTEXT_DEFAULTED_ATTR_NAME");
+				.concat(".CONTEXT_DEFAULTED_ATTR_NAME");
 
 			private final CoreSubscriber<T> delegate;
 
@@ -107,7 +107,7 @@ public class ReactorContextTestExecutionListener extends DelegatingTestExecution
 					return context;
 				}
 				Context toMerge = ReactiveSecurityContextHolder.withSecurityContext(Mono.just(this.securityContext));
-				return toMerge.putAll(context);
+				return toMerge.putAll(context.readOnly());
 			}
 
 			@Override

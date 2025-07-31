@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2019 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,13 +20,16 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
 import org.springframework.security.config.test.SpringTestContext;
 import org.springframework.security.config.test.SpringTestContextExtension;
+import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.test.web.servlet.MockMvc;
 
+import static org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher.pathPattern;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -67,45 +70,44 @@ public class RequestMatcherConfigurerTests {
 		// @formatter:on
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class Sec2908Config extends WebSecurityConfigurerAdapter {
+	static class Sec2908Config {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.requestMatchers()
-					.antMatchers("/api/**")
-					.and()
-				.requestMatchers()
-					.antMatchers("/oauth/**")
-					.and()
-				.authorizeRequests()
-					.anyRequest().denyAll();
+				.securityMatchers((security) -> security
+					.requestMatchers(pathPattern("/api/**")))
+				.securityMatchers((security) -> security
+					.requestMatchers(pathPattern("/oauth/**")))
+				.authorizeHttpRequests((requests) -> requests
+					.anyRequest().denyAll());
+			return http.build();
 			// @formatter:on
 		}
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class AuthorizeRequestInLambdaConfig extends WebSecurityConfigurerAdapter {
+	static class AuthorizeRequestInLambdaConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.requestMatchers((requestMatchers) ->
-					requestMatchers
-						.antMatchers("/api/**")
+				.securityMatchers((secure) -> secure
+						.requestMatchers(pathPattern("/api/**"))
 				)
-				.requestMatchers((requestMatchers) ->
-					requestMatchers
-						.antMatchers("/oauth/**")
+				.securityMatchers((securityMatchers) -> securityMatchers
+						.requestMatchers(pathPattern("/oauth/**"))
 				)
-				.authorizeRequests((authorizeRequests) ->
-					authorizeRequests
+				.authorizeHttpRequests((authorize) -> authorize
 						.anyRequest().denyAll()
 				);
+			return http.build();
 			// @formatter:on
 		}
 

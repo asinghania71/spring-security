@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2025 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,48 +19,58 @@ package org.springframework.security.config.annotation.web.builders;
 import java.util.ArrayList;
 import java.util.List;
 
-import javax.servlet.Filter;
-import javax.servlet.ServletContext;
-import javax.servlet.http.HttpServletRequest;
-
+import io.micrometer.observation.ObservationRegistry;
+import jakarta.servlet.Filter;
+import jakarta.servlet.ServletContext;
+import jakarta.servlet.http.HttpServletRequest;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.NoSuchBeanDefinitionException;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
-import org.springframework.http.HttpMethod;
+import org.springframework.core.ResolvableType;
 import org.springframework.security.access.PermissionEvaluator;
 import org.springframework.security.access.expression.SecurityExpressionHandler;
 import org.springframework.security.access.hierarchicalroles.RoleHierarchy;
+import org.springframework.security.authorization.AuthorizationDecision;
 import org.springframework.security.authorization.AuthorizationManager;
+import org.springframework.security.authorization.SingleResultAuthorizationManager;
+import org.springframework.security.config.ObjectPostProcessor;
 import org.springframework.security.config.annotation.AbstractConfiguredSecurityBuilder;
-import org.springframework.security.config.annotation.ObjectPostProcessor;
 import org.springframework.security.config.annotation.SecurityBuilder;
 import org.springframework.security.config.annotation.web.AbstractRequestMatcherRegistry;
 import org.springframework.security.config.annotation.web.WebSecurityConfigurer;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configuration.WebSecurityConfiguration;
-import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
 import org.springframework.security.config.annotation.web.configuration.WebSecurityCustomizer;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.web.DefaultSecurityFilterChain;
 import org.springframework.security.web.FilterChainProxy;
+import org.springframework.security.web.FilterChainProxy.FilterChainDecorator;
 import org.springframework.security.web.FilterInvocation;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.AuthorizationManagerWebInvocationPrivilegeEvaluator;
+import org.springframework.security.web.access.AuthorizationManagerWebInvocationPrivilegeEvaluator.HttpServletRequestTransformer;
 import org.springframework.security.web.access.DefaultWebInvocationPrivilegeEvaluator;
+import org.springframework.security.web.access.PathPatternRequestTransformer;
 import org.springframework.security.web.access.RequestMatcherDelegatingWebInvocationPrivilegeEvaluator;
 import org.springframework.security.web.access.WebInvocationPrivilegeEvaluator;
 import org.springframework.security.web.access.expression.DefaultWebSecurityExpressionHandler;
 import org.springframework.security.web.access.intercept.AuthorizationFilter;
 import org.springframework.security.web.access.intercept.FilterSecurityInterceptor;
+import org.springframework.security.web.access.intercept.RequestAuthorizationContext;
+import org.springframework.security.web.access.intercept.RequestMatcherDelegatingAuthorizationManager;
 import org.springframework.security.web.debug.DebugFilter;
+import org.springframework.security.web.firewall.CompositeRequestRejectedHandler;
 import org.springframework.security.web.firewall.HttpFirewall;
+import org.springframework.security.web.firewall.HttpStatusRequestRejectedHandler;
+import org.springframework.security.web.firewall.ObservationMarkingRequestRejectedHandler;
 import org.springframework.security.web.firewall.RequestRejectedHandler;
 import org.springframework.security.web.firewall.StrictHttpFirewall;
-import org.springframework.security.web.servlet.util.matcher.MvcRequestMatcher;
+import org.springframework.security.web.util.matcher.AnyRequestMatcher;
 import org.springframework.security.web.util.matcher.RequestMatcher;
 import org.springframework.security.web.util.matcher.RequestMatcherEntry;
 import org.springframework.util.Assert;
@@ -77,8 +87,7 @@ import org.springframework.web.filter.DelegatingFilterProxy;
  *
  * <p>
  * Customizations to the {@link WebSecurity} can be made by creating a
- * {@link WebSecurityConfigurer}, overriding {@link WebSecurityConfigurerAdapter} or
- * exposing a {@link WebSecurityCustomizer} bean.
+ * {@link WebSecurityConfigurer} or exposing a {@link WebSecurityCustomizer} bean.
  * </p>
  *
  * @author Rob Winch
@@ -98,8 +107,6 @@ public final class WebSecurity extends AbstractConfiguredSecurityBuilder<Filter,
 
 	private IgnoredRequestConfigurer ignoredRequestRegistry;
 
-	private FilterSecurityInterceptor filterSecurityInterceptor;
-
 	private HttpFirewall httpFirewall;
 
 	private RequestRejectedHandler requestRejectedHandler;
@@ -107,6 +114,13 @@ public final class WebSecurity extends AbstractConfiguredSecurityBuilder<Filter,
 	private boolean debugEnabled;
 
 	private WebInvocationPrivilegeEvaluator privilegeEvaluator;
+
+	private ObservationRegistry observationRegistry = ObservationRegistry.NOOP;
+
+	private ObjectPostProcessor<FilterChainDecorator> filterChainDecoratorPostProcessor = ObjectPostProcessor
+		.identity();
+
+	private HttpServletRequestTransformer privilegeEvaluatorRequestTransformer;
 
 	private DefaultWebSecurityExpressionHandler defaultWebSecurityExpressionHandler = new DefaultWebSecurityExpressionHandler();
 
@@ -140,7 +154,7 @@ public final class WebSecurity extends AbstractConfiguredSecurityBuilder<Filter,
 	 * <pre>
 	 * webSecurityBuilder.ignoring()
 	 * // ignore all URLs that start with /resources/ or /static/
-	 * 		.antMatchers(&quot;/resources/**&quot;, &quot;/static/**&quot;);
+	 * 		.requestMatchers(&quot;/resources/**&quot;, &quot;/static/**&quot;);
 	 * </pre>
 	 *
 	 * Alternatively this will accomplish the same result:
@@ -148,7 +162,7 @@ public final class WebSecurity extends AbstractConfiguredSecurityBuilder<Filter,
 	 * <pre>
 	 * webSecurityBuilder.ignoring()
 	 * // ignore all URLs that start with /resources/ or /static/
-	 * 		.antMatchers(&quot;/resources/**&quot;).antMatchers(&quot;/static/**&quot;);
+	 * 		.requestMatchers(&quot;/resources/**&quot;).requestMatchers(&quot;/static/**&quot;);
 	 * </pre>
 	 *
 	 * Multiple invocations of ignoring() are also additive, so the following is also
@@ -157,10 +171,10 @@ public final class WebSecurity extends AbstractConfiguredSecurityBuilder<Filter,
 	 * <pre>
 	 * webSecurityBuilder.ignoring()
 	 * // ignore all URLs that start with /resources/
-	 * 		.antMatchers(&quot;/resources/**&quot;);
+	 * 		.requestMatchers(&quot;/resources/**&quot;);
 	 * webSecurityBuilder.ignoring()
 	 * // ignore all URLs that start with /static/
-	 * 		.antMatchers(&quot;/static/**&quot;);
+	 * 		.requestMatchers(&quot;/static/**&quot;);
 	 * // now both URLs that start with /resources/ and /static/ will be ignored
 	 * </pre>
 	 * @return the {@link IgnoredRequestConfigurer} to use for registering request that
@@ -200,7 +214,7 @@ public final class WebSecurity extends AbstractConfiguredSecurityBuilder<Filter,
 	 *
 	 * <p>
 	 * Typically this method is invoked automatically within the framework from
-	 * {@link WebSecurityConfigurerAdapter#init(WebSecurity)}
+	 * {@link WebSecurityConfiguration#springSecurityFilterChain()}
 	 * </p>
 	 * @param securityFilterChainBuilder the builder to use to create the
 	 * {@link SecurityFilterChain} instances
@@ -214,8 +228,8 @@ public final class WebSecurity extends AbstractConfiguredSecurityBuilder<Filter,
 
 	/**
 	 * Set the {@link WebInvocationPrivilegeEvaluator} to be used. If this is not
-	 * specified, then a {@link DefaultWebInvocationPrivilegeEvaluator} will be created
-	 * when {@link #securityInterceptor(FilterSecurityInterceptor)} is non null.
+	 * specified, then a {@link AuthorizationManagerWebInvocationPrivilegeEvaluator} will
+	 * be created based on the list of {@link SecurityFilterChain}.
 	 * @param privilegeEvaluator the {@link WebInvocationPrivilegeEvaluator} to use
 	 * @return the {@link WebSecurity} for further customizations
 	 */
@@ -249,25 +263,7 @@ public final class WebSecurity extends AbstractConfiguredSecurityBuilder<Filter,
 	 * @return the {@link WebInvocationPrivilegeEvaluator} for further customizations
 	 */
 	public WebInvocationPrivilegeEvaluator getPrivilegeEvaluator() {
-		if (this.privilegeEvaluator != null) {
-			return this.privilegeEvaluator;
-		}
-		return (this.filterSecurityInterceptor != null)
-				? new DefaultWebInvocationPrivilegeEvaluator(this.filterSecurityInterceptor) : null;
-	}
-
-	/**
-	 * Sets the {@link FilterSecurityInterceptor}. This is typically invoked by
-	 * {@link WebSecurityConfigurerAdapter}.
-	 * @param securityInterceptor the {@link FilterSecurityInterceptor} to use
-	 * @return the {@link WebSecurity} for further customizations
-	 * @deprecated Use {@link #privilegeEvaluator(WebInvocationPrivilegeEvaluator)}
-	 * instead
-	 */
-	@Deprecated
-	public WebSecurity securityInterceptor(FilterSecurityInterceptor securityInterceptor) {
-		this.filterSecurityInterceptor = securityInterceptor;
-		return this;
+		return this.privilegeEvaluator;
 	}
 
 	/**
@@ -280,34 +276,55 @@ public final class WebSecurity extends AbstractConfiguredSecurityBuilder<Filter,
 		return this;
 	}
 
+	/**
+	 * Sets the handler to handle
+	 * {@link org.springframework.security.web.firewall.RequestRejectedException}
+	 * @param requestRejectedHandler
+	 * @return the {@link WebSecurity} for further customizations
+	 * @since 5.7
+	 */
+	public WebSecurity requestRejectedHandler(RequestRejectedHandler requestRejectedHandler) {
+		Assert.notNull(requestRejectedHandler, "requestRejectedHandler cannot be null");
+		this.requestRejectedHandler = requestRejectedHandler;
+		return this;
+	}
+
 	@Override
 	protected Filter performBuild() throws Exception {
 		Assert.state(!this.securityFilterChainBuilders.isEmpty(),
 				() -> "At least one SecurityBuilder<? extends SecurityFilterChain> needs to be specified. "
-						+ "Typically this is done by exposing a SecurityFilterChain bean "
-						+ "or by adding a @Configuration that extends WebSecurityConfigurerAdapter. "
+						+ "Typically this is done by exposing a SecurityFilterChain bean. "
 						+ "More advanced users can invoke " + WebSecurity.class.getSimpleName()
 						+ ".addSecurityFilterChainBuilder directly");
 		int chainSize = this.ignoredRequests.size() + this.securityFilterChainBuilders.size();
 		List<SecurityFilterChain> securityFilterChains = new ArrayList<>(chainSize);
-		List<RequestMatcherEntry<List<WebInvocationPrivilegeEvaluator>>> requestMatcherPrivilegeEvaluatorsEntries = new ArrayList<>();
+		RequestMatcherDelegatingAuthorizationManager.Builder builder = RequestMatcherDelegatingAuthorizationManager
+			.builder();
+		boolean mappings = false;
 		for (RequestMatcher ignoredRequest : this.ignoredRequests) {
 			WebSecurity.this.logger.warn("You are asking Spring Security to ignore " + ignoredRequest
 					+ ". This is not recommended -- please use permitAll via HttpSecurity#authorizeHttpRequests instead.");
 			SecurityFilterChain securityFilterChain = new DefaultSecurityFilterChain(ignoredRequest);
 			securityFilterChains.add(securityFilterChain);
-			requestMatcherPrivilegeEvaluatorsEntries
-					.add(getRequestMatcherPrivilegeEvaluatorsEntry(securityFilterChain));
+			builder.add(ignoredRequest, SingleResultAuthorizationManager.permitAll());
+			mappings = true;
 		}
 		for (SecurityBuilder<? extends SecurityFilterChain> securityFilterChainBuilder : this.securityFilterChainBuilders) {
 			SecurityFilterChain securityFilterChain = securityFilterChainBuilder.build();
 			securityFilterChains.add(securityFilterChain);
-			requestMatcherPrivilegeEvaluatorsEntries
-					.add(getRequestMatcherPrivilegeEvaluatorsEntry(securityFilterChain));
+			mappings = addAuthorizationManager(securityFilterChain, builder) || mappings;
 		}
 		if (this.privilegeEvaluator == null) {
+			AuthorizationManager<HttpServletRequest> authorizationManager = mappings ? builder.build()
+					: SingleResultAuthorizationManager.permitAll();
+			AuthorizationManagerWebInvocationPrivilegeEvaluator privilegeEvaluator = new AuthorizationManagerWebInvocationPrivilegeEvaluator(
+					authorizationManager);
+			privilegeEvaluator.setServletContext(this.servletContext);
+			if (this.privilegeEvaluatorRequestTransformer != null) {
+				privilegeEvaluator.setRequestTransformer(this.privilegeEvaluatorRequestTransformer);
+			}
 			this.privilegeEvaluator = new RequestMatcherDelegatingWebInvocationPrivilegeEvaluator(
-					requestMatcherPrivilegeEvaluatorsEntries);
+					List.of(new RequestMatcherEntry<>(AnyRequestMatcher.INSTANCE, List.of(privilegeEvaluator))));
 		}
 		FilterChainProxy filterChainProxy = new FilterChainProxy(securityFilterChains);
 		if (this.httpFirewall != null) {
@@ -316,6 +333,14 @@ public final class WebSecurity extends AbstractConfiguredSecurityBuilder<Filter,
 		if (this.requestRejectedHandler != null) {
 			filterChainProxy.setRequestRejectedHandler(this.requestRejectedHandler);
 		}
+		else if (!this.observationRegistry.isNoop()) {
+			CompositeRequestRejectedHandler requestRejectedHandler = new CompositeRequestRejectedHandler(
+					new ObservationMarkingRequestRejectedHandler(this.observationRegistry),
+					new HttpStatusRequestRejectedHandler());
+			filterChainProxy.setRequestRejectedHandler(requestRejectedHandler);
+		}
+		filterChainProxy.setFilterChainValidator(new WebSecurityFilterChainValidator());
+		filterChainProxy.setFilterChainDecorator(getFilterChainDecorator());
 		filterChainProxy.afterPropertiesSet();
 
 		Filter result = filterChainProxy;
@@ -327,31 +352,38 @@ public final class WebSecurity extends AbstractConfiguredSecurityBuilder<Filter,
 					+ "********************************************************************\n\n");
 			result = new DebugFilter(filterChainProxy);
 		}
+
 		this.postBuildAction.run();
 		return result;
 	}
 
-	private RequestMatcherEntry<List<WebInvocationPrivilegeEvaluator>> getRequestMatcherPrivilegeEvaluatorsEntry(
-			SecurityFilterChain securityFilterChain) {
-		List<WebInvocationPrivilegeEvaluator> privilegeEvaluators = new ArrayList<>();
+	private boolean addAuthorizationManager(SecurityFilterChain securityFilterChain,
+			RequestMatcherDelegatingAuthorizationManager.Builder builder) {
+		boolean mappings = false;
 		for (Filter filter : securityFilterChain.getFilters()) {
-			if (filter instanceof FilterSecurityInterceptor) {
-				DefaultWebInvocationPrivilegeEvaluator defaultWebInvocationPrivilegeEvaluator = new DefaultWebInvocationPrivilegeEvaluator(
-						(FilterSecurityInterceptor) filter);
-				defaultWebInvocationPrivilegeEvaluator.setServletContext(this.servletContext);
-				privilegeEvaluators.add(defaultWebInvocationPrivilegeEvaluator);
+			if (filter instanceof FilterSecurityInterceptor securityInterceptor) {
+				DefaultWebInvocationPrivilegeEvaluator privilegeEvaluator = new DefaultWebInvocationPrivilegeEvaluator(
+						securityInterceptor);
+				privilegeEvaluator.setServletContext(this.servletContext);
+				AuthorizationManager<RequestAuthorizationContext> authorizationManager = (authentication, context) -> {
+					HttpServletRequest request = context.getRequest();
+					boolean result = privilegeEvaluator.isAllowed(request.getContextPath(), request.getRequestURI(),
+							request.getMethod(), authentication.get());
+					return new AuthorizationDecision(result);
+				};
+				builder.add(securityFilterChain::matches, authorizationManager);
+				mappings = true;
 				continue;
 			}
-			if (filter instanceof AuthorizationFilter) {
-				AuthorizationManager<HttpServletRequest> authorizationManager = ((AuthorizationFilter) filter)
-						.getAuthorizationManager();
-				AuthorizationManagerWebInvocationPrivilegeEvaluator evaluator = new AuthorizationManagerWebInvocationPrivilegeEvaluator(
-						authorizationManager);
-				evaluator.setServletContext(this.servletContext);
-				privilegeEvaluators.add(evaluator);
+			if (filter instanceof AuthorizationFilter authorization) {
+				AuthorizationManager<HttpServletRequest> authorizationManager = authorization.getAuthorizationManager();
+				builder.add(securityFilterChain::matches,
+						(authentication, context) -> (AuthorizationDecision) authorizationManager
+							.authorize(authentication, context.getRequest()));
+				mappings = true;
 			}
 		}
-		return new RequestMatcherEntry<>(securityFilterChain::matches, privilegeEvaluators);
+		return mappings;
 	}
 
 	@Override
@@ -364,7 +396,7 @@ public final class WebSecurity extends AbstractConfiguredSecurityBuilder<Filter,
 		}
 		try {
 			this.defaultWebSecurityExpressionHandler
-					.setPermissionEvaluator(applicationContext.getBean(PermissionEvaluator.class));
+				.setPermissionEvaluator(applicationContext.getBean(PermissionEvaluator.class));
 		}
 		catch (NoSuchBeanDefinitionException ex) {
 		}
@@ -379,6 +411,19 @@ public final class WebSecurity extends AbstractConfiguredSecurityBuilder<Filter,
 		}
 		catch (NoSuchBeanDefinitionException ex) {
 		}
+		try {
+			this.observationRegistry = applicationContext.getBean(ObservationRegistry.class);
+		}
+		catch (NoSuchBeanDefinitionException ex) {
+		}
+		ResolvableType type = ResolvableType.forClassWithGenerics(ObjectPostProcessor.class,
+				FilterChainDecorator.class);
+		ObjectProvider<ObjectPostProcessor<FilterChainDecorator>> postProcessor = applicationContext
+			.getBeanProvider(type);
+		this.filterChainDecoratorPostProcessor = postProcessor.getIfUnique(ObjectPostProcessor::identity);
+		Class<HttpServletRequestTransformer> requestTransformerClass = HttpServletRequestTransformer.class;
+		this.privilegeEvaluatorRequestTransformer = applicationContext.getBeanProvider(requestTransformerClass)
+			.getIfUnique(PathPatternRequestTransformer::new);
 	}
 
 	@Override
@@ -386,28 +431,8 @@ public final class WebSecurity extends AbstractConfiguredSecurityBuilder<Filter,
 		this.servletContext = servletContext;
 	}
 
-	/**
-	 * An {@link IgnoredRequestConfigurer} that allows optionally configuring the
-	 * {@link MvcRequestMatcher#setMethod(HttpMethod)}
-	 *
-	 * @author Rob Winch
-	 */
-	public final class MvcMatchersIgnoredRequestConfigurer extends IgnoredRequestConfigurer {
-
-		private final List<MvcRequestMatcher> mvcMatchers;
-
-		private MvcMatchersIgnoredRequestConfigurer(ApplicationContext context, List<MvcRequestMatcher> mvcMatchers) {
-			super(context);
-			this.mvcMatchers = mvcMatchers;
-		}
-
-		public IgnoredRequestConfigurer servletPath(String servletPath) {
-			for (MvcRequestMatcher matcher : this.mvcMatchers) {
-				matcher.setServletPath(servletPath);
-			}
-			return this;
-		}
-
+	FilterChainDecorator getFilterChainDecorator() {
+		return this.filterChainDecoratorPostProcessor.postProcess(new FilterChainProxy.VirtualFilterChainDecorator());
 	}
 
 	/**
@@ -421,18 +446,6 @@ public final class WebSecurity extends AbstractConfiguredSecurityBuilder<Filter,
 
 		IgnoredRequestConfigurer(ApplicationContext context) {
 			setApplicationContext(context);
-		}
-
-		@Override
-		public MvcMatchersIgnoredRequestConfigurer mvcMatchers(HttpMethod method, String... mvcPatterns) {
-			List<MvcRequestMatcher> mvcMatchers = createMvcMatchers(method, mvcPatterns);
-			WebSecurity.this.ignoredRequests.addAll(mvcMatchers);
-			return new MvcMatchersIgnoredRequestConfigurer(getApplicationContext(), mvcMatchers);
-		}
-
-		@Override
-		public MvcMatchersIgnoredRequestConfigurer mvcMatchers(String... mvcPatterns) {
-			return mvcMatchers(null, mvcPatterns);
 		}
 
 		@Override

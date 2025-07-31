@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2020 the original author or authors.
+ * Copyright 2002-2025 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,8 +34,10 @@ import org.springframework.security.web.server.util.matcher.ServerWebExchangeMat
 import org.springframework.security.web.server.util.matcher.ServerWebExchangeMatcher.MatchResult;
 import org.springframework.security.web.server.util.matcher.ServerWebExchangeMatchers;
 import org.springframework.util.Assert;
+import org.springframework.util.MultiValueMap;
 import org.springframework.web.server.ServerWebExchange;
 import org.springframework.web.server.WebSession;
+import org.springframework.web.util.UriComponentsBuilder;
 
 /**
  * An implementation of {@link ServerRequestCache} that saves the
@@ -55,12 +57,15 @@ public class WebSessionServerRequestCache implements ServerRequestCache {
 
 	private String sessionAttrName = DEFAULT_SAVED_REQUEST_ATTR;
 
-	private ServerWebExchangeMatcher saveRequestMatcher = createDefaultRequestMacher();
+	private ServerWebExchangeMatcher saveRequestMatcher = createDefaultRequestMatcher();
+
+	private String matchingRequestParameterName;
 
 	/**
 	 * Sets the matcher to determine if the request should be saved. The default is to
 	 * match on any GET request.
-	 * @param saveRequestMatcher
+	 * @param saveRequestMatcher the {@link ServerWebExchangeMatcher} that determines if
+	 * the request should be saved
 	 */
 	public void setSaveRequestMatcher(ServerWebExchangeMatcher saveRequestMatcher) {
 		Assert.notNull(saveRequestMatcher, "saveRequestMatcher cannot be null");
@@ -69,31 +74,69 @@ public class WebSessionServerRequestCache implements ServerRequestCache {
 
 	@Override
 	public Mono<Void> saveRequest(ServerWebExchange exchange) {
-		return this.saveRequestMatcher.matches(exchange).filter(MatchResult::isMatch)
-				.flatMap((m) -> exchange.getSession()).map(WebSession::getAttributes).doOnNext((attrs) -> {
-					String requestPath = pathInApplication(exchange.getRequest());
-					attrs.put(this.sessionAttrName, requestPath);
-					logger.debug(LogMessage.format("Request added to WebSession: '%s'", requestPath));
-				}).then();
+		return this.saveRequestMatcher.matches(exchange)
+			.filter(MatchResult::isMatch)
+			.flatMap((m) -> exchange.getSession())
+			.map(WebSession::getAttributes)
+			.doOnNext((attrs) -> {
+				String requestPath = pathInApplication(exchange.getRequest());
+				attrs.put(this.sessionAttrName, requestPath);
+				logger.debug(LogMessage.format("Request added to WebSession: '%s'", requestPath));
+			})
+			.then();
 	}
 
 	@Override
 	public Mono<URI> getRedirectUri(ServerWebExchange exchange) {
 		return exchange.getSession()
-				.flatMap((session) -> Mono.justOrEmpty(session.<String>getAttribute(this.sessionAttrName)))
-				.map(URI::create);
+			.flatMap((session) -> Mono.justOrEmpty(session.<String>getAttribute(this.sessionAttrName)))
+			.map(this::createRedirectUri);
 	}
 
 	@Override
 	public Mono<ServerHttpRequest> removeMatchingRequest(ServerWebExchange exchange) {
+		MultiValueMap<String, String> queryParams = exchange.getRequest().getQueryParams();
+		if (this.matchingRequestParameterName != null && !queryParams.containsKey(this.matchingRequestParameterName)) {
+			logger.trace(
+					"matchingRequestParameterName is required for getMatchingRequest to lookup a value, but not provided");
+			return Mono.empty();
+		}
+		ServerHttpRequest request = stripMatchingRequestParameterName(exchange.getRequest());
 		return exchange.getSession().map(WebSession::getAttributes).filter((attributes) -> {
-			String requestPath = pathInApplication(exchange.getRequest());
+			String requestPath = pathInApplication(request);
 			boolean removed = attributes.remove(this.sessionAttrName, requestPath);
 			if (removed) {
 				logger.debug(LogMessage.format("Request removed from WebSession: '%s'", requestPath));
 			}
 			return removed;
-		}).map((attributes) -> exchange.getRequest());
+		}).map((attributes) -> request);
+	}
+
+	/**
+	 * Specify the name of a query parameter that is added to the URL in
+	 * {@link #getRedirectUri(ServerWebExchange)} and is required for
+	 * {@link #removeMatchingRequest(ServerWebExchange)} to look up the
+	 * {@link ServerHttpRequest}.
+	 * @param matchingRequestParameterName the parameter name that must be in the request
+	 * for {@link #removeMatchingRequest(ServerWebExchange)} to check the session.
+	 */
+	public void setMatchingRequestParameterName(String matchingRequestParameterName) {
+		this.matchingRequestParameterName = matchingRequestParameterName;
+	}
+
+	private ServerHttpRequest stripMatchingRequestParameterName(ServerHttpRequest request) {
+		if (this.matchingRequestParameterName == null) {
+			return request;
+		}
+		// @formatter:off
+		URI uri = UriComponentsBuilder.fromUri(request.getURI())
+				.replaceQueryParam(this.matchingRequestParameterName)
+				.build()
+				.toUri();
+		return request.mutate()
+				.uri(uri)
+				.build();
+		// @formatter:on
 	}
 
 	private static String pathInApplication(ServerHttpRequest request) {
@@ -102,7 +145,19 @@ public class WebSessionServerRequestCache implements ServerRequestCache {
 		return path + ((query != null) ? "?" + query : "");
 	}
 
-	private static ServerWebExchangeMatcher createDefaultRequestMacher() {
+	private URI createRedirectUri(String uri) {
+		if (this.matchingRequestParameterName == null) {
+			return URI.create(uri);
+		}
+		// @formatter:off
+		return UriComponentsBuilder.fromUriString(uri)
+				.queryParam(this.matchingRequestParameterName)
+				.build()
+				.toUri();
+		// @formatter:on
+	}
+
+	private static ServerWebExchangeMatcher createDefaultRequestMatcher() {
 		ServerWebExchangeMatcher get = ServerWebExchangeMatchers.pathMatchers(HttpMethod.GET, "/**");
 		ServerWebExchangeMatcher notFavicon = new NegatedServerWebExchangeMatcher(
 				ServerWebExchangeMatchers.pathMatchers("/favicon.*"));

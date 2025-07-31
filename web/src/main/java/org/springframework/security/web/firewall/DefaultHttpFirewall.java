@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2016 the original author or authors.
+ * Copyright 2002-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,8 @@
 
 package org.springframework.security.web.firewall;
 
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 
 /**
  * <p>
@@ -87,10 +87,7 @@ public class DefaultHttpFirewall implements HttpFirewall {
 		if (this.allowUrlEncodedSlash || uri == null) {
 			return false;
 		}
-		if (uri.contains("%2f") || uri.contains("%2F")) {
-			return true;
-		}
-		return false;
+		return uri.contains("%2f") || uri.contains("%2F");
 	}
 
 	/**

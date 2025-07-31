@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2021 the original author or authors.
+ * Copyright 2004-2025 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,12 +18,12 @@ package org.springframework.security.web.access;
 
 import java.io.IOException;
 
-import javax.servlet.FilterChain;
-import javax.servlet.ServletException;
-import javax.servlet.ServletRequest;
-import javax.servlet.ServletResponse;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.ServletRequest;
+import jakarta.servlet.ServletResponse;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 
 import org.springframework.context.MessageSource;
 import org.springframework.context.MessageSourceAware;
@@ -38,6 +38,7 @@ import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.SpringSecurityMessageSource;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.context.SecurityContextHolderStrategy;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.savedrequest.HttpSessionRequestCache;
 import org.springframework.security.web.savedrequest.RequestCache;
@@ -55,8 +56,7 @@ import org.springframework.web.filter.GenericFilterBean;
  * <p>
  * If an {@link AuthenticationException} is detected, the filter will launch the
  * <code>authenticationEntryPoint</code>. This allows common handling of authentication
- * failures originating from any subclass of
- * {@link org.springframework.security.access.intercept.AbstractSecurityInterceptor}.
+ * failures originating from Web or Method Security.
  * <p>
  * If an {@link AccessDeniedException} is detected, the filter will determine whether or
  * not the user is an anonymous user. If they are an anonymous user, the
@@ -82,6 +82,9 @@ import org.springframework.web.filter.GenericFilterBean;
  */
 public class ExceptionTranslationFilter extends GenericFilterBean implements MessageSourceAware {
 
+	private SecurityContextHolderStrategy securityContextHolderStrategy = SecurityContextHolder
+		.getContextHolderStrategy();
+
 	private AccessDeniedHandler accessDeniedHandler = new AccessDeniedHandlerImpl();
 
 	private AuthenticationEntryPoint authenticationEntryPoint;
@@ -90,7 +93,7 @@ public class ExceptionTranslationFilter extends GenericFilterBean implements Mes
 
 	private ThrowableAnalyzer throwableAnalyzer = new DefaultThrowableAnalyzer();
 
-	private RequestCache requestCache = new HttpSessionRequestCache();
+	private final RequestCache requestCache;
 
 	protected MessageSourceAccessor messages = SpringSecurityMessageSource.getAccessor();
 
@@ -128,10 +131,10 @@ public class ExceptionTranslationFilter extends GenericFilterBean implements Mes
 			// Try to extract a SpringSecurityException from the stacktrace
 			Throwable[] causeChain = this.throwableAnalyzer.determineCauseChain(ex);
 			RuntimeException securityException = (AuthenticationException) this.throwableAnalyzer
-					.getFirstThrowableOfType(AuthenticationException.class, causeChain);
+				.getFirstThrowableOfType(AuthenticationException.class, causeChain);
 			if (securityException == null) {
 				securityException = (AccessDeniedException) this.throwableAnalyzer
-						.getFirstThrowableOfType(AccessDeniedException.class, causeChain);
+					.getFirstThrowableOfType(AccessDeniedException.class, causeChain);
 			}
 			if (securityException == null) {
 				rethrow(ex);
@@ -183,17 +186,18 @@ public class ExceptionTranslationFilter extends GenericFilterBean implements Mes
 
 	private void handleAccessDeniedException(HttpServletRequest request, HttpServletResponse response,
 			FilterChain chain, AccessDeniedException exception) throws ServletException, IOException {
-		Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+		Authentication authentication = this.securityContextHolderStrategy.getContext().getAuthentication();
 		boolean isAnonymous = this.authenticationTrustResolver.isAnonymous(authentication);
 		if (isAnonymous || this.authenticationTrustResolver.isRememberMe(authentication)) {
 			if (logger.isTraceEnabled()) {
 				logger.trace(LogMessage.format("Sending %s to authentication entry point since access is denied",
 						authentication), exception);
 			}
-			sendStartAuthentication(request, response, chain,
-					new InsufficientAuthenticationException(
-							this.messages.getMessage("ExceptionTranslationFilter.insufficientAuthentication",
-									"Full authentication is required to access this resource")));
+			AuthenticationException ex = new InsufficientAuthenticationException(
+					this.messages.getMessage("ExceptionTranslationFilter.insufficientAuthentication",
+							"Full authentication is required to access this resource"));
+			ex.setAuthenticationRequest(authentication);
+			sendStartAuthentication(request, response, chain, ex);
 		}
 		else {
 			if (logger.isTraceEnabled()) {
@@ -209,8 +213,8 @@ public class ExceptionTranslationFilter extends GenericFilterBean implements Mes
 			AuthenticationException reason) throws ServletException, IOException {
 		// SEC-112: Clear the SecurityContextHolder's Authentication, as the
 		// existing Authentication is no longer considered valid
-		SecurityContext context = SecurityContextHolder.createEmptyContext();
-		SecurityContextHolder.setContext(context);
+		SecurityContext context = this.securityContextHolderStrategy.createEmptyContext();
+		this.securityContextHolderStrategy.setContext(context);
 		this.requestCache.saveRequest(request, response);
 		this.authenticationEntryPoint.commence(request, response, reason);
 	}
@@ -237,6 +241,17 @@ public class ExceptionTranslationFilter extends GenericFilterBean implements Mes
 	public void setMessageSource(MessageSource messageSource) {
 		Assert.notNull(messageSource, "messageSource cannot be null");
 		this.messages = new MessageSourceAccessor(messageSource);
+	}
+
+	/**
+	 * Sets the {@link SecurityContextHolderStrategy} to use. The default action is to use
+	 * the {@link SecurityContextHolderStrategy} stored in {@link SecurityContextHolder}.
+	 *
+	 * @since 5.8
+	 */
+	public void setSecurityContextHolderStrategy(SecurityContextHolderStrategy securityContextHolderStrategy) {
+		Assert.notNull(securityContextHolderStrategy, "securityContextHolderStrategy cannot be null");
+		this.securityContextHolderStrategy = securityContextHolderStrategy;
 	}
 
 	/**

@@ -18,11 +18,10 @@ package org.springframework.security.web.debug;
 
 import java.util.Collections;
 
-import javax.servlet.FilterChain;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletRequestWrapper;
-import javax.servlet.http.HttpServletResponse;
-
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletRequestWrapper;
+import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -42,6 +41,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.springframework.security.web.servlet.TestMockHttpServletRequests.get;
 
 /**
  * @author Rob Winch
@@ -121,10 +121,7 @@ public class DebugFilterTests {
 
 	@Test
 	public void doFilterLogsProperly() throws Exception {
-		MockHttpServletRequest request = new MockHttpServletRequest();
-		request.setMethod("GET");
-		request.setServletPath("/path");
-		request.setPathInfo("/");
+		MockHttpServletRequest request = get().requestUri(null, "/path", "/").build();
 		request.addHeader("A", "A Value");
 		request.addHeader("A", "Another Value");
 		request.addHeader("B", "B Value");

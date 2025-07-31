@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2018 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,12 +21,16 @@ import java.lang.reflect.AnnotatedElement;
 import java.util.function.Supplier;
 
 import org.springframework.beans.BeanUtils;
+import org.springframework.context.ApplicationContext;
 import org.springframework.core.GenericTypeResolver;
 import org.springframework.core.annotation.AnnotatedElementUtils;
 import org.springframework.core.annotation.AnnotationUtils;
+import org.springframework.core.convert.converter.Converter;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.context.SecurityContextHolderStrategy;
 import org.springframework.security.test.context.TestSecurityContextHolder;
+import org.springframework.security.test.context.TestSecurityContextHolderStrategyAdapter;
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors;
 import org.springframework.test.context.TestContext;
 import org.springframework.test.context.TestContextAnnotationUtils;
@@ -51,7 +55,20 @@ import org.springframework.test.web.servlet.MockMvc;
 public class WithSecurityContextTestExecutionListener extends AbstractTestExecutionListener {
 
 	static final String SECURITY_CONTEXT_ATTR_NAME = WithSecurityContextTestExecutionListener.class.getName()
-			.concat(".SECURITY_CONTEXT");
+		.concat(".SECURITY_CONTEXT");
+
+	static final SecurityContextHolderStrategy DEFAULT_SECURITY_CONTEXT_HOLDER_STRATEGY = new TestSecurityContextHolderStrategyAdapter();
+
+	Converter<TestContext, SecurityContextHolderStrategy> securityContextHolderStrategyConverter = (testContext) -> {
+		if (!testContext.hasApplicationContext()) {
+			return DEFAULT_SECURITY_CONTEXT_HOLDER_STRATEGY;
+		}
+		ApplicationContext context = testContext.getApplicationContext();
+		if (context.getBeanNamesForType(SecurityContextHolderStrategy.class).length == 0) {
+			return DEFAULT_SECURITY_CONTEXT_HOLDER_STRATEGY;
+		}
+		return context.getBean(SecurityContextHolderStrategy.class);
+	};
 
 	/**
 	 * Sets up the {@link SecurityContext} for each test method. First the specific method
@@ -70,7 +87,7 @@ public class WithSecurityContextTestExecutionListener extends AbstractTestExecut
 		}
 		Supplier<SecurityContext> supplier = testSecurityContext.getSecurityContextSupplier();
 		if (testSecurityContext.getTestExecutionEvent() == TestExecutionEvent.TEST_METHOD) {
-			TestSecurityContextHolder.setContext(supplier.get());
+			this.securityContextHolderStrategyConverter.convert(testContext).setContext(supplier.get());
 		}
 		else {
 			testContext.setAttribute(SECURITY_CONTEXT_ATTR_NAME, supplier);
@@ -84,9 +101,9 @@ public class WithSecurityContextTestExecutionListener extends AbstractTestExecut
 	@Override
 	public void beforeTestExecution(TestContext testContext) {
 		Supplier<SecurityContext> supplier = (Supplier<SecurityContext>) testContext
-				.removeAttribute(SECURITY_CONTEXT_ATTR_NAME);
+			.removeAttribute(SECURITY_CONTEXT_ATTR_NAME);
 		if (supplier != null) {
-			TestSecurityContextHolder.setContext(supplier.get());
+			this.securityContextHolderStrategyConverter.convert(testContext).setContext(supplier.get());
 		}
 	}
 
@@ -98,7 +115,7 @@ public class WithSecurityContextTestExecutionListener extends AbstractTestExecut
 
 	private TestSecurityContext createTestSecurityContext(Class<?> annotated, TestContext context) {
 		TestContextAnnotationUtils.AnnotationDescriptor<WithSecurityContext> withSecurityContextDescriptor = TestContextAnnotationUtils
-				.findAnnotationDescriptor(annotated, WithSecurityContext.class);
+			.findAnnotationDescriptor(annotated, WithSecurityContext.class);
 		if (withSecurityContextDescriptor == null) {
 			return null;
 		}
@@ -116,7 +133,7 @@ public class WithSecurityContextTestExecutionListener extends AbstractTestExecut
 		withSecurityContext = AnnotationUtils.synthesizeAnnotation(withSecurityContext, annotated);
 		WithSecurityContextFactory factory = createFactory(withSecurityContext, context);
 		Class<? extends Annotation> type = (Class<? extends Annotation>) GenericTypeResolver
-				.resolveTypeArgument(factory.getClass(), WithSecurityContextFactory.class);
+			.resolveTypeArgument(factory.getClass(), WithSecurityContextFactory.class);
 		Annotation annotation = findAnnotation(annotated, type);
 		Supplier<SecurityContext> supplier = () -> {
 			try {
@@ -131,7 +148,7 @@ public class WithSecurityContextTestExecutionListener extends AbstractTestExecut
 	}
 
 	private Annotation findAnnotation(AnnotatedElement annotated, Class<? extends Annotation> type) {
-		Annotation findAnnotation = AnnotationUtils.findAnnotation(annotated, type);
+		Annotation findAnnotation = AnnotatedElementUtils.findMergedAnnotation(annotated, type);
 		if (findAnnotation != null) {
 			return findAnnotation;
 		}
@@ -166,7 +183,7 @@ public class WithSecurityContextTestExecutionListener extends AbstractTestExecut
 	 */
 	@Override
 	public void afterTestMethod(TestContext testContext) {
-		TestSecurityContextHolder.clearContext();
+		this.securityContextHolderStrategyConverter.convert(testContext).clearContext();
 	}
 
 	/**

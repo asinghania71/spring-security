@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2018 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,32 +18,37 @@ package org.springframework.security.config.annotation.web.builders;
 
 import java.io.IOException;
 
-import javax.servlet.FilterChain;
-import javax.servlet.ServletException;
-import javax.servlet.ServletRequest;
-import javax.servlet.ServletResponse;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.ServletRequest;
+import jakarta.servlet.ServletResponse;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import org.springframework.beans.factory.BeanCreationException;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.security.cas.web.CasAuthenticationFilter;
-import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
 import org.springframework.security.config.test.SpringTestContext;
 import org.springframework.security.config.test.SpringTestContextExtension;
 import org.springframework.security.core.userdetails.PasswordEncodedUser;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.provisioning.InMemoryUserDetailsManager;
+import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.filter.OncePerRequestFilter;
+import org.springframework.web.servlet.config.annotation.EnableWebMvc;
 
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
+import static org.springframework.security.config.Customizer.withDefaults;
+import static org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher.pathPattern;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -64,10 +69,10 @@ public class HttpConfigurationTests {
 	@Test
 	public void configureWhenAddFilterUnregisteredThenThrowsBeanCreationException() {
 		assertThatExceptionOfType(BeanCreationException.class)
-				.isThrownBy(() -> this.spring.register(UnregisteredFilterConfig.class).autowire())
-				.withMessageContaining("The Filter class " + UnregisteredFilter.class.getName()
-						+ " does not have a registered order and cannot be added without a specified order."
-						+ " Consider using addFilterBefore or addFilterAfter instead.");
+			.isThrownBy(() -> this.spring.register(UnregisteredFilterConfig.class).autowire())
+			.withMessageContaining("The Filter class " + UnregisteredFilter.class.getName()
+					+ " does not have a registered order and cannot be added without a specified order."
+					+ " Consider using addFilterBefore or addFilterAfter instead.");
 	}
 
 	// https://github.com/spring-projects/spring-security-javaconfig/issues/104
@@ -89,24 +94,22 @@ public class HttpConfigurationTests {
 		this.mockMvc.perform(get("/api/b")).andExpect(status().isUnauthorized());
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class UnregisteredFilterConfig extends WebSecurityConfigurerAdapter {
+	static class UnregisteredFilterConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
 				.addFilter(new UnregisteredFilter());
 			// @formatter:on
+			return http.build();
 		}
 
-		@Override
-		protected void configure(AuthenticationManagerBuilder auth) throws Exception {
-			// @formatter:off
-			auth
-				.inMemoryAuthentication()
-					.withUser(PasswordEncodedUser.user());
-			// @formatter:on
+		@Bean
+		UserDetailsService userDetailsService() {
+			return new InMemoryUserDetailsManager(PasswordEncodedUser.user());
 		}
 
 	}
@@ -122,35 +125,37 @@ public class HttpConfigurationTests {
 	}
 
 	@EnableWebSecurity
-	static class CasAuthenticationFilterConfig extends WebSecurityConfigurerAdapter {
+	static class CasAuthenticationFilterConfig {
+
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+			// @formatter:off
+			http
+					.addFilter(CAS_AUTHENTICATION_FILTER);
+			// @formatter:on
+			return http.build();
+		}
 
 		static CasAuthenticationFilter CAS_AUTHENTICATION_FILTER;
 
-		@Override
-		protected void configure(HttpSecurity http) {
-			// @formatter:off
-			http
-				.addFilter(CAS_AUTHENTICATION_FILTER);
-			// @formatter:on
-		}
-
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class RequestMatcherRegistryConfigs extends WebSecurityConfigurerAdapter {
+	@EnableWebMvc
+	static class RequestMatcherRegistryConfigs {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.requestMatchers()
-					.antMatchers("/api/**")
-					.antMatchers("/oauth/**")
-					.and()
-				.authorizeRequests()
-					.antMatchers("/**").hasRole("USER")
-					.and()
-				.httpBasic();
+				.securityMatchers((security) -> security
+					.requestMatchers(pathPattern("/api/**"))
+					.requestMatchers(pathPattern("/oauth/**")))
+				.authorizeHttpRequests((requests) -> requests
+					.anyRequest().hasRole("USER"))
+				.httpBasic(withDefaults());
+			return http.build();
 			// @formatter:on
 		}
 

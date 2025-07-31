@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2018 the original author or authors.
+ * Copyright 2002-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,13 +18,15 @@ package org.springframework.security.config.authentication;
 
 import java.util.Arrays;
 
+import io.micrometer.observation.ObservationRegistry;
+
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.BeanFactory;
 import org.springframework.beans.factory.BeanFactoryAware;
 import org.springframework.beans.factory.FactoryBean;
 import org.springframework.beans.factory.NoSuchBeanDefinitionException;
 import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.AuthenticationProvider;
+import org.springframework.security.authentication.ObservationAuthenticationManager;
 import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.BeanIds;
@@ -37,11 +39,14 @@ import org.springframework.security.crypto.password.PasswordEncoder;
  * has forgotten to declare the &lt;authentication-manager&gt; element.
  *
  * @author Luke Taylor
+ * @author Ngoc Nhan
  * @since 3.0
  */
 public class AuthenticationManagerFactoryBean implements FactoryBean<AuthenticationManager>, BeanFactoryAware {
 
 	private BeanFactory bf;
+
+	private ObservationRegistry observationRegistry = ObservationRegistry.NOOP;
 
 	public static final String MISSING_BEAN_ERROR_MESSAGE = "Did you forget to add a global <authentication-manager> element "
 			+ "to your configuration (with child <authentication-provider> elements)? Alternatively you can use the "
@@ -56,18 +61,21 @@ public class AuthenticationManagerFactoryBean implements FactoryBean<Authenticat
 			if (!BeanIds.AUTHENTICATION_MANAGER.equals(ex.getBeanName())) {
 				throw ex;
 			}
-			UserDetailsService uds = getBeanOrNull(UserDetailsService.class);
+			UserDetailsService uds = this.bf.getBeanProvider(UserDetailsService.class).getIfUnique();
 			if (uds == null) {
 				throw new NoSuchBeanDefinitionException(BeanIds.AUTHENTICATION_MANAGER, MISSING_BEAN_ERROR_MESSAGE);
 			}
-			DaoAuthenticationProvider provider = new DaoAuthenticationProvider();
-			provider.setUserDetailsService(uds);
-			PasswordEncoder passwordEncoder = getBeanOrNull(PasswordEncoder.class);
+			DaoAuthenticationProvider provider = new DaoAuthenticationProvider(uds);
+			PasswordEncoder passwordEncoder = this.bf.getBeanProvider(PasswordEncoder.class).getIfUnique();
 			if (passwordEncoder != null) {
 				provider.setPasswordEncoder(passwordEncoder);
 			}
 			provider.afterPropertiesSet();
-			return new ProviderManager(Arrays.<AuthenticationProvider>asList(provider));
+			ProviderManager manager = new ProviderManager(Arrays.asList(provider));
+			if (this.observationRegistry.isNoop()) {
+				return manager;
+			}
+			return new ObservationAuthenticationManager(this.observationRegistry, manager);
 		}
 	}
 
@@ -86,13 +94,8 @@ public class AuthenticationManagerFactoryBean implements FactoryBean<Authenticat
 		this.bf = beanFactory;
 	}
 
-	private <T> T getBeanOrNull(Class<T> type) {
-		try {
-			return this.bf.getBean(type);
-		}
-		catch (NoSuchBeanDefinitionException noUds) {
-			return null;
-		}
+	public void setObservationRegistry(ObservationRegistry observationRegistry) {
+		this.observationRegistry = observationRegistry;
 	}
 
 }

@@ -16,6 +16,7 @@
 
 package org.springframework.security.acls.jdbc;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -23,15 +24,15 @@ import java.util.UUID;
 
 import javax.sql.DataSource;
 
-import net.sf.ehcache.Cache;
-import net.sf.ehcache.CacheManager;
-import net.sf.ehcache.Ehcache;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
+import org.springframework.cache.concurrent.ConcurrentMapCache;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.acls.TargetObject;
 import org.springframework.security.acls.TargetObjectWithUUID;
@@ -41,10 +42,10 @@ import org.springframework.security.acls.domain.BasePermission;
 import org.springframework.security.acls.domain.ConsoleAuditLogger;
 import org.springframework.security.acls.domain.DefaultPermissionFactory;
 import org.springframework.security.acls.domain.DefaultPermissionGrantingStrategy;
-import org.springframework.security.acls.domain.EhCacheBasedAclCache;
 import org.springframework.security.acls.domain.GrantedAuthoritySid;
 import org.springframework.security.acls.domain.ObjectIdentityImpl;
 import org.springframework.security.acls.domain.PrincipalSid;
+import org.springframework.security.acls.domain.SpringCacheBasedAclCache;
 import org.springframework.security.acls.model.Acl;
 import org.springframework.security.acls.model.AuditableAccessControlEntry;
 import org.springframework.security.acls.model.MutableAcl;
@@ -55,6 +56,8 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.mock;
 
 /**
  * Tests {@link BasicLookupStrategy}
@@ -75,7 +78,7 @@ public abstract class AbstractBasicLookupStrategyTests {
 
 	private BasicLookupStrategy strategy;
 
-	private static CacheManager cacheManager;
+	private static CacheManagerMock cacheManager;
 
 	public abstract JdbcTemplate getJdbcTemplate();
 
@@ -83,14 +86,13 @@ public abstract class AbstractBasicLookupStrategyTests {
 
 	@BeforeAll
 	public static void initCacheManaer() {
-		cacheManager = CacheManager.create();
-		cacheManager.addCache(new Cache("basiclookuptestcache", 500, false, false, 30, 30));
+		cacheManager = new CacheManagerMock();
+		cacheManager.addCache("basiclookuptestcache");
 	}
 
 	@AfterAll
 	public static void shutdownCacheManager() {
-		cacheManager.removalAll();
-		cacheManager.shutdown();
+		cacheManager.clear();
 	}
 
 	@BeforeEach
@@ -118,9 +120,15 @@ public abstract class AbstractBasicLookupStrategyTests {
 		return new AclAuthorizationStrategyImpl(new SimpleGrantedAuthority("ROLE_ADMINISTRATOR"));
 	}
 
-	protected EhCacheBasedAclCache aclCache() {
-		return new EhCacheBasedAclCache(getCache(), new DefaultPermissionGrantingStrategy(new ConsoleAuditLogger()),
+	protected SpringCacheBasedAclCache aclCache() {
+		return new SpringCacheBasedAclCache(getCache(), new DefaultPermissionGrantingStrategy(new ConsoleAuditLogger()),
 				new AclAuthorizationStrategyImpl(new SimpleGrantedAuthority("ROLE_USER")));
+	}
+
+	protected Cache getCache() {
+		Cache cache = cacheManager.getCacheManager().getCache("basiclookuptestcache");
+		cache.clear();
+		return cache;
 	}
 
 	@AfterEach
@@ -134,12 +142,6 @@ public abstract class AbstractBasicLookupStrategyTests {
 		getJdbcTemplate().execute(query);
 	}
 
-	protected Ehcache getCache() {
-		Ehcache cache = cacheManager.getCache("basiclookuptestcache");
-		cache.removeAll();
-		return cache;
-	}
-
 	@Test
 	public void testAclsRetrievalWithDefaultBatchSize() throws Exception {
 		ObjectIdentity topParentOid = new ObjectIdentityImpl(TARGET_CLASS, 100L);
@@ -147,7 +149,7 @@ public abstract class AbstractBasicLookupStrategyTests {
 		// Deliberately use an integer for the child, to reproduce bug report in SEC-819
 		ObjectIdentity childOid = new ObjectIdentityImpl(TARGET_CLASS, 102);
 		Map<ObjectIdentity, Acl> map = this.strategy
-				.readAclsById(Arrays.asList(topParentOid, middleParentOid, childOid), null);
+			.readAclsById(Arrays.asList(topParentOid, middleParentOid, childOid), null);
 		checkEntries(topParentOid, middleParentOid, childOid, map);
 	}
 
@@ -161,7 +163,7 @@ public abstract class AbstractBasicLookupStrategyTests {
 		// Let's empty the database to force acls retrieval from cache
 		emptyDatabase();
 		Map<ObjectIdentity, Acl> map = this.strategy
-				.readAclsById(Arrays.asList(topParentOid, middleParentOid, childOid), null);
+			.readAclsById(Arrays.asList(topParentOid, middleParentOid, childOid), null);
 		checkEntries(topParentOid, middleParentOid, childOid, map);
 	}
 
@@ -174,7 +176,7 @@ public abstract class AbstractBasicLookupStrategyTests {
 		// acls
 		this.strategy.setBatchSize(1);
 		Map<ObjectIdentity, Acl> map = this.strategy
-				.readAclsById(Arrays.asList(topParentOid, middleParentOid, childOid), null);
+			.readAclsById(Arrays.asList(topParentOid, middleParentOid, childOid), null);
 		checkEntries(topParentOid, middleParentOid, childOid, map);
 	}
 
@@ -301,7 +303,7 @@ public abstract class AbstractBasicLookupStrategyTests {
 		getJdbcTemplate().execute(query);
 		ObjectIdentity oid = new ObjectIdentityImpl(TARGET_CLASS, 104L);
 		assertThatIllegalArgumentException()
-				.isThrownBy(() -> this.strategy.readAclsById(Arrays.asList(oid), Arrays.asList(BEN_SID)));
+			.isThrownBy(() -> this.strategy.readAclsById(Arrays.asList(oid), Arrays.asList(BEN_SID)));
 	}
 
 	@Test
@@ -316,6 +318,43 @@ public abstract class AbstractBasicLookupStrategyTests {
 		Sid result = this.strategy.createSid(false, "sid");
 		assertThat(result.getClass()).isEqualTo(GrantedAuthoritySid.class);
 		assertThat(((GrantedAuthoritySid) result).getGrantedAuthority()).isEqualTo("sid");
+	}
+
+	@Test
+	public void setObjectIdentityGeneratorWhenNullThenThrowsIllegalArgumentException() {
+		// @formatter:off
+		assertThatIllegalArgumentException()
+				.isThrownBy(() -> this.strategy.setObjectIdentityGenerator(null))
+				.withMessage("objectIdentityGenerator cannot be null");
+		// @formatter:on
+	}
+
+	private static final class CacheManagerMock {
+
+		private final List<String> cacheNames;
+
+		private final CacheManager cacheManager;
+
+		private CacheManagerMock() {
+			this.cacheNames = new ArrayList<>();
+			this.cacheManager = mock(CacheManager.class);
+			given(this.cacheManager.getCacheNames()).willReturn(this.cacheNames);
+		}
+
+		private CacheManager getCacheManager() {
+			return this.cacheManager;
+		}
+
+		private void addCache(String name) {
+			this.cacheNames.add(name);
+			Cache cache = new ConcurrentMapCache(name);
+			given(this.cacheManager.getCache(name)).willReturn(cache);
+		}
+
+		private void clear() {
+			this.cacheNames.clear();
+		}
+
 	}
 
 }

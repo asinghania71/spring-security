@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2018 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,10 +20,10 @@ import java.util.concurrent.Callable;
 
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.context.SecurityContextHolderStrategy;
 import org.springframework.util.Assert;
 import org.springframework.web.context.request.NativeWebRequest;
 import org.springframework.web.context.request.async.CallableProcessingInterceptor;
-import org.springframework.web.context.request.async.CallableProcessingInterceptorAdapter;
 
 /**
  * <p>
@@ -40,9 +40,12 @@ import org.springframework.web.context.request.async.CallableProcessingIntercept
  * @author Rob Winch
  * @since 3.2
  */
-public final class SecurityContextCallableProcessingInterceptor extends CallableProcessingInterceptorAdapter {
+public final class SecurityContextCallableProcessingInterceptor implements CallableProcessingInterceptor {
 
 	private volatile SecurityContext securityContext;
+
+	private SecurityContextHolderStrategy securityContextHolderStrategy = SecurityContextHolder
+		.getContextHolderStrategy();
 
 	/**
 	 * Create a new {@link SecurityContextCallableProcessingInterceptor} that uses the
@@ -68,18 +71,29 @@ public final class SecurityContextCallableProcessingInterceptor extends Callable
 	@Override
 	public <T> void beforeConcurrentHandling(NativeWebRequest request, Callable<T> task) {
 		if (this.securityContext == null) {
-			setSecurityContext(SecurityContextHolder.getContext());
+			setSecurityContext(this.securityContextHolderStrategy.getContext());
 		}
 	}
 
 	@Override
 	public <T> void preProcess(NativeWebRequest request, Callable<T> task) {
-		SecurityContextHolder.setContext(this.securityContext);
+		this.securityContextHolderStrategy.setContext(this.securityContext);
 	}
 
 	@Override
 	public <T> void postProcess(NativeWebRequest request, Callable<T> task, Object concurrentResult) {
-		SecurityContextHolder.clearContext();
+		this.securityContextHolderStrategy.clearContext();
+	}
+
+	/**
+	 * Sets the {@link SecurityContextHolderStrategy} to use. The default action is to use
+	 * the {@link SecurityContextHolderStrategy} stored in {@link SecurityContextHolder}.
+	 *
+	 * @since 5.8
+	 */
+	public void setSecurityContextHolderStrategy(SecurityContextHolderStrategy securityContextHolderStrategy) {
+		Assert.notNull(securityContextHolderStrategy, "securityContextHolderStrategy cannot be null");
+		this.securityContextHolderStrategy = securityContextHolderStrategy;
 	}
 
 	private void setSecurityContext(SecurityContext securityContext) {

@@ -19,13 +19,14 @@ package org.springframework.security.access.annotation;
 import java.util.ArrayList;
 import java.util.List;
 
-import javax.annotation.security.PermitAll;
-import javax.annotation.security.RolesAllowed;
+import jakarta.annotation.security.PermitAll;
+import jakarta.annotation.security.RolesAllowed;
 
 /**
  * @author Luke Taylor
  */
 @PermitAll
+@SuppressWarnings("serial")
 public class Jsr250BusinessServiceImpl implements BusinessService {
 
 	@Override

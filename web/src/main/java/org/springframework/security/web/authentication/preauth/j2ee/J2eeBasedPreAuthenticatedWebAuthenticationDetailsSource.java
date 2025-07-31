@@ -21,8 +21,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Set;
 
-import javax.servlet.http.HttpServletRequest;
-
+import jakarta.servlet.http.HttpServletRequest;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -68,9 +67,9 @@ public class J2eeBasedPreAuthenticatedWebAuthenticationDetailsSource implements
 
 	/**
 	 * Obtains the list of user roles based on the current user's JEE roles. The
-	 * {@link javax.servlet.http.HttpServletRequest#isUserInRole(String)} method is called
-	 * for each of the values in the {@code j2eeMappableRoles} set to determine if that
-	 * role should be assigned to the user.
+	 * {@link jakarta.servlet.http.HttpServletRequest#isUserInRole(String)} method is
+	 * called for each of the values in the {@code j2eeMappableRoles} set to determine if
+	 * that role should be assigned to the user.
 	 * @param request the request which should be used to extract the user's roles.
 	 * @return The subset of {@code j2eeMappableRoles} which applies to the current user
 	 * making the request.
@@ -94,7 +93,7 @@ public class J2eeBasedPreAuthenticatedWebAuthenticationDetailsSource implements
 	public PreAuthenticatedGrantedAuthoritiesWebAuthenticationDetails buildDetails(HttpServletRequest context) {
 		Collection<String> j2eeUserRoles = getUserRoles(context);
 		Collection<? extends GrantedAuthority> userGrantedAuthorities = this.j2eeUserRoles2GrantedAuthoritiesMapper
-				.getGrantedAuthorities(j2eeUserRoles);
+			.getGrantedAuthorities(j2eeUserRoles);
 		if (this.logger.isDebugEnabled()) {
 			this.logger.debug(LogMessage.format("J2EE roles [%s] mapped to Granted Authorities: [%s]", j2eeUserRoles,
 					userGrantedAuthorities));

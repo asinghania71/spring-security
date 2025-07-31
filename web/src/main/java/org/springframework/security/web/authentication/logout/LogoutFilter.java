@@ -18,22 +18,24 @@ package org.springframework.security.web.authentication.logout;
 
 import java.io.IOException;
 
-import javax.servlet.FilterChain;
-import javax.servlet.ServletException;
-import javax.servlet.ServletRequest;
-import javax.servlet.ServletResponse;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.ServletRequest;
+import jakarta.servlet.ServletResponse;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 
 import org.springframework.core.log.LogMessage;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.context.SecurityContextHolderStrategy;
 import org.springframework.security.web.util.UrlUtils;
-import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 import org.springframework.security.web.util.matcher.RequestMatcher;
 import org.springframework.util.Assert;
 import org.springframework.util.StringUtils;
 import org.springframework.web.filter.GenericFilterBean;
+
+import static org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher.pathPattern;
 
 /**
  * Logs a principal out.
@@ -51,6 +53,9 @@ import org.springframework.web.filter.GenericFilterBean;
  * @author Eddú Meléndez
  */
 public class LogoutFilter extends GenericFilterBean {
+
+	private SecurityContextHolderStrategy securityContextHolderStrategy = SecurityContextHolder
+		.getContextHolderStrategy();
 
 	private RequestMatcher logoutRequestMatcher;
 
@@ -92,7 +97,7 @@ public class LogoutFilter extends GenericFilterBean {
 	private void doFilter(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
 			throws IOException, ServletException {
 		if (requiresLogout(request, response)) {
-			Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+			Authentication auth = this.securityContextHolderStrategy.getContext().getAuthentication();
 			if (this.logger.isDebugEnabled()) {
 				this.logger.debug(LogMessage.format("Logging out [%s]", auth));
 			}
@@ -119,13 +124,24 @@ public class LogoutFilter extends GenericFilterBean {
 		return false;
 	}
 
+	/**
+	 * Sets the {@link SecurityContextHolderStrategy} to use. The default action is to use
+	 * the {@link SecurityContextHolderStrategy} stored in {@link SecurityContextHolder}.
+	 *
+	 * @since 5.8
+	 */
+	public void setSecurityContextHolderStrategy(SecurityContextHolderStrategy securityContextHolderStrategy) {
+		Assert.notNull(securityContextHolderStrategy, "securityContextHolderStrategy cannot be null");
+		this.securityContextHolderStrategy = securityContextHolderStrategy;
+	}
+
 	public void setLogoutRequestMatcher(RequestMatcher logoutRequestMatcher) {
 		Assert.notNull(logoutRequestMatcher, "logoutRequestMatcher cannot be null");
 		this.logoutRequestMatcher = logoutRequestMatcher;
 	}
 
 	public void setFilterProcessesUrl(String filterProcessesUrl) {
-		this.logoutRequestMatcher = new AntPathRequestMatcher(filterProcessesUrl);
+		this.logoutRequestMatcher = pathPattern(filterProcessesUrl);
 	}
 
 }

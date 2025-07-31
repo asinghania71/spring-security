@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2025 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,14 +34,17 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.security.oauth2.core.AuthorizationGrantType;
 import org.springframework.security.oauth2.core.ClientAuthenticationMethod;
+import org.springframework.web.util.UriComponents;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 
 /**
  * @author Rob Winch
  * @author Rafiullah Hamedy
+ * @author Evgeniy Cheban
  * @since 5.1
  */
 public class ClientRegistrationsTests {
@@ -159,7 +162,7 @@ public class ClientRegistrationsTests {
 
 	private void assertIssuerMetadata(ClientRegistration registration, ClientRegistration.ProviderDetails provider) {
 		assertThat(registration.getClientAuthenticationMethod())
-				.isEqualTo(ClientAuthenticationMethod.CLIENT_SECRET_BASIC);
+			.isEqualTo(ClientAuthenticationMethod.CLIENT_SECRET_BASIC);
 		assertThat(registration.getAuthorizationGrantType()).isEqualTo(AuthorizationGrantType.AUTHORIZATION_CODE);
 		assertThat(registration.getRegistrationId()).isEqualTo(URI.create(this.issuer).getHost());
 		assertThat(registration.getClientName()).isEqualTo(this.issuer);
@@ -180,7 +183,7 @@ public class ClientRegistrationsTests {
 	public void issuerWhenResponseMissingJwksUriThenThrowsIllegalArgumentException() throws Exception {
 		this.response.remove("jwks_uri");
 		assertThatIllegalArgumentException().isThrownBy(() -> registration("").build())
-				.withMessageContaining("The public JWK set URI must not be null");
+			.withMessageContaining("The public JWK set URI must not be null");
 	}
 
 	// gh-7512
@@ -188,7 +191,7 @@ public class ClientRegistrationsTests {
 	public void issuerWhenOidcFallbackResponseMissingJwksUriThenThrowsIllegalArgumentException() throws Exception {
 		this.response.remove("jwks_uri");
 		assertThatIllegalArgumentException().isThrownBy(() -> registrationOidcFallback("issuer1", null).build())
-				.withMessageContaining("The public JWK set URI must not be null");
+			.withMessageContaining("The public JWK set URI must not be null");
 	}
 
 	// gh-7512
@@ -264,7 +267,7 @@ public class ClientRegistrationsTests {
 		this.response.put("grant_types_supported", Arrays.asList("urn:ietf:params:oauth:grant-type:jwt-bearer"));
 		this.response.remove("authorization_endpoint");
 		ClientRegistration registration = registration("").authorizationGrantType(AuthorizationGrantType.JWT_BEARER)
-				.build();
+			.build();
 		assertThat(registration.getAuthorizationGrantType()).isEqualTo(AuthorizationGrantType.JWT_BEARER);
 		ClientRegistration.ProviderDetails provider = registration.getProviderDetails();
 		assertThat(provider.getAuthorizationUri()).isNull();
@@ -276,7 +279,8 @@ public class ClientRegistrationsTests {
 		this.response.put("grant_types_supported", Arrays.asList("urn:ietf:params:oauth:grant-type:jwt-bearer"));
 		this.response.remove("authorization_endpoint");
 		ClientRegistration registration = registrationOAuth2("", null)
-				.authorizationGrantType(AuthorizationGrantType.JWT_BEARER).build();
+			.authorizationGrantType(AuthorizationGrantType.JWT_BEARER)
+			.build();
 		assertThat(registration.getAuthorizationGrantType()).isEqualTo(AuthorizationGrantType.JWT_BEARER);
 		ClientRegistration.ProviderDetails provider = registration.getProviderDetails();
 		assertThat(provider.getAuthorizationUri()).isNull();
@@ -287,7 +291,7 @@ public class ClientRegistrationsTests {
 		this.response.remove("token_endpoint_auth_methods_supported");
 		ClientRegistration registration = registration("").build();
 		assertThat(registration.getClientAuthenticationMethod())
-				.isEqualTo(ClientAuthenticationMethod.CLIENT_SECRET_BASIC);
+			.isEqualTo(ClientAuthenticationMethod.CLIENT_SECRET_BASIC);
 	}
 
 	@Test
@@ -295,7 +299,7 @@ public class ClientRegistrationsTests {
 		this.response.remove("token_endpoint_auth_methods_supported");
 		ClientRegistration registration = registrationOAuth2("", null).build();
 		assertThat(registration.getClientAuthenticationMethod())
-				.isEqualTo(ClientAuthenticationMethod.CLIENT_SECRET_BASIC);
+			.isEqualTo(ClientAuthenticationMethod.CLIENT_SECRET_BASIC);
 	}
 
 	// gh-9780
@@ -304,7 +308,7 @@ public class ClientRegistrationsTests {
 		this.response.put("token_endpoint_auth_methods_supported", Arrays.asList("client_secret_basic"));
 		ClientRegistration registration = registration("").build();
 		assertThat(registration.getClientAuthenticationMethod())
-				.isEqualTo(ClientAuthenticationMethod.CLIENT_SECRET_BASIC);
+			.isEqualTo(ClientAuthenticationMethod.CLIENT_SECRET_BASIC);
 	}
 
 	// gh-9780
@@ -313,7 +317,7 @@ public class ClientRegistrationsTests {
 		this.response.put("token_endpoint_auth_methods_supported", Arrays.asList("client_secret_basic"));
 		ClientRegistration registration = registrationOAuth2("", null).build();
 		assertThat(registration.getClientAuthenticationMethod())
-				.isEqualTo(ClientAuthenticationMethod.CLIENT_SECRET_BASIC);
+			.isEqualTo(ClientAuthenticationMethod.CLIENT_SECRET_BASIC);
 	}
 
 	@Test
@@ -321,7 +325,7 @@ public class ClientRegistrationsTests {
 		this.response.put("token_endpoint_auth_methods_supported", Arrays.asList("client_secret_post"));
 		ClientRegistration registration = registration("").build();
 		assertThat(registration.getClientAuthenticationMethod())
-				.isEqualTo(ClientAuthenticationMethod.CLIENT_SECRET_POST);
+			.isEqualTo(ClientAuthenticationMethod.CLIENT_SECRET_POST);
 	}
 
 	@Test
@@ -329,7 +333,7 @@ public class ClientRegistrationsTests {
 		this.response.put("token_endpoint_auth_methods_supported", Arrays.asList("client_secret_post"));
 		ClientRegistration registration = registrationOAuth2("", null).build();
 		assertThat(registration.getClientAuthenticationMethod())
-				.isEqualTo(ClientAuthenticationMethod.CLIENT_SECRET_POST);
+			.isEqualTo(ClientAuthenticationMethod.CLIENT_SECRET_POST);
 	}
 
 	// gh-9780
@@ -339,7 +343,7 @@ public class ClientRegistrationsTests {
 		ClientRegistration registration = registration("").build();
 		// The client_secret_basic auth method is still the default
 		assertThat(registration.getClientAuthenticationMethod())
-				.isEqualTo(ClientAuthenticationMethod.CLIENT_SECRET_BASIC);
+			.isEqualTo(ClientAuthenticationMethod.CLIENT_SECRET_BASIC);
 	}
 
 	// gh-9780
@@ -349,7 +353,7 @@ public class ClientRegistrationsTests {
 		ClientRegistration registration = registrationOAuth2("", null).build();
 		// The client_secret_basic auth method is still the default
 		assertThat(registration.getClientAuthenticationMethod())
-				.isEqualTo(ClientAuthenticationMethod.CLIENT_SECRET_BASIC);
+			.isEqualTo(ClientAuthenticationMethod.CLIENT_SECRET_BASIC);
 	}
 
 	// gh-9780
@@ -359,7 +363,7 @@ public class ClientRegistrationsTests {
 		ClientRegistration registration = registration("").build();
 		// The client_secret_basic auth method is still the default
 		assertThat(registration.getClientAuthenticationMethod())
-				.isEqualTo(ClientAuthenticationMethod.CLIENT_SECRET_BASIC);
+			.isEqualTo(ClientAuthenticationMethod.CLIENT_SECRET_BASIC);
 	}
 
 	// gh-9780
@@ -369,7 +373,7 @@ public class ClientRegistrationsTests {
 		ClientRegistration registration = registrationOAuth2("", null).build();
 		// The client_secret_basic auth method is still the default
 		assertThat(registration.getClientAuthenticationMethod())
-				.isEqualTo(ClientAuthenticationMethod.CLIENT_SECRET_BASIC);
+			.isEqualTo(ClientAuthenticationMethod.CLIENT_SECRET_BASIC);
 	}
 
 	@Test
@@ -393,7 +397,7 @@ public class ClientRegistrationsTests {
 		ClientRegistration registration = registration("").build();
 		// The client_secret_basic auth method is still the default
 		assertThat(registration.getClientAuthenticationMethod())
-				.isEqualTo(ClientAuthenticationMethod.CLIENT_SECRET_BASIC);
+			.isEqualTo(ClientAuthenticationMethod.CLIENT_SECRET_BASIC);
 	}
 
 	// gh-9780
@@ -403,7 +407,7 @@ public class ClientRegistrationsTests {
 		ClientRegistration registration = registrationOAuth2("", null).build();
 		// The client_secret_basic auth method is still the default
 		assertThat(registration.getClientAuthenticationMethod())
-				.isEqualTo(ClientAuthenticationMethod.CLIENT_SECRET_BASIC);
+			.isEqualTo(ClientAuthenticationMethod.CLIENT_SECRET_BASIC);
 	}
 
 	@Test
@@ -428,8 +432,8 @@ public class ClientRegistrationsTests {
 	public void issuerWhenOpenIdConfigurationDoesNotMatchThenMeaningfulErrorMessage() throws Exception {
 		this.issuer = createIssuerFromServer("");
 		String body = this.mapper.writeValueAsString(this.response);
-		MockResponse mockResponse = new MockResponse().setBody(body).setHeader(HttpHeaders.CONTENT_TYPE,
-				MediaType.APPLICATION_JSON_VALUE);
+		MockResponse mockResponse = new MockResponse().setBody(body)
+			.setHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE);
 		this.server.enqueue(mockResponse);
 		// @formatter:off
 		assertThatIllegalStateException()
@@ -443,8 +447,8 @@ public class ClientRegistrationsTests {
 	public void issuerWhenOAuth2ConfigurationDoesNotMatchThenMeaningfulErrorMessage() throws Exception {
 		this.issuer = createIssuerFromServer("");
 		String body = this.mapper.writeValueAsString(this.response);
-		MockResponse mockResponse = new MockResponse().setBody(body).setHeader(HttpHeaders.CONTENT_TYPE,
-				MediaType.APPLICATION_JSON_VALUE);
+		MockResponse mockResponse = new MockResponse().setBody(body)
+			.setHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE);
 		this.server.enqueue(mockResponse);
 		// @formatter:off
 		assertThatIllegalStateException()
@@ -452,6 +456,152 @@ public class ClientRegistrationsTests {
 				.withMessageContaining("The Issuer \"https://example.com\" provided in the configuration metadata "
 						+ "did not match the requested issuer \"" + this.issuer + "\"");
 		// @formatter:on
+	}
+
+	@Test
+	public void issuerWhenOidcConfigurationAllInformationThenSuccess() throws Exception {
+		ClientRegistration registration = registration(this.response).build();
+		ClientRegistration.ProviderDetails provider = registration.getProviderDetails();
+		assertIssuerMetadata(registration, provider);
+		assertThat(provider.getUserInfoEndpoint().getUri()).isEqualTo("https://example.com/oauth2/v3/userinfo");
+	}
+
+	private ClientRegistration.Builder registration(Map<String, Object> configuration) {
+		this.issuer = "https://example.com";
+		return ClientRegistrations.fromOidcConfiguration(configuration)
+			.clientId("client-id")
+			.clientSecret("client-secret");
+	}
+
+	@Test
+	public void issuerWhenOidcConfigurationResponseMissingJwksUriThenThrowsIllegalArgumentException() throws Exception {
+		this.response.remove("jwks_uri");
+		assertThatIllegalArgumentException().isThrownBy(() -> registration(this.response).build())
+			.withMessageContaining("The public JWK set URI must not be null");
+	}
+
+	@Test
+	public void issuerWhenOidcConfigurationResponseMissingUserInfoUriThenSuccess() throws Exception {
+		this.response.remove("userinfo_endpoint");
+		ClientRegistration registration = registration(this.response).build();
+		assertThat(registration.getProviderDetails().getUserInfoEndpoint().getUri()).isNull();
+	}
+
+	@Test
+	public void issuerWhenOidcConfigurationGrantTypesSupportedNullThenDefaulted() throws Exception {
+		this.response.remove("grant_types_supported");
+		ClientRegistration registration = registration(this.response).build();
+		assertThat(registration.getAuthorizationGrantType()).isEqualTo(AuthorizationGrantType.AUTHORIZATION_CODE);
+	}
+
+	@Test
+	public void issuerWhenOidcConfigurationImplicitGrantTypeThenSuccess() throws Exception {
+		this.response.put("grant_types_supported", Arrays.asList("implicit"));
+		ClientRegistration registration = registration(this.response).build();
+		// The authorization_code grant type is still the default
+		assertThat(registration.getAuthorizationGrantType()).isEqualTo(AuthorizationGrantType.AUTHORIZATION_CODE);
+	}
+
+	@Test
+	public void issuerWhenOidcConfigurationResponseAuthorizationEndpointIsNullThenSuccess() throws Exception {
+		this.response.put("grant_types_supported", Arrays.asList("urn:ietf:params:oauth:grant-type:jwt-bearer"));
+		this.response.remove("authorization_endpoint");
+		ClientRegistration registration = registration(this.response)
+			.authorizationGrantType(AuthorizationGrantType.JWT_BEARER)
+			.build();
+		assertThat(registration.getAuthorizationGrantType()).isEqualTo(AuthorizationGrantType.JWT_BEARER);
+		ClientRegistration.ProviderDetails provider = registration.getProviderDetails();
+		assertThat(provider.getAuthorizationUri()).isNull();
+	}
+
+	@Test
+	public void issuerWhenOidcConfigurationTokenEndpointAuthMethodsNullThenDefaulted() throws Exception {
+		this.response.remove("token_endpoint_auth_methods_supported");
+		ClientRegistration registration = registration(this.response).build();
+		assertThat(registration.getClientAuthenticationMethod())
+			.isEqualTo(ClientAuthenticationMethod.CLIENT_SECRET_BASIC);
+	}
+
+	@Test
+	public void issuerWhenOidcConfigurationClientSecretBasicAuthMethodThenMethodIsBasic() throws Exception {
+		this.response.put("token_endpoint_auth_methods_supported", Arrays.asList("client_secret_basic"));
+		ClientRegistration registration = registration(this.response).build();
+		assertThat(registration.getClientAuthenticationMethod())
+			.isEqualTo(ClientAuthenticationMethod.CLIENT_SECRET_BASIC);
+	}
+
+	@Test
+	public void issuerWhenOidcConfigurationTokenEndpointAuthMethodsPostThenMethodIsPost() throws Exception {
+		this.response.put("token_endpoint_auth_methods_supported", Arrays.asList("client_secret_post"));
+		ClientRegistration registration = registration(this.response).build();
+		assertThat(registration.getClientAuthenticationMethod())
+			.isEqualTo(ClientAuthenticationMethod.CLIENT_SECRET_POST);
+	}
+
+	@Test
+	public void issuerWhenOidcConfigurationClientSecretJwtAuthMethodThenMethodIsClientSecretBasic() throws Exception {
+		this.response.put("token_endpoint_auth_methods_supported", Arrays.asList("client_secret_jwt"));
+		ClientRegistration registration = registration(this.response).build();
+		// The client_secret_basic auth method is still the default
+		assertThat(registration.getClientAuthenticationMethod())
+			.isEqualTo(ClientAuthenticationMethod.CLIENT_SECRET_BASIC);
+	}
+
+	@Test
+	public void issuerWhenOidcConfigurationPrivateKeyJwtAuthMethodThenMethodIsClientSecretBasic() throws Exception {
+		this.response.put("token_endpoint_auth_methods_supported", Arrays.asList("private_key_jwt"));
+		ClientRegistration registration = registration(this.response).build();
+		// The client_secret_basic auth method is still the default
+		assertThat(registration.getClientAuthenticationMethod())
+			.isEqualTo(ClientAuthenticationMethod.CLIENT_SECRET_BASIC);
+	}
+
+	@Test
+	public void issuerWhenOidcConfigurationTokenEndpointAuthMethodsNoneThenMethodIsNone() throws Exception {
+		this.response.put("token_endpoint_auth_methods_supported", Arrays.asList("none"));
+		ClientRegistration registration = registration(this.response).build();
+		assertThat(registration.getClientAuthenticationMethod()).isEqualTo(ClientAuthenticationMethod.NONE);
+	}
+
+	@Test
+	public void issuerWhenOidcConfigurationTlsClientAuthMethodThenSuccess() throws Exception {
+		this.response.put("token_endpoint_auth_methods_supported", Arrays.asList("tls_client_auth"));
+		ClientRegistration registration = registration(this.response).build();
+		// The client_secret_basic auth method is still the default
+		assertThat(registration.getClientAuthenticationMethod())
+			.isEqualTo(ClientAuthenticationMethod.CLIENT_SECRET_BASIC);
+	}
+
+	// gh-15852
+	@Test
+	public void oidcWhenHostContainsUnderscoreThenRetains() {
+		UriComponents oidc = ClientRegistrations.oidcUri("https://elated_sutherland:8080/path");
+		assertThat(oidc.getHost()).isEqualTo("elated_sutherland");
+		UriComponents oauth = ClientRegistrations.oauthUri("https://elated_sutherland:8080/path");
+		assertThat(oauth.getHost()).isEqualTo("elated_sutherland");
+		UriComponents oidcRfc8414 = ClientRegistrations.oidcRfc8414Uri("https://elated_sutherland:8080/path");
+		assertThat(oidcRfc8414.getHost()).isEqualTo("elated_sutherland");
+	}
+
+	@Test
+	public void issuerWhenAllEndpointsFailedThenExceptionIncludesFailureInformation() {
+		this.issuer = createIssuerFromServer("issuer1");
+		this.server.setDispatcher(new Dispatcher() {
+			@Override
+			public MockResponse dispatch(RecordedRequest request) {
+				int responseCode = switch (request.getPath()) {
+					case "/issuer1/.well-known/openid-configuration" -> 405;
+					case "/.well-known/openid-configuration/issuer1" -> 400;
+					default -> 404;
+				};
+				return new MockResponse().setResponseCode(responseCode);
+			}
+		});
+		assertThatExceptionOfType(IllegalArgumentException.class)
+			.isThrownBy(() -> ClientRegistrations.fromIssuerLocation(this.issuer).build())
+			.withMessageContaining("405")
+			.withMessageContaining("400")
+			.withMessageContaining("404");
 	}
 
 	private ClientRegistration.Builder registration(String path) throws Exception {
@@ -478,12 +628,12 @@ public class ClientRegistrationsTests {
 		final Dispatcher dispatcher = new Dispatcher() {
 			@Override
 			public MockResponse dispatch(RecordedRequest request) {
-				switch (request.getPath()) {
-				case "/.well-known/oauth-authorization-server/issuer1":
-				case "/.well-known/oauth-authorization-server/":
-					return buildSuccessMockResponse(responseBody);
-				}
-				return new MockResponse().setResponseCode(404);
+				return switch (request.getPath()) {
+					case "/.well-known/oauth-authorization-server/issuer1",
+							"/.well-known/oauth-authorization-server/" ->
+						buildSuccessMockResponse(responseBody);
+					default -> new MockResponse().setResponseCode(404);
+				};
 			}
 		};
 		this.server.setDispatcher(dispatcher);
@@ -514,12 +664,11 @@ public class ClientRegistrationsTests {
 		final Dispatcher dispatcher = new Dispatcher() {
 			@Override
 			public MockResponse dispatch(RecordedRequest request) {
-				switch (request.getPath()) {
-				case "/issuer1/.well-known/openid-configuration":
-				case "/.well-known/openid-configuration/":
-					return buildSuccessMockResponse(responseBody);
-				}
-				return new MockResponse().setResponseCode(404);
+				return switch (request.getPath()) {
+					case "/issuer1/.well-known/openid-configuration", "/.well-known/openid-configuration/" ->
+						buildSuccessMockResponse(responseBody);
+					default -> new MockResponse().setResponseCode(404);
+				};
 			}
 		};
 		this.server.setDispatcher(dispatcher);

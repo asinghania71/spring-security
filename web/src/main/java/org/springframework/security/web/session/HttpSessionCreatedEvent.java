@@ -16,7 +16,7 @@
 
 package org.springframework.security.web.session;
 
-import javax.servlet.http.HttpSession;
+import jakarta.servlet.http.HttpSession;
 
 import org.springframework.security.core.session.SessionCreationEvent;
 
@@ -27,6 +27,7 @@ import org.springframework.security.core.session.SessionCreationEvent;
  * @author Ray Krueger
  * @author Luke Taylor
  */
+@SuppressWarnings("serial")
 public class HttpSessionCreatedEvent extends SessionCreationEvent {
 
 	public HttpSessionCreatedEvent(HttpSession session) {

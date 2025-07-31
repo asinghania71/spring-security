@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2014 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,12 +22,14 @@ import org.junit.jupiter.api.extension.ExtendWith;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
-import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
+import org.springframework.security.core.userdetails.PasswordEncodedUser;
 import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.test.context.support.WithUserDetails;
+import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 import org.springframework.test.context.web.WebAppConfiguration;
@@ -36,6 +38,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 import org.springframework.web.servlet.config.annotation.EnableWebMvc;
 
+import static org.springframework.security.config.Customizer.withDefaults;
 import static org.springframework.security.test.web.servlet.response.SecurityMockMvcResultMatchers.authenticated;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -60,52 +63,42 @@ public class WithUserDetailsAuthenticationTests {
 	@WithUserDetails
 	public void requestProtectedUrlWithUser() throws Exception {
 		this.mvc.perform(get("/"))
-				// Ensure we got past Security
-				.andExpect(status().isNotFound())
-				// Ensure it appears we are authenticated with user
-				.andExpect(authenticated().withUsername("user"));
+			// Ensure we got past Security
+			.andExpect(status().isNotFound())
+			// Ensure it appears we are authenticated with user
+			.andExpect(authenticated().withUsername("user"));
 	}
 
 	@Test
 	@WithUserDetails("admin")
 	public void requestProtectedUrlWithAdmin() throws Exception {
 		this.mvc.perform(get("/admin"))
-				// Ensure we got past Security
-				.andExpect(status().isNotFound())
-				// Ensure it appears we are authenticated with user
-				.andExpect(authenticated().withUsername("admin").withRoles("ADMIN", "USER"));
+			// Ensure we got past Security
+			.andExpect(status().isNotFound())
+			// Ensure it appears we are authenticated with user
+			.andExpect(authenticated().withUsername("admin").withRoles("ADMIN", "USER"));
 	}
 
+	@Configuration
 	@EnableWebSecurity
 	@EnableWebMvc
-	static class Config extends WebSecurityConfigurerAdapter {
+	static class Config {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.authorizeRequests()
-					.antMatchers("/admin/**").hasRole("ADMIN")
-					.anyRequest().authenticated()
-					.and()
-				.formLogin();
+				.authorizeHttpRequests((requests) -> requests
+					.requestMatchers("/admin/**").hasRole("ADMIN")
+					.anyRequest().authenticated())
+				.formLogin(withDefaults());
 			// @formatter:on
+			return http.build();
 		}
 
 		@Bean
-		@Override
-		public UserDetailsService userDetailsServiceBean() throws Exception {
-			return super.userDetailsServiceBean();
-		}
-
-		@Autowired
-		void configureGlobal(AuthenticationManagerBuilder auth) throws Exception {
-			// @formatter:off
-			auth
-				.inMemoryAuthentication()
-					.withUser("user").password("password").roles("USER").and()
-					.withUser("admin").password("password").roles("USER", "ADMIN");
-			// @formatter:on
+		UserDetailsService userDetailsService() {
+			return new InMemoryUserDetailsManager(PasswordEncodedUser.user(), PasswordEncodedUser.admin());
 		}
 
 	}

@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2020 the original author or authors.
+ * Copyright 2002-2025 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,7 +30,6 @@ import java.util.Set;
 import java.util.function.Function;
 
 import org.springframework.dao.DataRetrievalFailureException;
-import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.ArgumentPreparedStatementSetter;
 import org.springframework.jdbc.core.JdbcOperations;
 import org.springframework.jdbc.core.PreparedStatementSetter;
@@ -166,24 +165,15 @@ public class JdbcOAuth2AuthorizedClientService implements OAuth2AuthorizedClient
 	public void saveAuthorizedClient(OAuth2AuthorizedClient authorizedClient, Authentication principal) {
 		Assert.notNull(authorizedClient, "authorizedClient cannot be null");
 		Assert.notNull(principal, "principal cannot be null");
-		boolean existsAuthorizedClient = null != this.loadAuthorizedClient(
-				authorizedClient.getClientRegistration().getRegistrationId(), principal.getName());
-		if (existsAuthorizedClient) {
-			updateAuthorizedClient(authorizedClient, principal);
-		}
-		else {
-			try {
-				insertAuthorizedClient(authorizedClient, principal);
-			}
-			catch (DuplicateKeyException ex) {
-				updateAuthorizedClient(authorizedClient, principal);
-			}
+		int rows = updateAuthorizedClient(authorizedClient, principal);
+		if (rows == 0) {
+			insertAuthorizedClient(authorizedClient, principal);
 		}
 	}
 
-	private void updateAuthorizedClient(OAuth2AuthorizedClient authorizedClient, Authentication principal) {
+	private int updateAuthorizedClient(OAuth2AuthorizedClient authorizedClient, Authentication principal) {
 		List<SqlParameterValue> parameters = this.authorizedClientParametersMapper
-				.apply(new OAuth2AuthorizedClientHolder(authorizedClient, principal));
+			.apply(new OAuth2AuthorizedClientHolder(authorizedClient, principal));
 		SqlParameterValue clientRegistrationIdParameter = parameters.remove(0);
 		SqlParameterValue principalNameParameter = parameters.remove(0);
 		parameters.add(clientRegistrationIdParameter);
@@ -191,13 +181,13 @@ public class JdbcOAuth2AuthorizedClientService implements OAuth2AuthorizedClient
 		try (LobCreator lobCreator = this.lobHandler.getLobCreator()) {
 			PreparedStatementSetter pss = new LobCreatorArgumentPreparedStatementSetter(lobCreator,
 					parameters.toArray());
-			this.jdbcOperations.update(UPDATE_AUTHORIZED_CLIENT_SQL, pss);
+			return this.jdbcOperations.update(UPDATE_AUTHORIZED_CLIENT_SQL, pss);
 		}
 	}
 
 	private void insertAuthorizedClient(OAuth2AuthorizedClient authorizedClient, Authentication principal) {
 		List<SqlParameterValue> parameters = this.authorizedClientParametersMapper
-				.apply(new OAuth2AuthorizedClientHolder(authorizedClient, principal));
+			.apply(new OAuth2AuthorizedClientHolder(authorizedClient, principal));
 		try (LobCreator lobCreator = this.lobHandler.getLobCreator()) {
 			PreparedStatementSetter pss = new LobCreatorArgumentPreparedStatementSetter(lobCreator,
 					parameters.toArray());
@@ -265,7 +255,7 @@ public class JdbcOAuth2AuthorizedClientService implements OAuth2AuthorizedClient
 		public OAuth2AuthorizedClient mapRow(ResultSet rs, int rowNum) throws SQLException {
 			String clientRegistrationId = rs.getString("client_registration_id");
 			ClientRegistration clientRegistration = this.clientRegistrationRepository
-					.findByRegistrationId(clientRegistrationId);
+				.findByRegistrationId(clientRegistrationId);
 			if (clientRegistration == null) {
 				throw new DataRetrievalFailureException(
 						"The ClientRegistration with id '" + clientRegistrationId + "' exists in the data source, "
@@ -320,8 +310,8 @@ public class JdbcOAuth2AuthorizedClientService implements OAuth2AuthorizedClient
 			parameters.add(new SqlParameterValue(Types.VARCHAR, clientRegistration.getRegistrationId()));
 			parameters.add(new SqlParameterValue(Types.VARCHAR, principal.getName()));
 			parameters.add(new SqlParameterValue(Types.VARCHAR, accessToken.getTokenType().getValue()));
-			parameters.add(
-					new SqlParameterValue(Types.BLOB, accessToken.getTokenValue().getBytes(StandardCharsets.UTF_8)));
+			parameters
+				.add(new SqlParameterValue(Types.BLOB, accessToken.getTokenValue().getBytes(StandardCharsets.UTF_8)));
 			parameters.add(new SqlParameterValue(Types.TIMESTAMP, Timestamp.from(accessToken.getIssuedAt())));
 			parameters.add(new SqlParameterValue(Types.TIMESTAMP, Timestamp.from(accessToken.getExpiresAt())));
 			String accessTokenScopes = null;
@@ -396,8 +386,7 @@ public class JdbcOAuth2AuthorizedClientService implements OAuth2AuthorizedClient
 
 		@Override
 		protected void doSetValue(PreparedStatement ps, int parameterPosition, Object argValue) throws SQLException {
-			if (argValue instanceof SqlParameterValue) {
-				SqlParameterValue paramValue = (SqlParameterValue) argValue;
+			if (argValue instanceof SqlParameterValue paramValue) {
 				if (paramValue.getSqlType() == Types.BLOB) {
 					if (paramValue.getValue() != null) {
 						Assert.isInstanceOf(byte[].class, paramValue.getValue(),

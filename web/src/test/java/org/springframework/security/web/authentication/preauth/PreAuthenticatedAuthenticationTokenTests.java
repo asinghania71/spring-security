@@ -42,7 +42,7 @@ public class PreAuthenticatedAuthenticationTokenTests {
 		assertThat(token.getPrincipal()).isEqualTo(principal);
 		assertThat(token.getCredentials()).isEqualTo(credentials);
 		assertThat(token.getDetails()).isEqualTo(details);
-		assertThat(token.getAuthorities().isEmpty()).isTrue();
+		assertThat(token.getAuthorities()).isEmpty();
 	}
 
 	@Test
@@ -53,7 +53,7 @@ public class PreAuthenticatedAuthenticationTokenTests {
 		assertThat(token.getPrincipal()).isEqualTo(principal);
 		assertThat(token.getCredentials()).isEqualTo(credentials);
 		assertThat(token.getDetails()).isNull();
-		assertThat(token.getAuthorities().isEmpty()).isTrue();
+		assertThat(token.getAuthorities()).isEmpty();
 	}
 
 	@Test
@@ -69,9 +69,8 @@ public class PreAuthenticatedAuthenticationTokenTests {
 		assertThat(token.getAuthorities()).isNotNull();
 		Collection<GrantedAuthority> resultColl = token.getAuthorities();
 		assertThat(gas.containsAll(resultColl) && resultColl.containsAll(gas))
-				.withFailMessage(
-						"GrantedAuthority collections do not match; result: " + resultColl + ", expected: " + gas)
-				.isTrue();
+			.withFailMessage("GrantedAuthority collections do not match; result: " + resultColl + ", expected: " + gas)
+			.isTrue();
 	}
 
 }

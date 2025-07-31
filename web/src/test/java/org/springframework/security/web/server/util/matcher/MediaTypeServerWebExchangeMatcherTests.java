@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2022 the original author or authors.
+ * Copyright 2002-2017 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,6 @@
 
 package org.springframework.security.web.server.util.matcher;
 
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
@@ -45,19 +43,9 @@ public class MediaTypeServerWebExchangeMatcherTests {
 		assertThatIllegalArgumentException().isThrownBy(() -> new MediaTypeServerWebExchangeMatcher(types));
 	}
 
-	// gh-10703
 	@Test
 	public void constructorListOfDoesNotThrowNullPointerException() {
-		List<MediaType> mediaTypes = new ArrayList<MediaType>(Arrays.asList(MediaType.ALL)) {
-			@Override
-			public boolean contains(Object o) {
-				if (o == null) {
-					throw new NullPointerException();
-				}
-				return super.contains(o);
-			}
-		};
-		new MediaTypeServerWebExchangeMatcher(mediaTypes);
+		new MediaTypeServerWebExchangeMatcher(List.of(MediaType.ALL));
 	}
 
 	@Test

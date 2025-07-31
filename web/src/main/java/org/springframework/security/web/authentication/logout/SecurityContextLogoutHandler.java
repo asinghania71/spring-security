@@ -16,10 +16,9 @@
 
 package org.springframework.security.web.authentication.logout;
 
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-import javax.servlet.http.HttpSession;
-
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpSession;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -27,6 +26,9 @@ import org.springframework.core.log.LogMessage;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.context.SecurityContextHolderStrategy;
+import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
+import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.util.Assert;
 
 /**
@@ -46,9 +48,14 @@ public class SecurityContextLogoutHandler implements LogoutHandler {
 
 	protected final Log logger = LogFactory.getLog(this.getClass());
 
+	private SecurityContextHolderStrategy securityContextHolderStrategy = SecurityContextHolder
+		.getContextHolderStrategy();
+
 	private boolean invalidateHttpSession = true;
 
 	private boolean clearAuthentication = true;
+
+	private SecurityContextRepository securityContextRepository = new HttpSessionSecurityContextRepository();
 
 	/**
 	 * Requires the request to be passed in.
@@ -68,15 +75,28 @@ public class SecurityContextLogoutHandler implements LogoutHandler {
 				}
 			}
 		}
-		SecurityContext context = SecurityContextHolder.getContext();
-		SecurityContextHolder.clearContext();
+		SecurityContext context = this.securityContextHolderStrategy.getContext();
+		this.securityContextHolderStrategy.clearContext();
 		if (this.clearAuthentication) {
 			context.setAuthentication(null);
 		}
+		SecurityContext emptyContext = this.securityContextHolderStrategy.createEmptyContext();
+		this.securityContextRepository.saveContext(emptyContext, request, response);
 	}
 
 	public boolean isInvalidateHttpSession() {
 		return this.invalidateHttpSession;
+	}
+
+	/**
+	 * Sets the {@link SecurityContextHolderStrategy} to use. The default action is to use
+	 * the {@link SecurityContextHolderStrategy} stored in {@link SecurityContextHolder}.
+	 *
+	 * @since 5.8
+	 */
+	public void setSecurityContextHolderStrategy(SecurityContextHolderStrategy securityContextHolderStrategy) {
+		Assert.notNull(securityContextHolderStrategy, "securityContextHolderStrategy cannot be null");
+		this.securityContextHolderStrategy = securityContextHolderStrategy;
 	}
 
 	/**
@@ -98,6 +118,16 @@ public class SecurityContextLogoutHandler implements LogoutHandler {
 	 */
 	public void setClearAuthentication(boolean clearAuthentication) {
 		this.clearAuthentication = clearAuthentication;
+	}
+
+	/**
+	 * Sets the {@link SecurityContextRepository} to use. Default is
+	 * {@link HttpSessionSecurityContextRepository}.
+	 * @param securityContextRepository the {@link SecurityContextRepository} to use.
+	 */
+	public void setSecurityContextRepository(SecurityContextRepository securityContextRepository) {
+		Assert.notNull(securityContextRepository, "securityContextRepository cannot be null");
+		this.securityContextRepository = securityContextRepository;
 	}
 
 }

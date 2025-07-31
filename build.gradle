@@ -1,29 +1,30 @@
 import io.spring.gradle.IncludeRepoTask
+import trang.RncToXsd
 
 buildscript {
 	dependencies {
-		classpath "io.spring.javaformat:spring-javaformat-gradle-plugin:$springJavaformatVersion"
-		classpath 'io.spring.nohttp:nohttp-gradle:0.0.11'
-		classpath "io.freefair.gradle:aspectj-plugin:6.2.0"
-		classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlinVersion"
-		classpath "com.netflix.nebula:nebula-project-plugin:8.2.0"
+		classpath libs.io.spring.javaformat.spring.javaformat.gradle.plugin
+		classpath libs.io.spring.nohttp.nohttp.gradle
+		classpath libs.io.freefair.gradle.aspectj.plugin
+		classpath libs.org.jetbrains.kotlin.kotlin.gradle.plugin
+		classpath libs.com.netflix.nebula.nebula.project.plugin
 	}
 	repositories {
 		maven { url 'https://plugins.gradle.org/m2/' }
 	}
 }
 
+plugins {
+	alias(libs.plugins.org.gradle.wrapper.upgrade)
+}
+
 apply plugin: 'io.spring.nohttp'
 apply plugin: 'locks'
-apply plugin: 's101'
 apply plugin: 'io.spring.convention.root'
 apply plugin: 'org.jetbrains.kotlin.jvm'
-apply plugin: 'org.springframework.security.update-dependencies'
-apply plugin: 'org.springframework.security.update-version'
-apply plugin: 'org.springframework.security.sagan'
-apply plugin: 'org.springframework.github.milestone'
-apply plugin: 'org.springframework.github.changelog'
-apply plugin: 'org.springframework.github.release'
+apply plugin: 'org.springframework.security.versions.verify-dependencies-versions'
+apply plugin: 'org.springframework.security.check-expected-branch-version'
+apply plugin: 'io.spring.security.release'
 
 group = 'org.springframework.security'
 description = 'Spring Security'
@@ -34,133 +35,41 @@ ext.milestoneBuild = !(snapshotBuild || releaseBuild)
 
 repositories {
 	mavenCentral()
+	maven { url "https://repo.spring.io/milestone" }
 }
 
-tasks.named("saganCreateRelease") {
-	referenceDocUrl = "https://docs.spring.io/spring-security/reference/{version}/index.html"
-	apiDocUrl = "https://docs.spring.io/spring-security/site/docs/{version}/api/"
-}
-
-tasks.named("gitHubCheckMilestoneHasNoOpenIssues") {
-	repository {
-		owner = "spring-projects"
-		name = "spring-security"
-	}
-}
-
-tasks.named("gitHubNextReleaseMilestone") {
-	repository {
-		owner = "spring-projects"
-		name = "spring-security"
-	}
-}
-
-tasks.named("gitHubCheckNextVersionDueToday") {
-	repository {
-		owner = "spring-projects"
-		name = "spring-security"
-	}
-}
-
-tasks.named("scheduleNextRelease") {
-	repository {
-		owner = "spring-projects"
-		name = "spring-security"
-	}
+springRelease {
 	weekOfMonth = 3
 	dayOfWeek = 1
+	referenceDocUrl = "https://docs.spring.io/spring-security/reference/{version}/index.html"
+	apiDocUrl = "https://docs.spring.io/spring-security/site/docs/{version}/api/"
+	replaceSnapshotVersionInReferenceDocUrl = true
 }
 
-tasks.named("createGitHubRelease") {
-	repository {
-		owner = "spring-projects"
-		name = "spring-security"
+def toolchainVersion() {
+	if (project.hasProperty('testToolchain')) {
+		return project.property('testToolchain').toString().toInteger()
 	}
-}
-
-tasks.named("dispatchGitHubWorkflow") {
-	repository {
-		owner = "spring-projects"
-		name = "spring-security"
-	}
-}
-
-tasks.named("updateDependencies") {
-	// we aren't Gradle 7 compatible yet
-	checkForGradleUpdate = false
-}
-
-updateDependenciesSettings {
-	gitHub {
-		organization = "spring-projects"
-		repository = "spring-security"
-	}
-	addFiles({
-		return [
-				project.file("buildSrc/src/main/groovy/io/spring/gradle/convention/CheckstylePlugin.groovy")
-		]
-	})
-	dependencyExcludes {
-		majorVersionBump()
-		minorVersionBump()
-		alphaBetaVersions()
-		releaseCandidatesVersions()
-		milestoneVersions()
-		snapshotVersions()
-		addRule { components ->
-			components.withModule("commons-codec:commons-codec") { selection ->
-				ModuleComponentIdentifier candidate = selection.getCandidate();
-				if (!candidate.getVersion().equals(selection.getCurrentVersion())) {
-					selection.reject("commons-codec updates break saml tests");
-				}
-			}
-			components.withModule("org.python:jython") { selection ->
-				ModuleComponentIdentifier candidate = selection.getCandidate();
-				if (!candidate.getVersion().equals(selection.getCurrentVersion())) {
-					selection.reject("jython updates break integration tests");
-				}
-			}
-			components.withModule("com.nimbusds:nimbus-jose-jwt") { selection ->
-				ModuleComponentIdentifier candidate = selection.getCandidate();
-				if (!candidate.getVersion().equals(selection.getCurrentVersion())) {
-					selection.reject("nimbus-jose-jwt gets updated when oauth2-oidc-sdk is updated to ensure consistency");
-				}
-			}
-			components.all { selection ->
-				ModuleComponentIdentifier candidate = selection.getCandidate();
-				// Do not compare version due to multiple versions existing
-				// will cause opensaml 3.x to be updated to 4.x
-				if (candidate.getGroup().equals("org.opensaml")) {
-					selection.reject("org.opensaml maintains two different versions, so it must be updated manually");
-				}
-			}
-			components.withModule("io.spring.javaformat:spring-javaformat-gradle-plugin") { selection ->
-				ModuleComponentIdentifier candidate = selection.getCandidate();
-				if (!candidate.getVersion().equals(selection.getCurrentVersion())) {
-					selection.reject("spring-javaformat-gradle-plugin updates break checkstyle");
-				}
-			}
-			components.withModule("io.spring.javaformat:spring-javaformat-checkstyle") { selection ->
-				ModuleComponentIdentifier candidate = selection.getCandidate();
-				if (!candidate.getVersion().equals(selection.getCurrentVersion())) {
-					selection.reject("spring-javaformat-checkstyle updates break checkstyle");
-				}
-			}
-		}
-	}
+	return 17
 }
 
 subprojects {
-	plugins.withType(JavaPlugin) {
-		project.sourceCompatibility='1.8'
+	java {
+		toolchain {
+			languageVersion = JavaLanguageVersion.of(toolchainVersion())
+		}
 	}
-	tasks.withType(JavaCompile) {
+	kotlin {
+		jvmToolchain {
+			languageVersion = JavaLanguageVersion.of(17)
+		}
+	}
+	tasks.withType(JavaCompile).configureEach {
 		options.encoding = "UTF-8"
 		options.compilerArgs.add("-parameters")
-		options.release = 8
+		options.release.set(17)
 	}
 }
-
 
 allprojects {
 	if (!['spring-security-bom', 'spring-security-docs'].contains(project.name)) {
@@ -170,7 +79,7 @@ allprojects {
 		pluginManager.withPlugin("io.spring.convention.checkstyle", { plugin ->
 			configure(plugin) {
 				dependencies {
-					checkstyle "io.spring.javaformat:spring-javaformat-checkstyle:$springJavaformatVersion"
+					checkstyle libs.io.spring.javaformat.spring.javaformat.checkstyle
 				}
 				checkstyle {
 					toolVersion = '8.34'
@@ -188,24 +97,34 @@ allprojects {
 	}
 }
 
-if (hasProperty('buildScan')) {
+develocity {
 	buildScan {
-		termsOfServiceUrl = 'https://gradle.com/terms-of-service'
-		termsOfServiceAgree = 'yes'
+		termsOfUseUrl = 'https://gradle.com/help/legal-terms-of-use'
+		termsOfUseAgree = 'yes'
 	}
 }
 
 nohttp {
-	source.exclude "buildSrc/build/**"
-
+	source.exclude "buildSrc/build/**", "javascript/.gradle/**", "javascript/package-lock.json", "javascript/node_modules/**", "javascript/build/**", "javascript/dist/**"
+	source.builtBy(project(':spring-security-config').tasks.withType(RncToXsd))
 }
 
-tasks.register('cloneSamples', IncludeRepoTask) {
-	repository = 'spring-projects/spring-security-samples'
-	ref = samplesBranch
-	outputDirectory = project.hasProperty("cloneOutputDirectory") ? project.file("$cloneOutputDirectory") : project.file("build/samples")
+tasks.named('checkstyleNohttp') {
+	maxHeapSize = '1g'
 }
 
-s101 {
-	configurationDirectory = project.file("etc/s101")
+tasks.register('cloneRepository', IncludeRepoTask) {
+	repository = project.getProperties().get("repositoryName")
+	ref = project.getProperties().get("ref")
+	var defaultDirectory = project.file("build/tmp/clone")
+	outputDirectory = project.hasProperty("cloneOutputDirectory") ? project.file("$cloneOutputDirectory") : defaultDirectory
+}
+
+wrapperUpgrade {
+	gradle {
+		'spring-security' {
+			repo = 'spring-projects/spring-security'
+			baseBranch = '6.3.x' // runs only on 6.3.x and the update is merged forward to main
+		}
+	}
 }

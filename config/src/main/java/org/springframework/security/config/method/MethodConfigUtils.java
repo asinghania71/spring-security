@@ -24,6 +24,7 @@ import org.springframework.security.access.AccessDecisionVoter;
 import org.springframework.security.access.vote.AffirmativeBased;
 import org.springframework.security.access.vote.AuthenticatedVoter;
 import org.springframework.security.access.vote.RoleVoter;
+import org.springframework.security.authorization.AuthorizationManager;
 import org.springframework.security.config.BeanIds;
 
 /**
@@ -32,14 +33,17 @@ import org.springframework.security.config.BeanIds;
  * @author Luke Taylor
  * @author Ben Alex
  * @author Rob Winch
+ * @deprecated Please use {@link AuthorizationManager} instead
  */
+@Deprecated
 abstract class MethodConfigUtils {
 
 	@SuppressWarnings("unchecked")
 	static void registerDefaultMethodAccessManagerIfNecessary(ParserContext parserContext) {
 		if (!parserContext.getRegistry().containsBeanDefinition(BeanIds.METHOD_ACCESS_MANAGER)) {
-			parserContext.getRegistry().registerBeanDefinition(BeanIds.METHOD_ACCESS_MANAGER,
-					createAccessManagerBean(RoleVoter.class, AuthenticatedVoter.class));
+			parserContext.getRegistry()
+				.registerBeanDefinition(BeanIds.METHOD_ACCESS_MANAGER,
+						createAccessManagerBean(RoleVoter.class, AuthenticatedVoter.class));
 		}
 	}
 

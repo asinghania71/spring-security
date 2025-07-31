@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2020 the original author or authors.
+ * Copyright 2002-2025 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,7 +49,7 @@ public class SubjectDnX509PrincipalExtractorTests {
 	}
 
 	@Test
-	public void defaultCNPatternReturnsExcpectedPrincipal() throws Exception {
+	public void defaultCNPatternReturnsExpectedPrincipal() throws Exception {
 		Object principal = this.extractor.extractPrincipal(X509TestUtils.buildTestCertificate());
 		assertThat(principal).isEqualTo("Luke Taylor");
 	}
@@ -65,7 +65,7 @@ public class SubjectDnX509PrincipalExtractorTests {
 	public void matchOnShoeSizeThrowsBadCredentials() throws Exception {
 		this.extractor.setSubjectDnRegex("shoeSize=(.*?),");
 		assertThatExceptionOfType(BadCredentialsException.class)
-				.isThrownBy(() -> this.extractor.extractPrincipal(X509TestUtils.buildTestCertificate()));
+			.isThrownBy(() -> this.extractor.extractPrincipal(X509TestUtils.buildTestCertificate()));
 	}
 
 	@Test

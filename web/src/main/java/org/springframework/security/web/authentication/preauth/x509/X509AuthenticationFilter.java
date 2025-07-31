@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2016 the original author or authors.
+ * Copyright 2002-2025 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@ package org.springframework.security.web.authentication.preauth.x509;
 
 import java.security.cert.X509Certificate;
 
-import javax.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletRequest;
 
 import org.springframework.core.log.LogMessage;
 import org.springframework.security.web.authentication.preauth.AbstractPreAuthenticatedProcessingFilter;
@@ -28,7 +28,7 @@ import org.springframework.security.web.authentication.preauth.AbstractPreAuthen
  */
 public class X509AuthenticationFilter extends AbstractPreAuthenticatedProcessingFilter {
 
-	private X509PrincipalExtractor principalExtractor = new SubjectDnX509PrincipalExtractor();
+	private X509PrincipalExtractor principalExtractor = new SubjectX500PrincipalExtractor();
 
 	@Override
 	protected Object getPreAuthenticatedPrincipal(HttpServletRequest request) {
@@ -42,7 +42,7 @@ public class X509AuthenticationFilter extends AbstractPreAuthenticatedProcessing
 	}
 
 	private X509Certificate extractClientCertificate(HttpServletRequest request) {
-		X509Certificate[] certs = (X509Certificate[]) request.getAttribute("javax.servlet.request.X509Certificate");
+		X509Certificate[] certs = (X509Certificate[]) request.getAttribute("jakarta.servlet.request.X509Certificate");
 		if (certs != null && certs.length > 0) {
 			this.logger.debug(LogMessage.format("X.509 client authentication certificate:%s", certs[0]));
 			return certs[0];

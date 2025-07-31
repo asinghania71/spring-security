@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2019 the original author or authors.
+ * Copyright 2002-2025 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,8 +20,10 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 
-import javax.servlet.http.HttpSession;
+import jakarta.servlet.http.HttpSession;
 
+import org.springframework.http.HttpMethod;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.SecurityConfigurer;
 import org.springframework.security.config.annotation.web.HttpSecurityBuilder;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -35,7 +37,8 @@ import org.springframework.security.web.authentication.logout.LogoutSuccessHandl
 import org.springframework.security.web.authentication.logout.SecurityContextLogoutHandler;
 import org.springframework.security.web.authentication.logout.SimpleUrlLogoutSuccessHandler;
 import org.springframework.security.web.authentication.ui.DefaultLoginPageGeneratingFilter;
-import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
+import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
+import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.security.web.util.matcher.OrRequestMatcher;
 import org.springframework.security.web.util.matcher.RequestMatcher;
 import org.springframework.util.Assert;
@@ -89,7 +92,7 @@ public final class LogoutConfigurer<H extends HttpSecurityBuilder<H>>
 
 	/**
 	 * Creates a new instance
-	 * @see HttpSecurity#logout()
+	 * @see HttpSecurity#logout(Customizer)
 	 */
 	public LogoutConfigurer() {
 	}
@@ -142,12 +145,12 @@ public final class LogoutConfigurer<H extends HttpSecurityBuilder<H>>
 	 * (i.e. log out) to protect against
 	 * <a href="https://en.wikipedia.org/wiki/Cross-site_request_forgery">CSRF
 	 * attacks</a>. If you really want to use an HTTP GET, you can use
-	 * <code>logoutRequestMatcher(new AntPathRequestMatcher(logoutUrl, "GET"));</code>
+	 * <code>logoutRequestMatcher(PathPatternRequestMatcher.pathPattern(HttpMethod.GEt, logoutUrl));</code>
 	 * </p>
 	 * @param logoutUrl the URL that will invoke logout.
 	 * @return the {@link LogoutConfigurer} for further customization
 	 * @see #logoutRequestMatcher(RequestMatcher)
-	 * @see HttpSecurity#csrf()
+	 * @see HttpSecurity#csrf(Customizer)
 	 */
 	public LogoutConfigurer<H> logoutUrl(String logoutUrl) {
 		this.logoutRequestMatcher = null;
@@ -278,7 +281,7 @@ public final class LogoutConfigurer<H extends HttpSecurityBuilder<H>>
 			PermitAllSupport.permitAll(http, this.getLogoutRequestMatcher(http));
 		}
 		DefaultLoginPageGeneratingFilter loginPageGeneratingFilter = http
-				.getSharedObject(DefaultLoginPageGeneratingFilter.class);
+			.getSharedObject(DefaultLoginPageGeneratingFilter.class);
 		if (loginPageGeneratingFilter != null && !isCustomLogoutSuccess()) {
 			loginPageGeneratingFilter.setLogoutSuccessUrl(getLogoutSuccessUrl());
 		}
@@ -325,13 +328,24 @@ public final class LogoutConfigurer<H extends HttpSecurityBuilder<H>>
 	 * @return the {@link LogoutFilter} to use.
 	 */
 	private LogoutFilter createLogoutFilter(H http) {
+		this.contextLogoutHandler.setSecurityContextHolderStrategy(getSecurityContextHolderStrategy());
+		this.contextLogoutHandler.setSecurityContextRepository(getSecurityContextRepository(http));
 		this.logoutHandlers.add(this.contextLogoutHandler);
 		this.logoutHandlers.add(postProcess(new LogoutSuccessEventPublishingLogoutHandler()));
 		LogoutHandler[] handlers = this.logoutHandlers.toArray(new LogoutHandler[0]);
 		LogoutFilter result = new LogoutFilter(getLogoutSuccessHandler(), handlers);
+		result.setSecurityContextHolderStrategy(getSecurityContextHolderStrategy());
 		result.setLogoutRequestMatcher(getLogoutRequestMatcher(http));
 		result = postProcess(result);
 		return result;
+	}
+
+	private SecurityContextRepository getSecurityContextRepository(H http) {
+		SecurityContextRepository securityContextRepository = http.getSharedObject(SecurityContextRepository.class);
+		if (securityContextRepository == null) {
+			securityContextRepository = new HttpSessionSecurityContextRepository();
+		}
+		return securityContextRepository;
 	}
 
 	private RequestMatcher getLogoutRequestMatcher(H http) {
@@ -355,7 +369,7 @@ public final class LogoutConfigurer<H extends HttpSecurityBuilder<H>>
 	}
 
 	private RequestMatcher createLogoutRequestMatcher(String httpMethod) {
-		return new AntPathRequestMatcher(this.logoutUrl, httpMethod);
+		return getRequestMatcherBuilder().matcher(HttpMethod.valueOf(httpMethod), this.logoutUrl);
 	}
 
 }

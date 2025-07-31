@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2025 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,22 +16,18 @@
 
 package org.springframework.security.saml2.provider.service.registration;
 
-import java.security.PrivateKey;
-import java.security.cert.X509Certificate;
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Set;
 import java.util.function.Consumer;
-import java.util.function.Function;
-
-import org.opensaml.xmlsec.signature.support.SignatureConstants;
 
 import org.springframework.security.saml2.core.Saml2X509Credential;
 import org.springframework.util.Assert;
+import org.springframework.util.CollectionUtils;
 
 /**
  * Represents a configured relying party (aka Service Provider) and asserting party (aka
@@ -48,7 +44,7 @@ import org.springframework.util.Assert;
  *	String registrationId = "simplesamlphp";
  *
  * 	String relyingPartyEntityId = "{baseUrl}/saml2/service-provider-metadata/{registrationId}";
- *	String assertionConsumerServiceLocation = "{baseUrl}/login/saml2/sso/{registrationId}";
+ *	String assertingConsumerServiceLocation = "{baseUrl}/login/saml2/sso/{registrationId}";
  *	Saml2X509Credential relyingPartySigningCredential = ...;
  *
  *	String assertingPartyEntityId = "https://simplesaml-for-spring-saml.apps.pcfone.io/saml2/idp/metadata.php";
@@ -60,7 +56,7 @@ import org.springframework.util.Assert;
  * 			.entityId(relyingPartyEntityId)
  * 			.assertionConsumerServiceLocation(assertingConsumerServiceLocation)
  * 		 	.signingX509Credentials((c) -&gt; c.add(relyingPartySigningCredential))
- * 			.assertingPartyDetails((details) -&gt; details
+ * 			.assertingPartyMetadata((metadata) -&gt; metadata
  * 				.entityId(assertingPartyEntityId));
  * 				.singleSignOnServiceLocation(singleSignOnServiceLocation))
  * 				.verifyingX509Credentials((c) -&gt; c.add(assertingPartyVerificationCredential))
@@ -71,7 +67,9 @@ import org.springframework.util.Assert;
  * @author Josh Cummings
  * @since 5.2
  */
-public final class RelyingPartyRegistration {
+public class RelyingPartyRegistration implements Serializable {
+
+	private static final long serialVersionUID = -2718908121120942813L;
 
 	private final String registrationId;
 
@@ -85,34 +83,31 @@ public final class RelyingPartyRegistration {
 
 	private final String singleLogoutServiceResponseLocation;
 
-	private final Saml2MessageBinding singleLogoutServiceBinding;
+	private final Collection<Saml2MessageBinding> singleLogoutServiceBindings;
 
-	private final ProviderDetails providerDetails;
+	private final String nameIdFormat;
 
-	private final List<org.springframework.security.saml2.credentials.Saml2X509Credential> credentials;
+	private final boolean authnRequestsSigned;
+
+	private final AssertingPartyMetadata assertingPartyMetadata;
 
 	private final Collection<Saml2X509Credential> decryptionX509Credentials;
 
 	private final Collection<Saml2X509Credential> signingX509Credentials;
 
-	private RelyingPartyRegistration(String registrationId, String entityId, String assertionConsumerServiceLocation,
+	protected RelyingPartyRegistration(String registrationId, String entityId, String assertionConsumerServiceLocation,
 			Saml2MessageBinding assertionConsumerServiceBinding, String singleLogoutServiceLocation,
-			String singleLogoutServiceResponseLocation, Saml2MessageBinding singleLogoutServiceBinding,
-			ProviderDetails providerDetails,
-			Collection<org.springframework.security.saml2.credentials.Saml2X509Credential> credentials,
+			String singleLogoutServiceResponseLocation, Collection<Saml2MessageBinding> singleLogoutServiceBindings,
+			AssertingPartyDetails assertingPartyDetails, String nameIdFormat, boolean authnRequestsSigned,
 			Collection<Saml2X509Credential> decryptionX509Credentials,
 			Collection<Saml2X509Credential> signingX509Credentials) {
 		Assert.hasText(registrationId, "registrationId cannot be empty");
 		Assert.hasText(entityId, "entityId cannot be empty");
 		Assert.hasText(assertionConsumerServiceLocation, "assertionConsumerServiceLocation cannot be empty");
 		Assert.notNull(assertionConsumerServiceBinding, "assertionConsumerServiceBinding cannot be null");
-		Assert.isTrue(singleLogoutServiceLocation == null || singleLogoutServiceBinding != null,
-				"singleLogoutServiceBinding cannot be null when singleLogoutServiceLocation is set");
-		Assert.notNull(providerDetails, "providerDetails cannot be null");
-		Assert.notEmpty(credentials, "credentials cannot be empty");
-		for (org.springframework.security.saml2.credentials.Saml2X509Credential c : credentials) {
-			Assert.notNull(c, "credentials cannot contain null elements");
-		}
+		Assert.isTrue(singleLogoutServiceLocation == null || !CollectionUtils.isEmpty(singleLogoutServiceBindings),
+				"singleLogoutServiceBindings cannot be null or empty when singleLogoutServiceLocation is set");
+		Assert.notNull(assertingPartyDetails, "assertingPartyDetails cannot be null");
 		Assert.notNull(decryptionX509Credentials, "decryptionX509Credentials cannot be null");
 		for (Saml2X509Credential c : decryptionX509Credentials) {
 			Assert.notNull(c, "decryptionX509Credentials cannot contain null elements");
@@ -130,11 +125,69 @@ public final class RelyingPartyRegistration {
 		this.assertionConsumerServiceBinding = assertionConsumerServiceBinding;
 		this.singleLogoutServiceLocation = singleLogoutServiceLocation;
 		this.singleLogoutServiceResponseLocation = singleLogoutServiceResponseLocation;
-		this.singleLogoutServiceBinding = singleLogoutServiceBinding;
-		this.providerDetails = providerDetails;
-		this.credentials = Collections.unmodifiableList(new LinkedList<>(credentials));
+		this.singleLogoutServiceBindings = Collections.unmodifiableList(new LinkedList<>(singleLogoutServiceBindings));
+		this.nameIdFormat = nameIdFormat;
+		this.authnRequestsSigned = authnRequestsSigned;
+		this.assertingPartyMetadata = assertingPartyDetails;
 		this.decryptionX509Credentials = Collections.unmodifiableList(new LinkedList<>(decryptionX509Credentials));
 		this.signingX509Credentials = Collections.unmodifiableList(new LinkedList<>(signingX509Credentials));
+	}
+
+	private RelyingPartyRegistration(String registrationId, String entityId, String assertionConsumerServiceLocation,
+			Saml2MessageBinding assertionConsumerServiceBinding, String singleLogoutServiceLocation,
+			String singleLogoutServiceResponseLocation, Collection<Saml2MessageBinding> singleLogoutServiceBindings,
+			AssertingPartyMetadata assertingPartyMetadata, String nameIdFormat, boolean authnRequestsSigned,
+			Collection<Saml2X509Credential> decryptionX509Credentials,
+			Collection<Saml2X509Credential> signingX509Credentials) {
+		Assert.hasText(registrationId, "registrationId cannot be empty");
+		Assert.hasText(entityId, "entityId cannot be empty");
+		Assert.hasText(assertionConsumerServiceLocation, "assertionConsumerServiceLocation cannot be empty");
+		Assert.notNull(assertionConsumerServiceBinding, "assertionConsumerServiceBinding cannot be null");
+		Assert.isTrue(singleLogoutServiceLocation == null || !CollectionUtils.isEmpty(singleLogoutServiceBindings),
+				"singleLogoutServiceBindings cannot be null or empty when singleLogoutServiceLocation is set");
+		Assert.notNull(assertingPartyMetadata, "assertingPartyMetadata cannot be null");
+		Assert.notNull(decryptionX509Credentials, "decryptionX509Credentials cannot be null");
+		for (Saml2X509Credential c : decryptionX509Credentials) {
+			Assert.notNull(c, "decryptionX509Credentials cannot contain null elements");
+			Assert.isTrue(c.isDecryptionCredential(),
+					"All decryptionX509Credentials must have a usage of DECRYPTION set");
+		}
+		Assert.notNull(signingX509Credentials, "signingX509Credentials cannot be null");
+		for (Saml2X509Credential c : signingX509Credentials) {
+			Assert.notNull(c, "signingX509Credentials cannot contain null elements");
+			Assert.isTrue(c.isSigningCredential(), "All signingX509Credentials must have a usage of SIGNING set");
+		}
+		this.registrationId = registrationId;
+		this.entityId = entityId;
+		this.assertionConsumerServiceLocation = assertionConsumerServiceLocation;
+		this.assertionConsumerServiceBinding = assertionConsumerServiceBinding;
+		this.singleLogoutServiceLocation = singleLogoutServiceLocation;
+		this.singleLogoutServiceResponseLocation = singleLogoutServiceResponseLocation;
+		this.singleLogoutServiceBindings = Collections.unmodifiableList(new LinkedList<>(singleLogoutServiceBindings));
+		this.nameIdFormat = nameIdFormat;
+		this.authnRequestsSigned = authnRequestsSigned;
+		this.assertingPartyMetadata = assertingPartyMetadata;
+		this.decryptionX509Credentials = Collections.unmodifiableList(new LinkedList<>(decryptionX509Credentials));
+		this.signingX509Credentials = Collections.unmodifiableList(new LinkedList<>(signingX509Credentials));
+	}
+
+	/**
+	 * Copy the properties in this {@link RelyingPartyRegistration} into a {@link Builder}
+	 * @return a {@link Builder} based off of the properties in this
+	 * {@link RelyingPartyRegistration}
+	 * @since 6.1
+	 */
+	public Builder mutate() {
+		return new Builder(this.registrationId, this.assertingPartyMetadata.mutate()).entityId(this.entityId)
+			.signingX509Credentials((c) -> c.addAll(this.signingX509Credentials))
+			.decryptionX509Credentials((c) -> c.addAll(this.decryptionX509Credentials))
+			.assertionConsumerServiceLocation(this.assertionConsumerServiceLocation)
+			.assertionConsumerServiceBinding(this.assertionConsumerServiceBinding)
+			.singleLogoutServiceLocation(this.singleLogoutServiceLocation)
+			.singleLogoutServiceResponseLocation(this.singleLogoutServiceResponseLocation)
+			.singleLogoutServiceBindings((c) -> c.addAll(this.singleLogoutServiceBindings))
+			.nameIdFormat(this.nameIdFormat)
+			.authnRequestsSigned(this.authnRequestsSigned);
 	}
 
 	/**
@@ -203,7 +256,22 @@ public final class RelyingPartyRegistration {
 	 * @since 5.6
 	 */
 	public Saml2MessageBinding getSingleLogoutServiceBinding() {
-		return this.singleLogoutServiceBinding;
+		Assert.state(this.singleLogoutServiceBindings.size() == 1, "Method does not support multiple bindings.");
+		return this.singleLogoutServiceBindings.iterator().next();
+	}
+
+	/**
+	 * Get the <a href=
+	 * "https://docs.oasis-open.org/security/saml/v2.0/saml-metadata-2.0-os.pdf#page=7">SingleLogoutService
+	 * Binding</a>
+	 * <p>
+	 * Equivalent to the value found in &lt;SingleLogoutService Binding="..."/&gt; in the
+	 * relying party's &lt;SPSSODescriptor&gt;.
+	 * @return the SingleLogoutService Binding
+	 * @since 5.8
+	 */
+	public Collection<Saml2MessageBinding> getSingleLogoutServiceBindings() {
+		return this.singleLogoutServiceBindings;
 	}
 
 	/**
@@ -237,6 +305,32 @@ public final class RelyingPartyRegistration {
 	}
 
 	/**
+	 * Get the NameID format.
+	 * @return the NameID format
+	 * @since 5.7
+	 */
+	public String getNameIdFormat() {
+		return this.nameIdFormat;
+	}
+
+	/**
+	 * Get the <a href=
+	 * "https://docs.oasis-open.org/security/saml/v2.0/saml-metadata-2.0-os.pdf#page=18">
+	 * AuthnRequestsSigned</a> setting. If {@code true}, the relying party will sign all
+	 * AuthnRequests, regardless of asserting party preference.
+	 *
+	 * <p>
+	 * Note that Spring Security will sign the request if either
+	 * {@link #isAuthnRequestsSigned()} is {@code true} or
+	 * {@link AssertingPartyDetails#getWantAuthnRequestsSigned()} is {@code true}.
+	 * @return the relying-party preference
+	 * @since 6.1
+	 */
+	public boolean isAuthnRequestsSigned() {
+		return this.authnRequestsSigned;
+	}
+
+	/**
 	 * Get the {@link Collection} of decryption {@link Saml2X509Credential}s associated
 	 * with this relying party
 	 * @return the {@link Collection} of decryption {@link Saml2X509Credential}s
@@ -259,144 +353,12 @@ public final class RelyingPartyRegistration {
 	}
 
 	/**
-	 * Get the configuration details for the Asserting Party
-	 * @return the {@link AssertingPartyDetails}
-	 * @since 5.4
+	 * Get the metadata for the Asserting Party
+	 * @return the {@link AssertingPartyMetadata}
+	 * @since 6.4
 	 */
-	public AssertingPartyDetails getAssertingPartyDetails() {
-		return this.providerDetails.assertingPartyDetails;
-	}
-
-	/**
-	 * Returns the entity ID of the IDP, the asserting party.
-	 * @return entity ID of the asserting party
-	 * @deprecated use {@link AssertingPartyDetails#getEntityId} from
-	 * {@link #getAssertingPartyDetails}
-	 */
-	@Deprecated
-	public String getRemoteIdpEntityId() {
-		return this.providerDetails.getEntityId();
-	}
-
-	/**
-	 * returns the URL template for which ACS URL authentication requests should contain
-	 * Possible variables are {@code baseUrl}, {@code registrationId}, {@code baseScheme},
-	 * {@code baseHost}, and {@code basePort}.
-	 * @return string containing the ACS URL template, with or without variables present
-	 * @deprecated Use {@link #getAssertionConsumerServiceLocation} instead
-	 */
-	@Deprecated
-	public String getAssertionConsumerServiceUrlTemplate() {
-		return this.assertionConsumerServiceLocation;
-	}
-
-	/**
-	 * Contains the URL for which to send the SAML 2 Authentication Request to initiate a
-	 * single sign on flow.
-	 * @return a IDP URL that accepts REDIRECT or POST binding for authentication requests
-	 * @deprecated use {@link AssertingPartyDetails#getSingleSignOnServiceLocation} from
-	 * {@link #getAssertingPartyDetails}
-	 */
-	@Deprecated
-	public String getIdpWebSsoUrl() {
-		return this.getAssertingPartyDetails().getSingleSignOnServiceLocation();
-	}
-
-	/**
-	 * Returns specific configuration around the Identity Provider SSO endpoint
-	 * @return the IDP SSO endpoint configuration
-	 * @since 5.3
-	 * @deprecated Use {@link #getAssertingPartyDetails} instead
-	 */
-	@Deprecated
-	public ProviderDetails getProviderDetails() {
-		return this.providerDetails;
-	}
-
-	/**
-	 * The local relying party, or Service Provider, can generate it's entity ID based on
-	 * possible variables of {@code baseUrl}, {@code registrationId}, {@code baseScheme},
-	 * {@code baseHost}, and {@code basePort}, for example
-	 * {@code {baseUrl}/saml2/service-provider-metadata/{registrationId}}
-	 * @return a string containing the entity ID or entity ID template
-	 * @deprecated Use {@link #getEntityId} instead
-	 */
-	@Deprecated
-	public String getLocalEntityIdTemplate() {
-		return this.entityId;
-	}
-
-	/**
-	 * Returns a list of configured credentials to be used in message exchanges between
-	 * relying party, SP, and asserting party, IDP.
-	 * @return a list of credentials
-	 * @deprecated Instead of retrieving all credentials, use the appropriate method for
-	 * obtaining the correct type
-	 */
-	@Deprecated
-	public List<org.springframework.security.saml2.credentials.Saml2X509Credential> getCredentials() {
-		return this.credentials;
-	}
-
-	/**
-	 * @return a filtered list containing only credentials of type
-	 * {@link org.springframework.security.saml2.credentials.Saml2X509Credential.Saml2X509CredentialType#VERIFICATION}.
-	 * Returns an empty list of credentials are not found
-	 * @deprecated Use {code #getAssertingPartyDetails().getSigningX509Credentials()}
-	 * instead
-	 */
-	@Deprecated
-	public List<org.springframework.security.saml2.credentials.Saml2X509Credential> getVerificationCredentials() {
-		return filterCredentials(
-				org.springframework.security.saml2.credentials.Saml2X509Credential::isSignatureVerficationCredential);
-	}
-
-	/**
-	 * @return a filtered list containing only credentials of type
-	 * {@link org.springframework.security.saml2.credentials.Saml2X509Credential.Saml2X509CredentialType#SIGNING}.
-	 * Returns an empty list of credentials are not found
-	 * @deprecated Use {@link #getSigningX509Credentials()} instead
-	 */
-	@Deprecated
-	public List<org.springframework.security.saml2.credentials.Saml2X509Credential> getSigningCredentials() {
-		return filterCredentials(
-				org.springframework.security.saml2.credentials.Saml2X509Credential::isSigningCredential);
-	}
-
-	/**
-	 * @return a filtered list containing only credentials of type
-	 * {@link org.springframework.security.saml2.credentials.Saml2X509Credential.Saml2X509CredentialType#ENCRYPTION}.
-	 * Returns an empty list of credentials are not found
-	 * @deprecated Use {@link AssertingPartyDetails#getEncryptionX509Credentials()}
-	 * instead
-	 */
-	@Deprecated
-	public List<org.springframework.security.saml2.credentials.Saml2X509Credential> getEncryptionCredentials() {
-		return filterCredentials(
-				org.springframework.security.saml2.credentials.Saml2X509Credential::isEncryptionCredential);
-	}
-
-	/**
-	 * @return a filtered list containing only credentials of type
-	 * {@link org.springframework.security.saml2.credentials.Saml2X509Credential.Saml2X509CredentialType#DECRYPTION}.
-	 * Returns an empty list of credentials are not found
-	 * @deprecated Use {@link #getDecryptionX509Credentials()} instead
-	 */
-	@Deprecated
-	public List<org.springframework.security.saml2.credentials.Saml2X509Credential> getDecryptionCredentials() {
-		return filterCredentials(
-				org.springframework.security.saml2.credentials.Saml2X509Credential::isDecryptionCredential);
-	}
-
-	private List<org.springframework.security.saml2.credentials.Saml2X509Credential> filterCredentials(
-			Function<org.springframework.security.saml2.credentials.Saml2X509Credential, Boolean> filter) {
-		List<org.springframework.security.saml2.credentials.Saml2X509Credential> result = new LinkedList<>();
-		for (org.springframework.security.saml2.credentials.Saml2X509Credential c : this.credentials) {
-			if (filter.apply(c)) {
-				result.add(c);
-			}
-		}
-		return result;
+	public AssertingPartyMetadata getAssertingPartyMetadata() {
+		return this.assertingPartyMetadata;
 	}
 
 	/**
@@ -407,89 +369,21 @@ public final class RelyingPartyRegistration {
 	 */
 	public static Builder withRegistrationId(String registrationId) {
 		Assert.hasText(registrationId, "registrationId cannot be empty");
-		return new Builder(registrationId);
+		return new Builder(registrationId, new AssertingPartyDetails.Builder());
 	}
 
 	/**
-	 * Creates a {@code RelyingPartyRegistration} {@link Builder} based on an existing
-	 * object
-	 * @param registration the {@code RelyingPartyRegistration}
-	 * @return {@code Builder} to create a {@code RelyingPartyRegistration} object
+	 * Creates a {@code RelyingPartyRegistration} {@link Builder} with a
+	 * {@code registrationId} equivalent to the asserting party entity id. Also
+	 * initializes to the contents of the given {@link AssertingPartyMetadata}.
+	 * @param metadata the metadata used to initialize the
+	 * {@link RelyingPartyRegistration} {@link Builder}
+	 * @return {@link Builder} to create a {@link RelyingPartyRegistration} object
+	 * @since 6.4
 	 */
-	public static Builder withRelyingPartyRegistration(RelyingPartyRegistration registration) {
-		Assert.notNull(registration, "registration cannot be null");
-		return withRegistrationId(registration.getRegistrationId()).entityId(registration.getEntityId())
-				.signingX509Credentials((c) -> c.addAll(registration.getSigningX509Credentials()))
-				.decryptionX509Credentials((c) -> c.addAll(registration.getDecryptionX509Credentials()))
-				.assertionConsumerServiceLocation(registration.getAssertionConsumerServiceLocation())
-				.assertionConsumerServiceBinding(registration.getAssertionConsumerServiceBinding())
-				.singleLogoutServiceLocation(registration.getSingleLogoutServiceLocation())
-				.singleLogoutServiceResponseLocation(registration.getSingleLogoutServiceResponseLocation())
-				.singleLogoutServiceBinding(registration.getSingleLogoutServiceBinding())
-				.assertingPartyDetails((assertingParty) -> assertingParty
-						.entityId(registration.getAssertingPartyDetails().getEntityId())
-						.wantAuthnRequestsSigned(registration.getAssertingPartyDetails().getWantAuthnRequestsSigned())
-						.signingAlgorithms((algorithms) -> algorithms
-								.addAll(registration.getAssertingPartyDetails().getSigningAlgorithms()))
-						.verificationX509Credentials((c) -> c
-								.addAll(registration.getAssertingPartyDetails().getVerificationX509Credentials()))
-						.encryptionX509Credentials(
-								(c) -> c.addAll(registration.getAssertingPartyDetails().getEncryptionX509Credentials()))
-						.singleSignOnServiceLocation(
-								registration.getAssertingPartyDetails().getSingleSignOnServiceLocation())
-						.singleSignOnServiceBinding(
-								registration.getAssertingPartyDetails().getSingleSignOnServiceBinding())
-						.singleLogoutServiceLocation(
-								registration.getAssertingPartyDetails().getSingleLogoutServiceLocation())
-						.singleLogoutServiceResponseLocation(
-								registration.getAssertingPartyDetails().getSingleLogoutServiceResponseLocation())
-						.singleLogoutServiceBinding(
-								registration.getAssertingPartyDetails().getSingleLogoutServiceBinding()));
-	}
-
-	private static Saml2X509Credential fromDeprecated(
-			org.springframework.security.saml2.credentials.Saml2X509Credential credential) {
-		PrivateKey privateKey = credential.getPrivateKey();
-		X509Certificate certificate = credential.getCertificate();
-		Set<Saml2X509Credential.Saml2X509CredentialType> credentialTypes = new LinkedHashSet<>();
-		if (credential.isSigningCredential()) {
-			credentialTypes.add(Saml2X509Credential.Saml2X509CredentialType.SIGNING);
-		}
-		if (credential.isSignatureVerficationCredential()) {
-			credentialTypes.add(Saml2X509Credential.Saml2X509CredentialType.VERIFICATION);
-		}
-		if (credential.isEncryptionCredential()) {
-			credentialTypes.add(Saml2X509Credential.Saml2X509CredentialType.ENCRYPTION);
-		}
-		if (credential.isDecryptionCredential()) {
-			credentialTypes.add(Saml2X509Credential.Saml2X509CredentialType.DECRYPTION);
-		}
-		return new Saml2X509Credential(privateKey, certificate, credentialTypes);
-	}
-
-	private static org.springframework.security.saml2.credentials.Saml2X509Credential toDeprecated(
-			Saml2X509Credential credential) {
-		PrivateKey privateKey = credential.getPrivateKey();
-		X509Certificate certificate = credential.getCertificate();
-		Set<org.springframework.security.saml2.credentials.Saml2X509Credential.Saml2X509CredentialType> credentialTypes = new LinkedHashSet<>();
-		if (credential.isSigningCredential()) {
-			credentialTypes.add(
-					org.springframework.security.saml2.credentials.Saml2X509Credential.Saml2X509CredentialType.SIGNING);
-		}
-		if (credential.isVerificationCredential()) {
-			credentialTypes.add(
-					org.springframework.security.saml2.credentials.Saml2X509Credential.Saml2X509CredentialType.VERIFICATION);
-		}
-		if (credential.isEncryptionCredential()) {
-			credentialTypes.add(
-					org.springframework.security.saml2.credentials.Saml2X509Credential.Saml2X509CredentialType.ENCRYPTION);
-		}
-		if (credential.isDecryptionCredential()) {
-			credentialTypes.add(
-					org.springframework.security.saml2.credentials.Saml2X509Credential.Saml2X509CredentialType.DECRYPTION);
-		}
-		return new org.springframework.security.saml2.credentials.Saml2X509Credential(privateKey, certificate,
-				credentialTypes);
+	public static Builder withAssertingPartyMetadata(AssertingPartyMetadata metadata) {
+		Assert.notNull(metadata, "assertingPartyMetadata cannot be null");
+		return new Builder(metadata.getEntityId(), metadata.mutate());
 	}
 
 	/**
@@ -497,7 +391,9 @@ public final class RelyingPartyRegistration {
 	 *
 	 * @since 5.4
 	 */
-	public static final class AssertingPartyDetails {
+	public static class AssertingPartyDetails implements AssertingPartyMetadata {
+
+		private static final long serialVersionUID = 8728930758311995475L;
 
 		private final String entityId;
 
@@ -519,7 +415,7 @@ public final class RelyingPartyRegistration {
 
 		private final Saml2MessageBinding singleLogoutServiceBinding;
 
-		private AssertingPartyDetails(String entityId, boolean wantAuthnRequestsSigned, List<String> signingAlgorithms,
+		AssertingPartyDetails(String entityId, boolean wantAuthnRequestsSigned, List<String> signingAlgorithms,
 				Collection<Saml2X509Credential> verificationX509Credentials,
 				Collection<Saml2X509Credential> encryptionX509Credentials, String singleSignOnServiceLocation,
 				Saml2MessageBinding singleSignOnServiceBinding, String singleLogoutServiceLocation,
@@ -688,7 +584,20 @@ public final class RelyingPartyRegistration {
 			return this.singleLogoutServiceBinding;
 		}
 
-		public static final class Builder {
+		public AssertingPartyDetails.Builder mutate() {
+			return new AssertingPartyDetails.Builder().entityId(this.entityId)
+				.wantAuthnRequestsSigned(this.wantAuthnRequestsSigned)
+				.signingAlgorithms((algorithms) -> algorithms.addAll(this.signingAlgorithms))
+				.verificationX509Credentials((c) -> c.addAll(this.verificationX509Credentials))
+				.encryptionX509Credentials((c) -> c.addAll(this.encryptionX509Credentials))
+				.singleSignOnServiceLocation(this.singleSignOnServiceLocation)
+				.singleSignOnServiceBinding(this.singleSignOnServiceBinding)
+				.singleLogoutServiceLocation(this.singleLogoutServiceLocation)
+				.singleLogoutServiceResponseLocation(this.singleLogoutServiceResponseLocation)
+				.singleLogoutServiceBinding(this.singleLogoutServiceBinding);
+		}
+
+		public static class Builder implements AssertingPartyMetadata.Builder<Builder> {
 
 			private String entityId;
 
@@ -716,7 +625,7 @@ public final class RelyingPartyRegistration {
 			 * Equivalent to the value found in the asserting party's &lt;EntityDescriptor
 			 * EntityID="..."/&gt;
 			 * @param entityId the asserting party's EntityID
-			 * @return the {@link ProviderDetails.Builder} for further configuration
+			 * @return the {@link AssertingPartyDetails.Builder} for further configuration
 			 */
 			public Builder entityId(String entityId) {
 				this.entityId = entityId;
@@ -728,7 +637,7 @@ public final class RelyingPartyRegistration {
 			 * preference that relying parties should sign the AuthnRequest before
 			 * sending.
 			 * @param wantAuthnRequestsSigned the WantAuthnRequestsSigned setting
-			 * @return the {@link ProviderDetails.Builder} for further configuration
+			 * @return the {@link AssertingPartyDetails.Builder} for further configuration
 			 */
 			public Builder wantAuthnRequestsSigned(boolean wantAuthnRequestsSigned) {
 				this.wantAuthnRequestsSigned = wantAuthnRequestsSigned;
@@ -783,7 +692,7 @@ public final class RelyingPartyRegistration {
 			 * Equivalent to the value found in &lt;SingleSignOnService
 			 * Location="..."/&gt; in the asserting party's &lt;IDPSSODescriptor&gt;.
 			 * @param singleSignOnServiceLocation the SingleSignOnService Location
-			 * @return the {@link ProviderDetails.Builder} for further configuration
+			 * @return the {@link AssertingPartyDetails.Builder} for further configuration
 			 */
 			public Builder singleSignOnServiceLocation(String singleSignOnServiceLocation) {
 				this.singleSignOnServiceLocation = singleSignOnServiceLocation;
@@ -799,7 +708,7 @@ public final class RelyingPartyRegistration {
 			 * Equivalent to the value found in &lt;SingleSignOnService Binding="..."/&gt;
 			 * in the asserting party's &lt;IDPSSODescriptor&gt;.
 			 * @param singleSignOnServiceBinding the SingleSignOnService Binding
-			 * @return the {@link ProviderDetails.Builder} for further configuration
+			 * @return the {@link AssertingPartyDetails.Builder} for further configuration
 			 */
 			public Builder singleSignOnServiceBinding(Saml2MessageBinding singleSignOnServiceBinding) {
 				this.singleSignOnServiceBinding = singleSignOnServiceBinding;
@@ -866,7 +775,7 @@ public final class RelyingPartyRegistration {
 			 */
 			public AssertingPartyDetails build() {
 				List<String> signingAlgorithms = this.signingAlgorithms.isEmpty()
-						? Collections.singletonList(SignatureConstants.ALGO_ID_SIGNATURE_RSA_SHA256)
+						? Collections.singletonList("http://www.w3.org/2001/04/xmldsig-more#rsa-sha256")
 						: Collections.unmodifiableList(this.signingAlgorithms);
 
 				return new AssertingPartyDetails(this.entityId, this.wantAuthnRequestsSigned, signingAlgorithms,
@@ -880,127 +789,7 @@ public final class RelyingPartyRegistration {
 
 	}
 
-	/**
-	 * Configuration for IDP SSO endpoint configuration
-	 *
-	 * @since 5.3
-	 * @deprecated Use {@link AssertingPartyDetails} instead
-	 */
-	@Deprecated
-	public static final class ProviderDetails {
-
-		private final AssertingPartyDetails assertingPartyDetails;
-
-		private ProviderDetails(AssertingPartyDetails assertingPartyDetails) {
-			Assert.notNull("assertingPartyDetails cannot be null");
-			this.assertingPartyDetails = assertingPartyDetails;
-		}
-
-		/**
-		 * Returns the entity ID of the Identity Provider
-		 * @return the entity ID of the IDP
-		 */
-		public String getEntityId() {
-			return this.assertingPartyDetails.getEntityId();
-		}
-
-		/**
-		 * Contains the URL for which to send the SAML 2 Authentication Request to
-		 * initiate a single sign on flow.
-		 * @return a IDP URL that accepts REDIRECT or POST binding for authentication
-		 * requests
-		 */
-		public String getWebSsoUrl() {
-			return this.assertingPartyDetails.getSingleSignOnServiceLocation();
-		}
-
-		/**
-		 * @return {@code true} if AuthNRequests from this relying party to the IDP should
-		 * be signed {@code false} if no signature is required.
-		 */
-		public boolean isSignAuthNRequest() {
-			return this.assertingPartyDetails.getWantAuthnRequestsSigned();
-		}
-
-		/**
-		 * @return the type of SAML 2 Binding the AuthNRequest should be sent on
-		 */
-		public Saml2MessageBinding getBinding() {
-			return this.assertingPartyDetails.getSingleSignOnServiceBinding();
-		}
-
-		/**
-		 * Builder for IDP SSO endpoint configuration
-		 *
-		 * @since 5.3
-		 * @deprecated Use {@link AssertingPartyDetails.Builder} instead
-		 */
-		@Deprecated
-		public static final class Builder {
-
-			private final AssertingPartyDetails.Builder assertingPartyDetailsBuilder = new AssertingPartyDetails.Builder();
-
-			/**
-			 * Set the asserting party's <a href=
-			 * "https://www.oasis-open.org/committees/download.php/51890/SAML%20MD%20simplified%20overview.pdf#2.9%20EntityDescriptor">EntityID</a>.
-			 * Equivalent to the value found in the asserting party's &lt;EntityDescriptor
-			 * EntityID="..."/&gt;
-			 * @param entityId the asserting party's EntityID
-			 * @return the {@link Builder} for further configuration
-			 * @since 5.4
-			 */
-			public Builder entityId(String entityId) {
-				this.assertingPartyDetailsBuilder.entityId(entityId);
-				return this;
-			}
-
-			/**
-			 * Sets the {@code SSO URL} for the remote asserting party, the Identity
-			 * Provider.
-			 * @param url - a URL that accepts authentication requests via REDIRECT or
-			 * POST bindings
-			 * @return this object
-			 */
-			public Builder webSsoUrl(String url) {
-				this.assertingPartyDetailsBuilder.singleSignOnServiceLocation(url);
-				return this;
-			}
-
-			/**
-			 * Set to true if the AuthNRequest message should be signed
-			 * @param signAuthNRequest true if the message should be signed
-			 * @return this object
-			 */
-			public Builder signAuthNRequest(boolean signAuthNRequest) {
-				this.assertingPartyDetailsBuilder.wantAuthnRequestsSigned(signAuthNRequest);
-				return this;
-			}
-
-			/**
-			 * Sets the message binding to be used when sending an AuthNRequest message
-			 * @param binding either {@link Saml2MessageBinding#POST} or
-			 * {@link Saml2MessageBinding#REDIRECT}
-			 * @return this object
-			 */
-			public Builder binding(Saml2MessageBinding binding) {
-				this.assertingPartyDetailsBuilder.singleSignOnServiceBinding(binding);
-				return this;
-			}
-
-			/**
-			 * Creates an immutable ProviderDetails object representing the configuration
-			 * for an Identity Provider, IDP
-			 * @return immutable ProviderDetails object
-			 */
-			public ProviderDetails build() {
-				return new ProviderDetails(this.assertingPartyDetailsBuilder.build());
-			}
-
-		}
-
-	}
-
-	public static final class Builder {
+	public static class Builder {
 
 		private String registrationId;
 
@@ -1018,14 +807,17 @@ public final class RelyingPartyRegistration {
 
 		private String singleLogoutServiceResponseLocation;
 
-		private Saml2MessageBinding singleLogoutServiceBinding = Saml2MessageBinding.POST;
+		private Collection<Saml2MessageBinding> singleLogoutServiceBindings = new LinkedHashSet<>();
 
-		private ProviderDetails.Builder providerDetails = new ProviderDetails.Builder();
+		private String nameIdFormat = null;
 
-		private Collection<org.springframework.security.saml2.credentials.Saml2X509Credential> credentials = new LinkedHashSet<>();
+		private boolean authnRequestsSigned = false;
 
-		private Builder(String registrationId) {
+		private AssertingPartyMetadata.Builder<?> assertingPartyMetadataBuilder;
+
+		protected Builder(String registrationId, AssertingPartyMetadata.Builder<?> assertingPartyMetadataBuilder) {
 			this.registrationId = registrationId;
+			this.assertingPartyMetadataBuilder = assertingPartyMetadataBuilder;
 		}
 
 		/**
@@ -1136,7 +928,28 @@ public final class RelyingPartyRegistration {
 		 * @since 5.6
 		 */
 		public Builder singleLogoutServiceBinding(Saml2MessageBinding singleLogoutServiceBinding) {
-			this.singleLogoutServiceBinding = singleLogoutServiceBinding;
+			return this.singleLogoutServiceBindings((saml2MessageBindings) -> {
+				saml2MessageBindings.clear();
+				saml2MessageBindings.add(singleLogoutServiceBinding);
+			});
+		}
+
+		/**
+		 * Apply this {@link Consumer} to the {@link Collection} of
+		 * {@link Saml2MessageBinding}s for the purposes of modifying the <a href=
+		 * "https://docs.oasis-open.org/security/saml/v2.0/saml-metadata-2.0-os.pdf#page=7">SingleLogoutService
+		 * Binding</a> {@link Collection}.
+		 *
+		 * <p>
+		 * Equivalent to the value found in &lt;SingleLogoutService Binding="..."/&gt; in
+		 * the relying party's &lt;SPSSODescriptor&gt;.
+		 * @param bindingsConsumer - the {@link Consumer} for modifying the
+		 * {@link Collection}
+		 * @return the {@link Builder} for further configuration
+		 * @since 5.8
+		 */
+		public Builder singleLogoutServiceBindings(Consumer<Collection<Saml2MessageBinding>> bindingsConsumer) {
+			bindingsConsumer.accept(this.singleLogoutServiceBindings);
 			return this;
 		}
 
@@ -1176,110 +989,42 @@ public final class RelyingPartyRegistration {
 		}
 
 		/**
-		 * Apply this {@link Consumer} to further configure the Asserting Party details
-		 * @param assertingPartyDetails The {@link Consumer} to apply
+		 * Set the NameID format
+		 * @param nameIdFormat the given NameID format
 		 * @return the {@link Builder} for further configuration
-		 * @since 5.4
+		 * @since 5.7
 		 */
-		public Builder assertingPartyDetails(Consumer<AssertingPartyDetails.Builder> assertingPartyDetails) {
-			assertingPartyDetails.accept(this.providerDetails.assertingPartyDetailsBuilder);
+		public Builder nameIdFormat(String nameIdFormat) {
+			this.nameIdFormat = nameIdFormat;
 			return this;
 		}
 
 		/**
-		 * Modifies the collection of {@link Saml2X509Credential} objects used in
-		 * communication between IDP and SP For example: <code>
-		 *     Saml2X509Credential credential = ...;
-		 *     return RelyingPartyRegistration.withRegistrationId("id")
-		 *             .credentials((c) -&gt; c.add(credential))
-		 *             ...
-		 *             .build();
-		 * </code>
-		 * @param credentials - a consumer that can modify the collection of credentials
-		 * @return this object
-		 * @deprecated Use {@link #signingX509Credentials} or
-		 * {@link #decryptionX509Credentials} instead for relying party keys or
-		 * {@link AssertingPartyDetails.Builder#verificationX509Credentials} or
-		 * {@link AssertingPartyDetails.Builder#encryptionX509Credentials} for asserting
-		 * party keys
+		 * Set the <a href=
+		 * "https://docs.oasis-open.org/security/saml/v2.0/saml-metadata-2.0-os.pdf#page=18">
+		 * AuthnRequestsSigned</a> setting. If {@code true}, the relying party will sign
+		 * all AuthnRequests, 301 asserting party preference.
+		 *
+		 * <p>
+		 * Note that Spring Security will sign the request if either
+		 * {@link #isAuthnRequestsSigned()} is {@code true} or
+		 * {@link AssertingPartyDetails#getWantAuthnRequestsSigned()} is {@code true}.
+		 * @return the {@link Builder} for further configuration
+		 * @since 6.1
 		 */
-		@Deprecated
-		public Builder credentials(
-				Consumer<Collection<org.springframework.security.saml2.credentials.Saml2X509Credential>> credentials) {
-			credentials.accept(this.credentials);
+		public Builder authnRequestsSigned(Boolean authnRequestsSigned) {
+			this.authnRequestsSigned = authnRequestsSigned;
 			return this;
 		}
 
 		/**
-		 * <a href=
-		 * "https://www.oasis-open.org/committees/download.php/51890/SAML%20MD%20simplified%20overview.pdf#2.3%20AttributeConsumingService">Assertion
-		 * Consumer Service</a> URL template. It can contain variables {@code baseUrl},
-		 * {@code registrationId}, {@code baseScheme}, {@code baseHost}, and
-		 * {@code basePort}.
-		 * @param assertionConsumerServiceUrlTemplate the Assertion Consumer Service URL
-		 * template (i.e. "{baseUrl}/login/saml2/sso/{registrationId}".
-		 * @return this object
-		 * @deprecated Use {@link #assertionConsumerServiceLocation} instead.
+		 * Apply this {@link Consumer} to further configure the Asserting Party metadata
+		 * @param assertingPartyMetadata The {@link Consumer} to apply
+		 * @return the {@link Builder} for further configuration
+		 * @since 6.4
 		 */
-		@Deprecated
-		public Builder assertionConsumerServiceUrlTemplate(String assertionConsumerServiceUrlTemplate) {
-			this.assertionConsumerServiceLocation = assertionConsumerServiceUrlTemplate;
-			return this;
-		}
-
-		/**
-		 * Sets the {@code entityId} for the remote asserting party, the Identity
-		 * Provider.
-		 * @param entityId the IDP entityId
-		 * @return this object
-		 * @deprecated use
-		 * {@code #assertingPartyDetails(Consumer<AssertingPartyDetails.Builder >)}
-		 */
-		@Deprecated
-		public Builder remoteIdpEntityId(String entityId) {
-			assertingPartyDetails((idp) -> idp.entityId(entityId));
-			return this;
-		}
-
-		/**
-		 * Sets the {@code SSO URL} for the remote asserting party, the Identity Provider.
-		 * @param url - a URL that accepts authentication requests via REDIRECT or POST
-		 * bindings
-		 * @return this object
-		 * @deprecated use
-		 * {@code #assertingPartyDetails(Consumer<AssertingPartyDetails.Builder >)}
-		 */
-		@Deprecated
-		public Builder idpWebSsoUrl(String url) {
-			assertingPartyDetails((config) -> config.singleSignOnServiceLocation(url));
-			return this;
-		}
-
-		/**
-		 * Sets the local relying party, or Service Provider, entity Id template. can
-		 * generate it's entity ID based on possible variables of {@code baseUrl},
-		 * {@code registrationId}, {@code baseScheme}, {@code baseHost}, and
-		 * {@code basePort}, for example
-		 * {@code {baseUrl}/saml2/service-provider-metadata/{registrationId}}
-		 * @param template the entity id
-		 * @return a string containing the entity ID or entity ID template
-		 * @deprecated Use {@link #entityId} instead
-		 */
-		@Deprecated
-		public Builder localEntityIdTemplate(String template) {
-			this.entityId = template;
-			return this;
-		}
-
-		/**
-		 * Configures the IDP SSO endpoint
-		 * @param providerDetails a consumer that configures the IDP SSO endpoint
-		 * @return this object
-		 * @deprecated Use {@link #assertingPartyDetails} instead
-		 */
-		@Deprecated
-		public Builder providerDetails(Consumer<ProviderDetails.Builder> providerDetails) {
-			providerDetails.accept(this.providerDetails);
+		public Builder assertingPartyMetadata(Consumer<AssertingPartyMetadata.Builder<?>> assertingPartyMetadata) {
+			assertingPartyMetadata.accept(this.assertingPartyMetadataBuilder);
 			return this;
 		}
 
@@ -1289,41 +1034,19 @@ public final class RelyingPartyRegistration {
 		 * @return a RelyingPartyRegistration instance
 		 */
 		public RelyingPartyRegistration build() {
-			for (org.springframework.security.saml2.credentials.Saml2X509Credential credential : this.credentials) {
-				Saml2X509Credential mapped = fromDeprecated(credential);
-				if (credential.isSigningCredential()) {
-					signingX509Credentials((c) -> c.add(mapped));
-				}
-				if (credential.isDecryptionCredential()) {
-					decryptionX509Credentials((c) -> c.add(mapped));
-				}
-				if (credential.isSignatureVerficationCredential()) {
-					this.providerDetails.assertingPartyDetailsBuilder.verificationX509Credentials((c) -> c.add(mapped));
-				}
-				if (credential.isEncryptionCredential()) {
-					this.providerDetails.assertingPartyDetailsBuilder.encryptionX509Credentials((c) -> c.add(mapped));
-				}
-			}
-
-			for (Saml2X509Credential credential : this.signingX509Credentials) {
-				this.credentials.add(toDeprecated(credential));
-			}
-			for (Saml2X509Credential credential : this.decryptionX509Credentials) {
-				this.credentials.add(toDeprecated(credential));
-			}
-			for (Saml2X509Credential credential : this.providerDetails.assertingPartyDetailsBuilder.verificationX509Credentials) {
-				this.credentials.add(toDeprecated(credential));
-			}
-			for (Saml2X509Credential credential : this.providerDetails.assertingPartyDetailsBuilder.encryptionX509Credentials) {
-				this.credentials.add(toDeprecated(credential));
-			}
 			if (this.singleLogoutServiceResponseLocation == null) {
 				this.singleLogoutServiceResponseLocation = this.singleLogoutServiceLocation;
 			}
+
+			if (this.singleLogoutServiceBindings.isEmpty()) {
+				this.singleLogoutServiceBindings.add(Saml2MessageBinding.POST);
+			}
+
+			AssertingPartyMetadata party = this.assertingPartyMetadataBuilder.build();
 			return new RelyingPartyRegistration(this.registrationId, this.entityId,
 					this.assertionConsumerServiceLocation, this.assertionConsumerServiceBinding,
 					this.singleLogoutServiceLocation, this.singleLogoutServiceResponseLocation,
-					this.singleLogoutServiceBinding, this.providerDetails.build(), this.credentials,
+					this.singleLogoutServiceBindings, party, this.nameIdFormat, this.authnRequestsSigned,
 					this.decryptionX509Credentials, this.signingX509Credentials);
 		}
 

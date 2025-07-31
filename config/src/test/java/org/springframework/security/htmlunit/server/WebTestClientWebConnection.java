@@ -18,10 +18,10 @@ package org.springframework.security.htmlunit.server;
 
 import java.io.IOException;
 
-import com.gargoylesoftware.htmlunit.WebClient;
-import com.gargoylesoftware.htmlunit.WebConnection;
-import com.gargoylesoftware.htmlunit.WebRequest;
-import com.gargoylesoftware.htmlunit.WebResponse;
+import org.htmlunit.WebClient;
+import org.htmlunit.WebConnection;
+import org.htmlunit.WebRequest;
+import org.htmlunit.WebResponse;
 
 import org.springframework.lang.Nullable;
 import org.springframework.test.web.reactive.server.FluxExchangeResult;
@@ -60,8 +60,8 @@ public class WebTestClientWebConnection implements WebConnection {
 	 * Validate the supplied {@code contextPath}.
 	 * <p>
 	 * If the value is not {@code null}, it must conform to
-	 * {@link javax.servlet.http.HttpServletRequest#getContextPath()} which states that it
-	 * can be an empty string and otherwise must start with a "/" character and not end
+	 * {@link jakarta.servlet.http.HttpServletRequest#getContextPath()} which states that
+	 * it can be an empty string and otherwise must start with a "/" character and not end
 	 * with a "/" character.
 	 * @param contextPath the path to validate
 	 */

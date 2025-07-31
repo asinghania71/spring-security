@@ -30,7 +30,7 @@ import org.springframework.web.server.ServerWebExchange;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
-import static org.mockito.Mockito.verifyZeroInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 /**
  * @author Rob Winch
@@ -49,7 +49,7 @@ public class HttpBasicServerAuthenticationEntryPointTests {
 	@Test
 	public void commenceWhenNoSubscribersThenNoActions() {
 		this.entryPoint.commence(this.exchange, this.exception);
-		verifyZeroInteractions(this.exchange);
+		verifyNoMoreInteractions(this.exchange);
 	}
 
 	@Test
@@ -58,7 +58,7 @@ public class HttpBasicServerAuthenticationEntryPointTests {
 		this.entryPoint.commence(this.exchange, this.exception).block();
 		assertThat(this.exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
 		assertThat(this.exchange.getResponse().getHeaders().get("WWW-Authenticate"))
-				.containsOnly("Basic realm=\"Realm\"");
+			.containsOnly("Basic realm=\"Realm\"");
 	}
 
 	@Test
@@ -68,7 +68,7 @@ public class HttpBasicServerAuthenticationEntryPointTests {
 		this.entryPoint.commence(this.exchange, this.exception).block();
 		assertThat(this.exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
 		assertThat(this.exchange.getResponse().getHeaders().get("WWW-Authenticate"))
-				.containsOnly("Basic realm=\"Custom\"");
+			.containsOnly("Basic realm=\"Custom\"");
 	}
 
 	@Test

@@ -19,18 +19,16 @@ package org.springframework.security.web.server.csrf;
 import java.util.Map;
 import java.util.UUID;
 
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpSession;
-
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
 import org.springframework.util.Assert;
 import org.springframework.web.server.ServerWebExchange;
+import org.springframework.web.server.WebSession;
 
 /**
  * A {@link ServerCsrfTokenRepository} that stores the {@link CsrfToken} in the
- * {@link HttpSession}.
+ * {@link WebSession}.
  *
  * @author Rob Winch
  * @since 5.0
@@ -42,7 +40,7 @@ public class WebSessionServerCsrfTokenRepository implements ServerCsrfTokenRepos
 	private static final String DEFAULT_CSRF_HEADER_NAME = "X-CSRF-TOKEN";
 
 	private static final String DEFAULT_CSRF_TOKEN_ATTR_NAME = WebSessionServerCsrfTokenRepository.class.getName()
-			.concat(".CSRF_TOKEN");
+		.concat(".CSRF_TOKEN");
 
 	private String parameterName = DEFAULT_CSRF_PARAMETER_NAME;
 
@@ -57,8 +55,9 @@ public class WebSessionServerCsrfTokenRepository implements ServerCsrfTokenRepos
 
 	@Override
 	public Mono<Void> saveToken(ServerWebExchange exchange, CsrfToken token) {
-		return exchange.getSession().doOnNext((session) -> putToken(session.getAttributes(), token))
-				.flatMap((session) -> session.changeSessionId());
+		return exchange.getSession()
+			.doOnNext((session) -> putToken(session.getAttributes(), token))
+			.flatMap((session) -> session.changeSessionId());
 	}
 
 	private void putToken(Map<String, Object> attributes, CsrfToken token) {
@@ -72,12 +71,13 @@ public class WebSessionServerCsrfTokenRepository implements ServerCsrfTokenRepos
 
 	@Override
 	public Mono<CsrfToken> loadToken(ServerWebExchange exchange) {
-		return exchange.getSession().filter((session) -> session.getAttributes().containsKey(this.sessionAttributeName))
-				.map((session) -> session.getAttribute(this.sessionAttributeName));
+		return exchange.getSession()
+			.filter((session) -> session.getAttributes().containsKey(this.sessionAttributeName))
+			.map((session) -> session.getAttribute(this.sessionAttributeName));
 	}
 
 	/**
-	 * Sets the {@link HttpServletRequest} parameter name that the {@link CsrfToken} is
+	 * Sets the {@link ServerWebExchange} parameter name that the {@link CsrfToken} is
 	 * expected to appear on
 	 * @param parameterName the new parameter name to use
 	 */
@@ -97,7 +97,7 @@ public class WebSessionServerCsrfTokenRepository implements ServerCsrfTokenRepos
 	}
 
 	/**
-	 * Sets the {@link HttpSession} attribute name that the {@link CsrfToken} is stored in
+	 * Sets the {@link WebSession} attribute name that the {@link CsrfToken} is stored in
 	 * @param sessionAttributeName the new attribute name to use
 	 */
 	public void setSessionAttributeName(String sessionAttributeName) {

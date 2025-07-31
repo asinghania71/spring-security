@@ -16,7 +16,7 @@
 
 package org.springframework.security.saml2.provider.service.web.authentication.logout;
 
-import javax.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletRequest;
 
 import org.springframework.security.core.Authentication;
 import org.springframework.security.saml2.provider.service.authentication.logout.Saml2LogoutRequest;
@@ -28,7 +28,7 @@ import org.springframework.security.saml2.provider.service.registration.RelyingP
  *
  * The returned logout request is suitable for sending to the asserting party based on,
  * for example, the location and binding specified in
- * {@link RelyingPartyRegistration#getAssertingPartyDetails()}.
+ * {@link RelyingPartyRegistration#getAssertingPartyMetadata()}.
  *
  * @author Josh Cummings
  * @since 5.6

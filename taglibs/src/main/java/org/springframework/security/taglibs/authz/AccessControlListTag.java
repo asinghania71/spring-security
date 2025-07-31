@@ -20,12 +20,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-import javax.servlet.ServletContext;
-import javax.servlet.jsp.JspException;
-import javax.servlet.jsp.PageContext;
-import javax.servlet.jsp.tagext.Tag;
-import javax.servlet.jsp.tagext.TagSupport;
-
+import jakarta.servlet.ServletContext;
+import jakarta.servlet.jsp.JspException;
+import jakarta.servlet.jsp.PageContext;
+import jakarta.servlet.jsp.tagext.Tag;
+import jakarta.servlet.jsp.tagext.TagSupport;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -33,6 +32,7 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.security.access.PermissionEvaluator;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.context.SecurityContextHolderStrategy;
 import org.springframework.security.taglibs.TagLibConfig;
 import org.springframework.security.web.context.support.SecurityWebApplicationContextUtils;
 
@@ -57,6 +57,9 @@ public class AccessControlListTag extends TagSupport {
 
 	protected static final Log logger = LogFactory.getLog(AccessControlListTag.class);
 
+	private SecurityContextHolderStrategy securityContextHolderStrategy = SecurityContextHolder
+		.getContextHolderStrategy();
+
 	private ApplicationContext applicationContext;
 
 	private Object domainObject;
@@ -78,7 +81,7 @@ public class AccessControlListTag extends TagSupport {
 			// Of course they have access to a null object!
 			return evalBody();
 		}
-		Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+		Authentication authentication = this.securityContextHolderStrategy.getContext().getAuthentication();
 		if (authentication == null) {
 			logger.debug("SecurityContextHolder did not return a non-null Authentication object, so skipping tag body");
 			return skipBody();
@@ -146,15 +149,21 @@ public class AccessControlListTag extends TagSupport {
 		}
 		this.applicationContext = getContext(this.pageContext);
 		this.permissionEvaluator = getBeanOfType(PermissionEvaluator.class);
+		String[] names = this.applicationContext.getBeanNamesForType(SecurityContextHolderStrategy.class);
+		if (names.length == 1) {
+			SecurityContextHolderStrategy strategy = this.applicationContext
+				.getBean(SecurityContextHolderStrategy.class);
+			this.securityContextHolderStrategy = strategy;
+		}
 	}
 
 	private <T> T getBeanOfType(Class<T> type) throws JspException {
 		Map<String, T> map = this.applicationContext.getBeansOfType(type);
 		for (ApplicationContext context = this.applicationContext.getParent(); context != null; context = context
-				.getParent()) {
+			.getParent()) {
 			map.putAll(context.getBeansOfType(type));
 		}
-		if (map.size() == 0) {
+		if (map.isEmpty()) {
 			return null;
 		}
 		if (map.size() == 1) {

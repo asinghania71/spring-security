@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -65,19 +65,6 @@ public interface ClaimAccessor {
 	}
 
 	/**
-	 * Returns {@code true} if the claim exists in {@link #getClaims()}, otherwise
-	 * {@code false}.
-	 * @param claim the name of the claim
-	 * @return {@code true} if the claim exists, otherwise {@code false}
-	 * @deprecated Use
-	 * {@link org.springframework.security.oauth2.core.ClaimAccessor#hasClaim} instead.
-	 */
-	@Deprecated
-	default Boolean containsClaim(String claim) {
-		return hasClaim(claim);
-	}
-
-	/**
 	 * Returns the claim value as a {@code String} or {@code null} if it does not exist or
 	 * is equal to {@code null}.
 	 * @param claim the name of the claim
@@ -120,7 +107,7 @@ public interface ClaimAccessor {
 		}
 		Object claimValue = getClaims().get(claim);
 		Instant convertedValue = ClaimConversionService.getSharedInstance().convert(claimValue, Instant.class);
-		Assert.isTrue(convertedValue != null,
+		Assert.notNull(convertedValue,
 				() -> "Unable to convert claim '" + claim + "' of type '" + claimValue.getClass() + "' to Instant.");
 		return convertedValue;
 	}
@@ -136,7 +123,7 @@ public interface ClaimAccessor {
 		}
 		Object claimValue = getClaims().get(claim);
 		URL convertedValue = ClaimConversionService.getSharedInstance().convert(claimValue, URL.class);
-		Assert.isTrue(convertedValue != null,
+		Assert.notNull(convertedValue,
 				() -> "Unable to convert claim '" + claim + "' of type '" + claimValue.getClass() + "' to URL.");
 		return convertedValue;
 	}
@@ -147,7 +134,7 @@ public interface ClaimAccessor {
 	 * @param claim the name of the claim
 	 * @return the claim value or {@code null} if the claim does not exist
 	 * @throws IllegalArgumentException if the claim value cannot be converted to a
-	 * {@code List}
+	 * {@code Map}
 	 * @throws NullPointerException if the claim value is {@code null}
 	 */
 	@SuppressWarnings("unchecked")
@@ -160,8 +147,8 @@ public interface ClaimAccessor {
 				TypeDescriptor.valueOf(Object.class));
 		Object claimValue = getClaims().get(claim);
 		Map<String, Object> convertedValue = (Map<String, Object>) ClaimConversionService.getSharedInstance()
-				.convert(claimValue, sourceDescriptor, targetDescriptor);
-		Assert.isTrue(convertedValue != null,
+			.convert(claimValue, sourceDescriptor, targetDescriptor);
+		Assert.notNull(convertedValue,
 				() -> "Unable to convert claim '" + claim + "' of type '" + claimValue.getClass() + "' to Map.");
 		return convertedValue;
 	}
@@ -184,9 +171,9 @@ public interface ClaimAccessor {
 		final TypeDescriptor targetDescriptor = TypeDescriptor.collection(List.class,
 				TypeDescriptor.valueOf(String.class));
 		Object claimValue = getClaims().get(claim);
-		List<String> convertedValue = (List<String>) ClaimConversionService.getSharedInstance().convert(claimValue,
-				sourceDescriptor, targetDescriptor);
-		Assert.isTrue(convertedValue != null,
+		List<String> convertedValue = (List<String>) ClaimConversionService.getSharedInstance()
+			.convert(claimValue, sourceDescriptor, targetDescriptor);
+		Assert.notNull(convertedValue,
 				() -> "Unable to convert claim '" + claim + "' of type '" + claimValue.getClass() + "' to List.");
 		return convertedValue;
 	}

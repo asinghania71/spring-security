@@ -48,7 +48,10 @@ import org.springframework.security.acls.model.Sid;
 import org.springframework.security.acls.sid.CustomSid;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.context.SecurityContextHolderStrategy;
+import org.springframework.security.core.context.SecurityContextImpl;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 import org.springframework.test.context.transaction.AfterTransaction;
@@ -59,7 +62,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
 
 /**
  * Integration tests the ACL system using an in-memory database.
@@ -163,7 +168,7 @@ public class JdbcMutableAclServiceTests {
 		this.jdbcMutableAclService.updateAcl(child);
 		// Let's check if we can read them back correctly
 		Map<ObjectIdentity, Acl> map = this.jdbcMutableAclService
-				.readAclsById(Arrays.asList(getTopParentOid(), getMiddleParentOid(), getChildOid()));
+			.readAclsById(Arrays.asList(getTopParentOid(), getMiddleParentOid(), getChildOid()));
 		assertThat(map).hasSize(3);
 		// Get the retrieved versions
 		MutableAcl retrievedTopParent = (MutableAcl) map.get(getTopParentOid());
@@ -191,7 +196,7 @@ public class JdbcMutableAclServiceTests {
 		assertThat(retrievedMiddleParent.isGranted(delete, pSid, false)).isTrue();
 		assertThat(retrievedChild.isGranted(delete, pSid, false)).isFalse();
 		assertThatExceptionOfType(NotFoundException.class)
-				.isThrownBy(() -> retrievedChild.isGranted(Arrays.asList(BasePermission.ADMINISTRATION), pSid, false));
+			.isThrownBy(() -> retrievedChild.isGranted(Arrays.asList(BasePermission.ADMINISTRATION), pSid, false));
 		// Now check the inherited rights (when not explicitly overridden) also look OK
 		assertThat(retrievedChild.isGranted(read, pSid, false)).isTrue();
 		assertThat(retrievedChild.isGranted(write, pSid, false)).isFalse();
@@ -204,9 +209,9 @@ public class JdbcMutableAclServiceTests {
 		// Check the child permissions no longer inherit
 		assertThat(nonInheritingChild.isGranted(delete, pSid, true)).isFalse();
 		assertThatExceptionOfType(NotFoundException.class)
-				.isThrownBy(() -> nonInheritingChild.isGranted(read, pSid, true));
+			.isThrownBy(() -> nonInheritingChild.isGranted(read, pSid, true));
 		assertThatExceptionOfType(NotFoundException.class)
-				.isThrownBy(() -> nonInheritingChild.isGranted(write, pSid, true));
+			.isThrownBy(() -> nonInheritingChild.isGranted(write, pSid, true));
 		// Let's add an identical permission to the child, but it'll appear AFTER the
 		// current permission, so has no impact
 		nonInheritingChild.insertAce(1, BasePermission.DELETE, new PrincipalSid(this.auth), true);
@@ -261,9 +266,9 @@ public class JdbcMutableAclServiceTests {
 		// Delete the mid-parent and test if the child was deleted, as well
 		this.jdbcMutableAclService.deleteAcl(getMiddleParentOid(), true);
 		assertThatExceptionOfType(NotFoundException.class)
-				.isThrownBy(() -> this.jdbcMutableAclService.readAclById(getMiddleParentOid()));
+			.isThrownBy(() -> this.jdbcMutableAclService.readAclById(getMiddleParentOid()));
 		assertThatExceptionOfType(NotFoundException.class)
-				.isThrownBy(() -> this.jdbcMutableAclService.readAclById(getChildOid()));
+			.isThrownBy(() -> this.jdbcMutableAclService.readAclById(getChildOid()));
 		Acl acl = this.jdbcMutableAclService.readAclById(getTopParentOid());
 		assertThat(acl).isNotNull();
 		assertThat(getTopParentOid()).isEqualTo(acl.getObjectIdentity());
@@ -272,11 +277,11 @@ public class JdbcMutableAclServiceTests {
 	@Test
 	public void constructorRejectsNullParameters() {
 		assertThatIllegalArgumentException()
-				.isThrownBy(() -> new JdbcMutableAclService(null, this.lookupStrategy, this.aclCache));
+			.isThrownBy(() -> new JdbcMutableAclService(null, this.lookupStrategy, this.aclCache));
 		assertThatIllegalArgumentException()
-				.isThrownBy(() -> new JdbcMutableAclService(this.dataSource, null, this.aclCache));
+			.isThrownBy(() -> new JdbcMutableAclService(this.dataSource, null, this.aclCache));
 		assertThatIllegalArgumentException()
-				.isThrownBy(() -> new JdbcMutableAclService(this.dataSource, this.lookupStrategy, null));
+			.isThrownBy(() -> new JdbcMutableAclService(this.dataSource, this.lookupStrategy, null));
 	}
 
 	@Test
@@ -292,7 +297,7 @@ public class JdbcMutableAclServiceTests {
 		this.jdbcMutableAclService.createAcl(duplicateOid);
 		// Try to add the same object second time
 		assertThatExceptionOfType(AlreadyExistsException.class)
-				.isThrownBy(() -> this.jdbcMutableAclService.createAcl(duplicateOid));
+			.isThrownBy(() -> this.jdbcMutableAclService.createAcl(duplicateOid));
 	}
 
 	@Test
@@ -315,7 +320,7 @@ public class JdbcMutableAclServiceTests {
 		try {
 			// checking in the class, not database
 			assertThatExceptionOfType(ChildrenExistException.class)
-					.isThrownBy(() -> this.jdbcMutableAclService.deleteAcl(getTopParentOid(), false));
+				.isThrownBy(() -> this.jdbcMutableAclService.deleteAcl(getTopParentOid(), false));
 		}
 		finally {
 			// restore to the default
@@ -350,6 +355,19 @@ public class JdbcMutableAclServiceTests {
 		assertThat(this.jdbcMutableAclService.readAclById(new ObjectIdentityImpl(TARGET_CLASS, 101L))).isNotNull();
 	}
 
+	@Test
+	@Transactional
+	public void createAclWhenCustomSecurityContextHolderStrategyThenUses() {
+		SecurityContextHolderStrategy securityContextHolderStrategy = mock(SecurityContextHolderStrategy.class);
+		SecurityContext context = new SecurityContextImpl(this.auth);
+		given(securityContextHolderStrategy.getContext()).willReturn(context);
+		JdbcMutableAclService service = new JdbcMutableAclService(this.dataSource, this.lookupStrategy, this.aclCache);
+		service.setSecurityContextHolderStrategy(securityContextHolderStrategy);
+		ObjectIdentity oid = new ObjectIdentityImpl(TARGET_CLASS, 101);
+		service.createAcl(oid);
+		verify(securityContextHolderStrategy).getContext();
+	}
+
 	/**
 	 * SEC-655
 	 */
@@ -374,7 +392,7 @@ public class JdbcMutableAclServiceTests {
 		child = (MutableAcl) this.jdbcMutableAclService.readAclById(childOid);
 		parent = (MutableAcl) child.getParentAcl();
 		assertThat(parent.getEntries()).hasSize(2)
-				.withFailMessage("Fails because child has a stale reference to its parent");
+			.withFailMessage("Fails because child has a stale reference to its parent");
 		assertThat(parent.getEntries().get(0).getPermission().getMask()).isEqualTo(1);
 		assertThat(parent.getEntries().get(0).getSid()).isEqualTo(new PrincipalSid("ben"));
 		assertThat(parent.getEntries().get(1).getPermission().getMask()).isEqualTo(1);
@@ -436,7 +454,7 @@ public class JdbcMutableAclServiceTests {
 		CustomSid customSid = new CustomSid("Custom sid");
 		given(customJdbcMutableAclService.createOrRetrieveSidPrimaryKey("Custom sid", false, false)).willReturn(1L);
 		Long result = customJdbcMutableAclService.createOrRetrieveSidPrimaryKey(customSid, false);
-		assertThat(new Long(1L)).isEqualTo(result);
+		assertThat(Long.valueOf(1L)).isEqualTo(result);
 	}
 
 	protected Authentication getAuth() {

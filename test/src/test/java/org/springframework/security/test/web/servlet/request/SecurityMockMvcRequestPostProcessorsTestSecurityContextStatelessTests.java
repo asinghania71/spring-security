@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2014 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,19 +16,20 @@
 
 package org.springframework.security.test.web.servlet.request;
 
-import javax.servlet.Filter;
-
+import jakarta.servlet.Filter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 import org.springframework.test.context.web.WebAppConfiguration;
@@ -58,8 +59,10 @@ public class SecurityMockMvcRequestPostProcessorsTestSecurityContextStatelessTes
 
 	@BeforeEach
 	public void setup() {
-		this.mvc = MockMvcBuilders.webAppContextSetup(this.context).addFilters(this.springSecurityFilterChain)
-				.defaultRequest(get("/").with(testSecurityContext())).build();
+		this.mvc = MockMvcBuilders.webAppContextSetup(this.context)
+			.addFilters(this.springSecurityFilterChain)
+			.defaultRequest(get("/").with(testSecurityContext()))
+			.build();
 	}
 
 	@Test
@@ -68,17 +71,18 @@ public class SecurityMockMvcRequestPostProcessorsTestSecurityContextStatelessTes
 		this.mvc.perform(get("/")).andExpect(status().is2xxSuccessful());
 	}
 
+	@Configuration
 	@EnableWebSecurity
 	@EnableWebMvc
-	static class Config extends WebSecurityConfigurerAdapter {
+	static class Config {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
-			super.configure(http);
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.sessionManagement()
-					.sessionCreationPolicy(SessionCreationPolicy.STATELESS);
+				.sessionManagement((management) -> management
+					.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
+			return http.build();
 			// @formatter:on
 		}
 
@@ -90,7 +94,7 @@ public class SecurityMockMvcRequestPostProcessorsTestSecurityContextStatelessTes
 		@RestController
 		static class Controller {
 
-			@RequestMapping
+			@RequestMapping("/")
 			String hello() {
 				return "Hello";
 			}

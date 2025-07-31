@@ -19,6 +19,7 @@ package org.springframework.security.ldap.ppolicy;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.Serial;
 
 import netscape.ldap.ber.stream.BERChoice;
 import netscape.ldap.ber.stream.BERElement;
@@ -52,6 +53,9 @@ import org.springframework.dao.DataRetrievalFailureException;
 public class PasswordPolicyResponseControl extends PasswordPolicyControl {
 
 	private static final Log logger = LogFactory.getLog(PasswordPolicyResponseControl.class);
+
+	@Serial
+	private static final long serialVersionUID = -4592657167939234499L;
 
 	private final byte[] encodedValue;
 
@@ -215,12 +219,12 @@ public class PasswordPolicyResponseControl extends PasswordPolicyControl {
 				else if (tag == 1) {
 					BERIntegral error = (BERIntegral) elt.getValue();
 					PasswordPolicyResponseControl.this.errorStatus = PasswordPolicyErrorStatus.values()[error
-							.getValue()];
+						.getValue()];
 				}
 			}
 		}
 
-		class SpecificTagDecoder extends BERTagDecoder {
+		static class SpecificTagDecoder extends BERTagDecoder {
 
 			/** Allows us to remember which of the two options we're decoding */
 			private Boolean inChoice = null;

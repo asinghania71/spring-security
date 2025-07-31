@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2025 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,24 +18,28 @@ package org.springframework.security.authorization.method;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
+import java.util.Collection;
+import java.util.Set;
 import java.util.function.Supplier;
 
-import javax.annotation.security.DenyAll;
-import javax.annotation.security.PermitAll;
-import javax.annotation.security.RolesAllowed;
-
+import jakarta.annotation.security.DenyAll;
+import jakarta.annotation.security.PermitAll;
+import jakarta.annotation.security.RolesAllowed;
 import org.junit.jupiter.api.Test;
 
 import org.springframework.core.annotation.AnnotationConfigurationException;
 import org.springframework.security.access.intercept.method.MockMethodInvocation;
 import org.springframework.security.authentication.TestAuthentication;
 import org.springframework.security.authentication.TestingAuthenticationToken;
-import org.springframework.security.authorization.AuthorizationDecision;
+import org.springframework.security.authorization.AuthorizationManager;
+import org.springframework.security.authorization.AuthorizationResult;
 import org.springframework.security.core.Authentication;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
 /**
  * Tests for {@link Jsr250AuthorizationManager}.
@@ -54,7 +58,7 @@ public class Jsr250AuthorizationManagerTests {
 	public void setRolePrefixWhenNullThenException() {
 		Jsr250AuthorizationManager manager = new Jsr250AuthorizationManager();
 		assertThatIllegalArgumentException().isThrownBy(() -> manager.setRolePrefix(null))
-				.withMessage("rolePrefix cannot be null");
+			.withMessage("rolePrefix cannot be null");
 	}
 
 	@Test
@@ -65,11 +69,32 @@ public class Jsr250AuthorizationManagerTests {
 	}
 
 	@Test
+	public void setAuthoritiesAuthorizationManagerWhenNullThenException() {
+		Jsr250AuthorizationManager manager = new Jsr250AuthorizationManager();
+		assertThatIllegalArgumentException().isThrownBy(() -> manager.setAuthoritiesAuthorizationManager(null))
+			.withMessage("authoritiesAuthorizationManager cannot be null");
+	}
+
+	@Test
+	public void setAuthoritiesAuthorizationManagerWhenNotNullThenVerifyUsage() throws Exception {
+		AuthorizationManager<Collection<String>> authoritiesAuthorizationManager = mock(AuthorizationManager.class);
+		Jsr250AuthorizationManager manager = new Jsr250AuthorizationManager();
+		manager.setAuthoritiesAuthorizationManager(authoritiesAuthorizationManager);
+		MockMethodInvocation methodInvocation = new MockMethodInvocation(new ClassLevelAnnotations(),
+				ClassLevelAnnotations.class, "rolesAllowedAdmin");
+		Supplier<Authentication> authentication = () -> new TestingAuthenticationToken("user", "password",
+				"ROLE_ADMIN");
+		AuthorizationResult decision = manager.authorize(authentication, methodInvocation);
+		assertThat(decision).isNull();
+		verify(authoritiesAuthorizationManager).authorize(authentication, Set.of("ROLE_ADMIN"));
+	}
+
+	@Test
 	public void checkDoSomethingWhenNoJsr250AnnotationsThenNullDecision() throws Exception {
 		MockMethodInvocation methodInvocation = new MockMethodInvocation(new TestClass(), TestClass.class,
 				"doSomething");
 		Jsr250AuthorizationManager manager = new Jsr250AuthorizationManager();
-		AuthorizationDecision decision = manager.check(TestAuthentication::authenticatedUser, methodInvocation);
+		AuthorizationResult decision = manager.authorize(TestAuthentication::authenticatedUser, methodInvocation);
 		assertThat(decision).isNull();
 	}
 
@@ -77,7 +102,7 @@ public class Jsr250AuthorizationManagerTests {
 	public void checkPermitAllWhenRoleUserThenGrantedDecision() throws Exception {
 		MockMethodInvocation methodInvocation = new MockMethodInvocation(new TestClass(), TestClass.class, "permitAll");
 		Jsr250AuthorizationManager manager = new Jsr250AuthorizationManager();
-		AuthorizationDecision decision = manager.check(TestAuthentication::authenticatedUser, methodInvocation);
+		AuthorizationResult decision = manager.authorize(TestAuthentication::authenticatedUser, methodInvocation);
 		assertThat(decision).isNotNull();
 		assertThat(decision.isGranted()).isTrue();
 	}
@@ -86,7 +111,7 @@ public class Jsr250AuthorizationManagerTests {
 	public void checkDenyAllWhenRoleAdminThenDeniedDecision() throws Exception {
 		MockMethodInvocation methodInvocation = new MockMethodInvocation(new TestClass(), TestClass.class, "denyAll");
 		Jsr250AuthorizationManager manager = new Jsr250AuthorizationManager();
-		AuthorizationDecision decision = manager.check(TestAuthentication::authenticatedAdmin, methodInvocation);
+		AuthorizationResult decision = manager.authorize(TestAuthentication::authenticatedAdmin, methodInvocation);
 		assertThat(decision).isNotNull();
 		assertThat(decision.isGranted()).isFalse();
 	}
@@ -96,7 +121,7 @@ public class Jsr250AuthorizationManagerTests {
 		MockMethodInvocation methodInvocation = new MockMethodInvocation(new TestClass(), TestClass.class,
 				"rolesAllowedUserOrAdmin");
 		Jsr250AuthorizationManager manager = new Jsr250AuthorizationManager();
-		AuthorizationDecision decision = manager.check(TestAuthentication::authenticatedUser, methodInvocation);
+		AuthorizationResult decision = manager.authorize(TestAuthentication::authenticatedUser, methodInvocation);
 		assertThat(decision).isNotNull();
 		assertThat(decision.isGranted()).isTrue();
 	}
@@ -106,7 +131,7 @@ public class Jsr250AuthorizationManagerTests {
 		MockMethodInvocation methodInvocation = new MockMethodInvocation(new TestClass(), TestClass.class,
 				"rolesAllowedUserOrAdmin");
 		Jsr250AuthorizationManager manager = new Jsr250AuthorizationManager();
-		AuthorizationDecision decision = manager.check(TestAuthentication::authenticatedAdmin, methodInvocation);
+		AuthorizationResult decision = manager.authorize(TestAuthentication::authenticatedAdmin, methodInvocation);
 		assertThat(decision).isNotNull();
 		assertThat(decision.isGranted()).isTrue();
 	}
@@ -118,20 +143,30 @@ public class Jsr250AuthorizationManagerTests {
 		MockMethodInvocation methodInvocation = new MockMethodInvocation(new TestClass(), TestClass.class,
 				"rolesAllowedUserOrAdmin");
 		Jsr250AuthorizationManager manager = new Jsr250AuthorizationManager();
-		AuthorizationDecision decision = manager.check(authentication, methodInvocation);
+		AuthorizationResult decision = manager.authorize(authentication, methodInvocation);
 		assertThat(decision).isNotNull();
 		assertThat(decision.isGranted()).isFalse();
 	}
 
 	@Test
-	public void checkMultipleAnnotationsWhenInvokedThenAnnotationConfigurationException() throws Exception {
+	public void checkMultipleMethodAnnotationsWhenInvokedThenAnnotationConfigurationException() throws Exception {
 		Supplier<Authentication> authentication = () -> new TestingAuthenticationToken("user", "password",
 				"ROLE_ANONYMOUS");
 		MockMethodInvocation methodInvocation = new MockMethodInvocation(new TestClass(), TestClass.class,
 				"multipleAnnotations");
 		Jsr250AuthorizationManager manager = new Jsr250AuthorizationManager();
 		assertThatExceptionOfType(AnnotationConfigurationException.class)
-				.isThrownBy(() -> manager.check(authentication, methodInvocation));
+			.isThrownBy(() -> manager.authorize(authentication, methodInvocation));
+	}
+
+	@Test
+	public void checkMultipleClassAnnotationsWhenInvokedThenAnnotationConfigurationException() throws Exception {
+		Supplier<Authentication> authentication = () -> new TestingAuthenticationToken("user", "password", "ROLE_USER");
+		MockMethodInvocation methodInvocation = new MockMethodInvocation(new ClassLevelIllegalAnnotations(),
+				ClassLevelIllegalAnnotations.class, "inheritedAnnotations");
+		Jsr250AuthorizationManager manager = new Jsr250AuthorizationManager();
+		assertThatExceptionOfType(AnnotationConfigurationException.class)
+			.isThrownBy(() -> manager.authorize(authentication, methodInvocation));
 	}
 
 	@Test
@@ -140,10 +175,10 @@ public class Jsr250AuthorizationManagerTests {
 		MockMethodInvocation methodInvocation = new MockMethodInvocation(new ClassLevelAnnotations(),
 				ClassLevelAnnotations.class, "rolesAllowedAdmin");
 		Jsr250AuthorizationManager manager = new Jsr250AuthorizationManager();
-		AuthorizationDecision decision = manager.check(authentication, methodInvocation);
+		AuthorizationResult decision = manager.authorize(authentication, methodInvocation);
 		assertThat(decision.isGranted()).isFalse();
 		authentication = () -> new TestingAuthenticationToken("user", "password", "ROLE_ADMIN");
-		decision = manager.check(authentication, methodInvocation);
+		decision = manager.authorize(authentication, methodInvocation);
 		assertThat(decision.isGranted()).isTrue();
 	}
 
@@ -153,7 +188,7 @@ public class Jsr250AuthorizationManagerTests {
 		MockMethodInvocation methodInvocation = new MockMethodInvocation(new ClassLevelAnnotations(),
 				ClassLevelAnnotations.class, "denyAll");
 		Jsr250AuthorizationManager manager = new Jsr250AuthorizationManager();
-		AuthorizationDecision decision = manager.check(authentication, methodInvocation);
+		AuthorizationResult decision = manager.authorize(authentication, methodInvocation);
 		assertThat(decision.isGranted()).isFalse();
 	}
 
@@ -163,31 +198,21 @@ public class Jsr250AuthorizationManagerTests {
 		MockMethodInvocation methodInvocation = new MockMethodInvocation(new ClassLevelAnnotations(),
 				ClassLevelAnnotations.class, "rolesAllowedUser");
 		Jsr250AuthorizationManager manager = new Jsr250AuthorizationManager();
-		AuthorizationDecision decision = manager.check(authentication, methodInvocation);
+		AuthorizationResult decision = manager.authorize(authentication, methodInvocation);
 		assertThat(decision.isGranted()).isTrue();
 		authentication = () -> new TestingAuthenticationToken("user", "password", "ROLE_ADMIN");
-		decision = manager.check(authentication, methodInvocation);
+		decision = manager.authorize(authentication, methodInvocation);
 		assertThat(decision.isGranted()).isFalse();
-	}
-
-	@Test
-	public void checkInheritedAnnotationsWhenDuplicatedThenAnnotationConfigurationException() throws Exception {
-		Supplier<Authentication> authentication = () -> new TestingAuthenticationToken("user", "password", "ROLE_USER");
-		MockMethodInvocation methodInvocation = new MockMethodInvocation(new TestClass(), TestClass.class,
-				"inheritedAnnotations");
-		Jsr250AuthorizationManager manager = new Jsr250AuthorizationManager();
-		assertThatExceptionOfType(AnnotationConfigurationException.class)
-				.isThrownBy(() -> manager.check(authentication, methodInvocation));
 	}
 
 	@Test
 	public void checkInheritedAnnotationsWhenConflictingThenAnnotationConfigurationException() throws Exception {
 		Supplier<Authentication> authentication = () -> new TestingAuthenticationToken("user", "password", "ROLE_USER");
-		MockMethodInvocation methodInvocation = new MockMethodInvocation(new ClassLevelAnnotations(),
-				ClassLevelAnnotations.class, "inheritedAnnotations");
+		MockMethodInvocation methodInvocation = new MockMethodInvocation(new TestClass(), TestClass.class,
+				"inheritedAnnotations");
 		Jsr250AuthorizationManager manager = new Jsr250AuthorizationManager();
 		assertThatExceptionOfType(AnnotationConfigurationException.class)
-				.isThrownBy(() -> manager.check(authentication, methodInvocation));
+			.isThrownBy(() -> manager.authorize(authentication, methodInvocation));
 	}
 
 	public static class TestClass implements InterfaceAnnotationsOne, InterfaceAnnotationsTwo {
@@ -248,6 +273,15 @@ public class Jsr250AuthorizationManagerTests {
 
 	}
 
+	@MyIllegalRolesAllowed
+	public static class ClassLevelIllegalAnnotations {
+
+		public void inheritedAnnotations() {
+
+		}
+
+	}
+
 	public interface InterfaceAnnotationsOne {
 
 		@RolesAllowed("ADMIN")
@@ -272,6 +306,13 @@ public class Jsr250AuthorizationManagerTests {
 	@Retention(RetentionPolicy.RUNTIME)
 	@RolesAllowed("USER")
 	public @interface MyRolesAllowed {
+
+	}
+
+	@DenyAll
+	@RolesAllowed("USER")
+	@Retention(RetentionPolicy.RUNTIME)
+	public @interface MyIllegalRolesAllowed {
 
 	}
 

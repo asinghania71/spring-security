@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2017 the original author or authors.
+ * Copyright 2002-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,10 +16,17 @@
 
 package org.springframework.security.core.context;
 
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
+
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnJre;
+import org.junit.jupiter.api.condition.JRE;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 import reactor.test.StepVerifier;
 
+import org.springframework.core.task.VirtualThreadTaskExecutor;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.core.Authentication;
 
@@ -42,9 +49,9 @@ public class ReactiveSecurityContextHolderTests {
 	public void setContextAndGetContextThenEmitsContext() {
 		SecurityContext expectedContext = new SecurityContextImpl(
 				new TestingAuthenticationToken("user", "password", "ROLE_USER"));
-		Mono<SecurityContext> context = Mono.subscriberContext()
-				.flatMap((c) -> ReactiveSecurityContextHolder.getContext())
-				.subscriberContext(ReactiveSecurityContextHolder.withSecurityContext(Mono.just(expectedContext)));
+		Mono<SecurityContext> context = Mono.deferContextual(Mono::just)
+			.flatMap((c) -> ReactiveSecurityContextHolder.getContext())
+			.contextWrite(ReactiveSecurityContextHolder.withSecurityContext(Mono.just(expectedContext)));
 		// @formatter:off
 		StepVerifier.create(context)
 				.expectNext(expectedContext)
@@ -60,7 +67,7 @@ public class ReactiveSecurityContextHolderTests {
 				.map(SecurityContext::getAuthentication)
 				.map(Authentication::getName)
 				.flatMap(this::findMessageByUsername)
-				.subscriberContext(ReactiveSecurityContextHolder.withAuthentication(authentication));
+				.contextWrite(ReactiveSecurityContextHolder.withAuthentication(authentication));
 		StepVerifier.create(messageByUsername)
 				.expectNext("Hi user")
 				.verifyComplete();
@@ -76,10 +83,10 @@ public class ReactiveSecurityContextHolderTests {
 		SecurityContext expectedContext = new SecurityContextImpl(
 				new TestingAuthenticationToken("user", "password", "ROLE_USER"));
 		// @formatter:off
-		Mono<SecurityContext> context = Mono.subscriberContext()
+		Mono<SecurityContext> context = Mono.deferContextual(Mono::just)
 				.flatMap((c) -> ReactiveSecurityContextHolder.getContext())
-				.subscriberContext(ReactiveSecurityContextHolder.clearContext())
-				.subscriberContext(ReactiveSecurityContextHolder.withSecurityContext(Mono.just(expectedContext)));
+				.contextWrite(ReactiveSecurityContextHolder.clearContext())
+				.contextWrite(ReactiveSecurityContextHolder.withSecurityContext(Mono.just(expectedContext)));
 		StepVerifier.create(context)
 				.verifyComplete();
 		// @formatter:on
@@ -89,14 +96,63 @@ public class ReactiveSecurityContextHolderTests {
 	public void setAuthenticationAndGetContextThenEmitsContext() {
 		Authentication expectedAuthentication = new TestingAuthenticationToken("user", "password", "ROLE_USER");
 		// @formatter:off
-		Mono<Authentication> authentication = Mono.subscriberContext()
+		Mono<Authentication> authentication = Mono.deferContextual(Mono::just)
 				.flatMap((c) -> ReactiveSecurityContextHolder.getContext())
 				.map(SecurityContext::getAuthentication)
-				.subscriberContext(ReactiveSecurityContextHolder.withAuthentication(expectedAuthentication));
+				.contextWrite(ReactiveSecurityContextHolder.withAuthentication(expectedAuthentication));
 		StepVerifier.create(authentication)
 				.expectNext(expectedAuthentication)
 				.verifyComplete();
 		// @formatter:on
+	}
+
+	@Test
+	public void getContextWhenThreadFactoryIsPlatformThenPropagated() {
+		verifySecurityContextIsPropagated(Executors.defaultThreadFactory());
+	}
+
+	@Test
+	@DisabledOnJre(JRE.JAVA_17)
+	public void getContextWhenThreadFactoryIsVirtualThenPropagated() {
+		verifySecurityContextIsPropagated(new VirtualThreadTaskExecutor().getVirtualThreadFactory());
+	}
+
+	private static void verifySecurityContextIsPropagated(ThreadFactory threadFactory) {
+		Authentication authentication = new TestingAuthenticationToken("user", null);
+
+		// @formatter:off
+		Mono<Authentication> publisher = ReactiveSecurityContextHolder.getContext()
+				.map(SecurityContext::getAuthentication)
+				.contextWrite((context) -> ReactiveSecurityContextHolder.withAuthentication(authentication))
+				.subscribeOn(Schedulers.newSingle(threadFactory));
+		// @formatter:on
+
+		StepVerifier.create(publisher).expectNext(authentication).verifyComplete();
+	}
+
+	@Test
+	public void clearContextWhenThreadFactoryIsPlatformThenCleared() {
+		verifySecurityContextIsCleared(Executors.defaultThreadFactory());
+	}
+
+	@Test
+	@DisabledOnJre(JRE.JAVA_17)
+	public void clearContextWhenThreadFactoryIsVirtualThenCleared() {
+		verifySecurityContextIsCleared(new VirtualThreadTaskExecutor().getVirtualThreadFactory());
+	}
+
+	private static void verifySecurityContextIsCleared(ThreadFactory threadFactory) {
+		Authentication authentication = new TestingAuthenticationToken("user", null);
+
+		// @formatter:off
+		Mono<Authentication> publisher = ReactiveSecurityContextHolder.getContext()
+				.map(SecurityContext::getAuthentication)
+				.contextWrite(ReactiveSecurityContextHolder.clearContext())
+				.contextWrite((context) -> ReactiveSecurityContextHolder.withAuthentication(authentication))
+				.subscribeOn(Schedulers.newSingle(threadFactory));
+		// @formatter:on
+
+		StepVerifier.create(publisher).verifyComplete();
 	}
 
 }

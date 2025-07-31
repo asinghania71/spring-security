@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2020 the original author or authors.
+ * Copyright 2002-2025 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,10 +18,12 @@ package org.springframework.security.oauth2.client.oidc.web.server.logout;
 
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
-import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 
 import reactor.core.publisher.Mono;
 
+import org.springframework.core.convert.converter.Converter;
 import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken;
@@ -34,6 +36,7 @@ import org.springframework.security.web.server.WebFilterExchange;
 import org.springframework.security.web.server.authentication.logout.RedirectServerLogoutSuccessHandler;
 import org.springframework.security.web.server.authentication.logout.ServerLogoutSuccessHandler;
 import org.springframework.util.Assert;
+import org.springframework.web.server.ServerWebExchange;
 import org.springframework.web.util.UriComponents;
 import org.springframework.web.util.UriComponentsBuilder;
 
@@ -48,13 +51,15 @@ import org.springframework.web.util.UriComponentsBuilder;
  */
 public class OidcClientInitiatedServerLogoutSuccessHandler implements ServerLogoutSuccessHandler {
 
-	private final ServerRedirectStrategy redirectStrategy = new DefaultServerRedirectStrategy();
+	private ServerRedirectStrategy redirectStrategy = new DefaultServerRedirectStrategy();
 
 	private final RedirectServerLogoutSuccessHandler serverLogoutSuccessHandler = new RedirectServerLogoutSuccessHandler();
 
 	private final ReactiveClientRegistrationRepository clientRegistrationRepository;
 
 	private String postLogoutRedirectUri;
+
+	private Converter<RedirectUriParameters, Mono<String>> redirectUriResolver = new DefaultRedirectUriResolver();
 
 	/**
 	 * Constructs an {@link OidcClientInitiatedServerLogoutSuccessHandler} with the
@@ -78,15 +83,10 @@ public class OidcClientInitiatedServerLogoutSuccessHandler implements ServerLogo
 				.map(OAuth2AuthenticationToken.class::cast)
 				.map(OAuth2AuthenticationToken::getAuthorizedClientRegistrationId)
 				.flatMap(this.clientRegistrationRepository::findByRegistrationId)
-				.flatMap((clientRegistration) -> {
-					URI endSessionEndpoint = endSessionEndpoint(clientRegistration);
-					if (endSessionEndpoint == null) {
-						return Mono.empty();
-					}
-					String idToken = idToken(authentication);
-					String postLogoutRedirectUri = postLogoutRedirectUri(exchange.getExchange().getRequest());
-					return Mono.just(endpointUri(endSessionEndpoint, idToken, postLogoutRedirectUri));
-				})
+				.flatMap((clientRegistration) ->
+					this.redirectUriResolver.convert(
+							new RedirectUriParameters(exchange.getExchange(), authentication, clientRegistration))
+				)
 				.switchIfEmpty(
 						this.serverLogoutSuccessHandler.onLogoutSuccess(exchange, authentication).then(Mono.empty())
 				)
@@ -96,8 +96,9 @@ public class OidcClientInitiatedServerLogoutSuccessHandler implements ServerLogo
 
 	private URI endSessionEndpoint(ClientRegistration clientRegistration) {
 		if (clientRegistration != null) {
-			Object endSessionEndpoint = clientRegistration.getProviderDetails().getConfigurationMetadata()
-					.get("end_session_endpoint");
+			Object endSessionEndpoint = clientRegistration.getProviderDetails()
+				.getConfigurationMetadata()
+				.get("end_session_endpoint");
 			if (endSessionEndpoint != null) {
 				return URI.create(endSessionEndpoint.toString());
 			}
@@ -118,7 +119,7 @@ public class OidcClientInitiatedServerLogoutSuccessHandler implements ServerLogo
 		return ((OidcUser) authentication.getPrincipal()).getIdToken().getTokenValue();
 	}
 
-	private String postLogoutRedirectUri(ServerHttpRequest request) {
+	private String postLogoutRedirectUri(ServerHttpRequest request, ClientRegistration clientRegistration) {
 		if (this.postLogoutRedirectUri == null) {
 			return null;
 		}
@@ -128,27 +129,39 @@ public class OidcClientInitiatedServerLogoutSuccessHandler implements ServerLogo
 				.replaceQuery(null)
 				.fragment(null)
 				.build();
+
+		Map<String, String> uriVariables = new HashMap<>();
+		String scheme = uriComponents.getScheme();
+		uriVariables.put("baseScheme", (scheme != null) ? scheme : "");
+		uriVariables.put("baseUrl", uriComponents.toUriString());
+
+		String host = uriComponents.getHost();
+		uriVariables.put("baseHost", (host != null) ? host : "");
+
+		String path = uriComponents.getPath();
+		uriVariables.put("basePath", (path != null) ? path : "");
+
+		int port = uriComponents.getPort();
+		uriVariables.put("basePort", (port == -1) ? "" : ":" + port);
+
+		uriVariables.put("registrationId", clientRegistration.getRegistrationId());
+
 		return UriComponentsBuilder.fromUriString(this.postLogoutRedirectUri)
-				.buildAndExpand(Collections.singletonMap("baseUrl", uriComponents.toUriString()))
+				.buildAndExpand(uriVariables)
 				.toUriString();
 		// @formatter:on
 	}
 
 	/**
-	 * Set the post logout redirect uri to use
-	 * @param postLogoutRedirectUri - A valid URL to which the OP should redirect after
-	 * logging out the user
-	 * @deprecated {@link #setPostLogoutRedirectUri(String)}
-	 */
-	@Deprecated
-	public void setPostLogoutRedirectUri(URI postLogoutRedirectUri) {
-		Assert.notNull(postLogoutRedirectUri, "postLogoutRedirectUri cannot be empty");
-		this.postLogoutRedirectUri = postLogoutRedirectUri.toASCIIString();
-	}
-
-	/**
-	 * Set the post logout redirect uri template to use. Supports the {@code "{baseUrl}"}
-	 * placeholder, for example:
+	 * Set the post logout redirect uri template.
+	 *
+	 * <br />
+	 * The supported uri template variables are: {@code {baseScheme}}, {@code {baseHost}},
+	 * {@code {basePort}} and {@code {basePath}}.
+	 *
+	 * <br />
+	 * <b>NOTE:</b> {@code {baseUrl}} is also supported, which is the same as
+	 * {@code "{baseScheme}://{baseHost}{basePort}{basePath}"}
 	 *
 	 * <pre>
 	 * 	handler.setPostLogoutRedirectUri("{baseUrl}");
@@ -173,6 +186,92 @@ public class OidcClientInitiatedServerLogoutSuccessHandler implements ServerLogo
 	public void setLogoutSuccessUrl(URI logoutSuccessUrl) {
 		Assert.notNull(logoutSuccessUrl, "logoutSuccessUrl cannot be null");
 		this.serverLogoutSuccessHandler.setLogoutSuccessUrl(logoutSuccessUrl);
+	}
+
+	/**
+	 * Set the {@link Converter} that converts {@link RedirectUriParameters} to redirect
+	 * URI
+	 * @param redirectUriResolver {@link Converter}
+	 * @since 6.5
+	 */
+	public void setRedirectUriResolver(Converter<RedirectUriParameters, Mono<String>> redirectUriResolver) {
+		Assert.notNull(redirectUriResolver, "redirectUriResolver cannot be null");
+		this.redirectUriResolver = redirectUriResolver;
+	}
+
+	/**
+	 * Set the {@link ServerRedirectStrategy} to use, default
+	 * {@link DefaultServerRedirectStrategy}
+	 * @param redirectStrategy {@link ServerRedirectStrategy}
+	 * @since 6.5
+	 */
+	public void setRedirectStrategy(ServerRedirectStrategy redirectStrategy) {
+		Assert.notNull(redirectStrategy, "redirectStrategy cannot be null");
+		this.redirectStrategy = redirectStrategy;
+	}
+
+	/**
+	 * Parameters, required for redirect URI resolving.
+	 *
+	 * @author Max Batischev
+	 * @since 6.5
+	 */
+	public static final class RedirectUriParameters {
+
+		private final ServerWebExchange serverWebExchange;
+
+		private final Authentication authentication;
+
+		private final ClientRegistration clientRegistration;
+
+		public RedirectUriParameters(ServerWebExchange serverWebExchange, Authentication authentication,
+				ClientRegistration clientRegistration) {
+			Assert.notNull(clientRegistration, "clientRegistration cannot be null");
+			Assert.notNull(serverWebExchange, "serverWebExchange cannot be null");
+			Assert.notNull(authentication, "authentication cannot be null");
+			this.serverWebExchange = serverWebExchange;
+			this.authentication = authentication;
+			this.clientRegistration = clientRegistration;
+		}
+
+		public ServerWebExchange getServerWebExchange() {
+			return this.serverWebExchange;
+		}
+
+		public Authentication getAuthentication() {
+			return this.authentication;
+		}
+
+		public ClientRegistration getClientRegistration() {
+			return this.clientRegistration;
+		}
+
+	}
+
+	/**
+	 * Default {@link Converter} for redirect uri resolving.
+	 *
+	 * @since 6.5
+	 */
+	private final class DefaultRedirectUriResolver implements Converter<RedirectUriParameters, Mono<String>> {
+
+		@Override
+		public Mono<String> convert(RedirectUriParameters redirectUriParameters) {
+			// @formatter:off
+			return Mono.just(redirectUriParameters.authentication)
+				.flatMap((authentication) -> {
+					URI endSessionEndpoint = endSessionEndpoint(redirectUriParameters.clientRegistration);
+					if (endSessionEndpoint == null) {
+						return Mono.empty();
+					}
+					String idToken = idToken(authentication);
+					String postLogoutRedirectUri = postLogoutRedirectUri(
+							redirectUriParameters.serverWebExchange.getRequest(), redirectUriParameters.clientRegistration);
+					return Mono.just(endpointUri(endSessionEndpoint, idToken, postLogoutRedirectUri));
+				});
+			// @formatter:on
+		}
+
 	}
 
 }

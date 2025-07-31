@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2020 the original author or authors.
+ * Copyright 2002-2025 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,16 +16,14 @@
 
 package org.springframework.security.oauth2.server.resource.authentication;
 
-import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
 
-import javax.servlet.http.HttpServletRequest;
-
 import com.nimbusds.jwt.JWTParser;
+import jakarta.servlet.http.HttpServletRequest;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -39,7 +37,6 @@ import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtDecoders;
-import org.springframework.security.oauth2.server.resource.BearerTokenAuthenticationToken;
 import org.springframework.security.oauth2.server.resource.InvalidBearerTokenException;
 import org.springframework.util.Assert;
 
@@ -49,10 +46,10 @@ import org.springframework.util.Assert;
  * "https://openid.net/specs/openid-connect-core-1_0.html#IssuerIdentifier">Issuer</a> in
  * a signed JWT (JWS).
  *
- * To use, this class must be able to determine whether or not the `iss` claim is trusted.
- * Recall that anyone can stand up an authorization server and issue valid tokens to a
- * resource server. The simplest way to achieve this is to supply a list of trusted
- * issuers in the constructor.
+ * To use, this class must be able to determine whether the `iss` claim is trusted. Recall
+ * that anyone can stand up an authorization server and issue valid tokens to a resource
+ * server. The simplest way to achieve this is to supply a set of trusted issuers in the
+ * constructor.
  *
  * This class derives the Issuer from the `iss` claim found in the
  * {@link HttpServletRequest}'s
@@ -69,22 +66,34 @@ public final class JwtIssuerAuthenticationManagerResolver implements Authenticat
 	/**
 	 * Construct a {@link JwtIssuerAuthenticationManagerResolver} using the provided
 	 * parameters
-	 * @param trustedIssuers a list of trusted issuers
+	 * @param trustedIssuers an array of trusted issuers
+	 * @since 6.2
 	 */
-	public JwtIssuerAuthenticationManagerResolver(String... trustedIssuers) {
-		this(Arrays.asList(trustedIssuers));
+	public static JwtIssuerAuthenticationManagerResolver fromTrustedIssuers(String... trustedIssuers) {
+		return fromTrustedIssuers(Set.of(trustedIssuers));
 	}
 
 	/**
 	 * Construct a {@link JwtIssuerAuthenticationManagerResolver} using the provided
 	 * parameters
-	 * @param trustedIssuers a list of trusted issuers
+	 * @param trustedIssuers a collection of trusted issuers
+	 * @since 6.2
 	 */
-	public JwtIssuerAuthenticationManagerResolver(Collection<String> trustedIssuers) {
+	public static JwtIssuerAuthenticationManagerResolver fromTrustedIssuers(Collection<String> trustedIssuers) {
 		Assert.notEmpty(trustedIssuers, "trustedIssuers cannot be empty");
-		this.authenticationManager = new ResolvingAuthenticationManager(
-				new TrustedIssuerJwtAuthenticationManagerResolver(
-						Collections.unmodifiableCollection(trustedIssuers)::contains));
+		return fromTrustedIssuers(Set.copyOf(trustedIssuers)::contains);
+	}
+
+	/**
+	 * Construct a {@link JwtIssuerAuthenticationManagerResolver} using the provided
+	 * parameters
+	 * @param trustedIssuers a predicate to validate issuers
+	 * @since 6.2
+	 */
+	public static JwtIssuerAuthenticationManagerResolver fromTrustedIssuers(Predicate<String> trustedIssuers) {
+		Assert.notNull(trustedIssuers, "trustedIssuers cannot be null");
+		return new JwtIssuerAuthenticationManagerResolver(
+				new TrustedIssuerJwtAuthenticationManagerResolver(trustedIssuers));
 	}
 
 	/**
@@ -92,16 +101,15 @@ public final class JwtIssuerAuthenticationManagerResolver implements Authenticat
 	 * parameters
 	 *
 	 * Note that the {@link AuthenticationManagerResolver} provided in this constructor
-	 * will need to verify that the issuer is trusted. This should be done via an
-	 * allowlist.
+	 * will need to verify that the issuer is trusted. This should be done via an allowed
+	 * set of issuers.
 	 *
 	 * One way to achieve this is with a {@link Map} where the keys are the known issuers:
 	 * <pre>
 	 *     Map&lt;String, AuthenticationManager&gt; authenticationManagers = new HashMap&lt;&gt;();
 	 *     authenticationManagers.put("https://issuerOne.example.org", managerOne);
 	 *     authenticationManagers.put("https://issuerTwo.example.org", managerTwo);
-	 *     JwtAuthenticationManagerResolver resolver = new JwtAuthenticationManagerResolver
-	 *     	(authenticationManagers::get);
+	 *     JwtIssuerAuthenticationManagerResolver resolver = new JwtIssuerAuthenticationManagerResolver(authenticationManagers::get);
 	 * </pre>
 	 *
 	 * The keys in the {@link Map} are the allowed issuers.
@@ -143,9 +151,17 @@ public final class JwtIssuerAuthenticationManagerResolver implements Authenticat
 			String issuer = this.issuerConverter.convert(token);
 			AuthenticationManager authenticationManager = this.issuerAuthenticationManagerResolver.resolve(issuer);
 			if (authenticationManager == null) {
-				throw new InvalidBearerTokenException("Invalid issuer");
+				AuthenticationException ex = new InvalidBearerTokenException("Invalid issuer");
+				ex.setAuthenticationRequest(authentication);
+				throw ex;
 			}
-			return authenticationManager.authenticate(authentication);
+			try {
+				return authenticationManager.authenticate(authentication);
+			}
+			catch (AuthenticationException ex) {
+				ex.setAuthenticationRequest(authentication);
+				throw ex;
+			}
 		}
 
 	}
@@ -161,10 +177,14 @@ public final class JwtIssuerAuthenticationManagerResolver implements Authenticat
 					return issuer;
 				}
 			}
-			catch (Exception ex) {
-				throw new InvalidBearerTokenException(ex.getMessage(), ex);
+			catch (Exception cause) {
+				AuthenticationException ex = new InvalidBearerTokenException(cause.getMessage(), cause);
+				ex.setAuthenticationRequest(authentication);
+				throw ex;
 			}
-			throw new InvalidBearerTokenException("Missing issuer");
+			AuthenticationException ex = new InvalidBearerTokenException("Missing issuer");
+			ex.setAuthenticationRequest(authentication);
+			throw ex;
 		}
 
 	}

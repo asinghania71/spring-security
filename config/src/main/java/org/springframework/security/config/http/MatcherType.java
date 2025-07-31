@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2016 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,8 +22,7 @@ import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.beans.factory.support.BeanDefinitionBuilder;
 import org.springframework.beans.factory.support.RootBeanDefinition;
 import org.springframework.beans.factory.xml.ParserContext;
-import org.springframework.security.web.servlet.util.matcher.MvcRequestMatcher;
-import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
+import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
 import org.springframework.security.web.util.matcher.AnyRequestMatcher;
 import org.springframework.security.web.util.matcher.RegexRequestMatcher;
 import org.springframework.security.web.util.matcher.RequestMatcher;
@@ -37,10 +36,7 @@ import org.springframework.util.StringUtils;
  */
 public enum MatcherType {
 
-	ant(AntPathRequestMatcher.class), regex(RegexRequestMatcher.class), ciRegex(RegexRequestMatcher.class), mvc(
-			MvcRequestMatcher.class);
-
-	private static final String HANDLER_MAPPING_INTROSPECTOR_BEAN_NAME = "mvcHandlerMappingIntrospector";
+	path(PathPatternRequestMatcher.class), regex(RegexRequestMatcher.class), ciRegex(RegexRequestMatcher.class);
 
 	private static final String ATT_MATCHER_TYPE = "request-matcher";
 
@@ -58,18 +54,17 @@ public enum MatcherType {
 		if (("/**".equals(path) || "**".equals(path)) && method == null) {
 			return new RootBeanDefinition(AnyRequestMatcher.class);
 		}
-		BeanDefinitionBuilder matcherBldr = BeanDefinitionBuilder.rootBeanDefinition(this.type);
-		if (this == mvc) {
-			matcherBldr.addConstructorArgValue(new RootBeanDefinition(HandlerMappingIntrospectorFactoryBean.class));
-		}
-		matcherBldr.addConstructorArgValue(path);
-		if (this == mvc) {
-			matcherBldr.addPropertyValue("method", method);
-			matcherBldr.addPropertyValue("servletPath", servletPath);
+		BeanDefinitionBuilder matcherBldr;
+		if (this == MatcherType.path) {
+			matcherBldr = BeanDefinitionBuilder.rootBeanDefinition(PathPatternRequestMatcherFactoryBean.class);
+			matcherBldr.addConstructorArgValue(path);
+			matcherBldr.addPropertyValue("basePath", servletPath);
 		}
 		else {
-			matcherBldr.addConstructorArgValue(method);
+			matcherBldr = BeanDefinitionBuilder.rootBeanDefinition(this.type);
+			matcherBldr.addConstructorArgValue(path);
 		}
+		matcherBldr.addConstructorArgValue(method);
 		if (this == ciRegex) {
 			matcherBldr.addConstructorArgValue(true);
 		}
@@ -81,7 +76,11 @@ public enum MatcherType {
 			return valueOf(elt.getAttribute(ATT_MATCHER_TYPE));
 		}
 
-		return ant;
+		return path;
+	}
+
+	static MatcherType fromElementOrMvc(Element elt) {
+		return MatcherType.fromElement(elt);
 	}
 
 }

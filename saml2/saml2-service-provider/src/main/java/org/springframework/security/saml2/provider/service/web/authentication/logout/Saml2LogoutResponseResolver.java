@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2025 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,9 +16,10 @@
 
 package org.springframework.security.saml2.provider.service.web.authentication.logout;
 
-import javax.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletRequest;
 
 import org.springframework.security.core.Authentication;
+import org.springframework.security.saml2.provider.service.authentication.Saml2AuthenticationException;
 import org.springframework.security.saml2.provider.service.authentication.logout.Saml2LogoutResponse;
 import org.springframework.security.saml2.provider.service.registration.RelyingPartyRegistration;
 
@@ -28,7 +29,7 @@ import org.springframework.security.saml2.provider.service.registration.RelyingP
  *
  * The returned logout response is suitable for sending to the asserting party based on,
  * for example, the location and binding specified in
- * {@link RelyingPartyRegistration#getAssertingPartyDetails()}.
+ * {@link RelyingPartyRegistration#getAssertingPartyMetadata()}.
  *
  * @author Josh Cummings
  * @since 5.6
@@ -43,5 +44,20 @@ public interface Saml2LogoutResponseResolver {
 	 * @return a signed and serialized SAML 2.0 Logout Response
 	 */
 	Saml2LogoutResponse resolve(HttpServletRequest request, Authentication authentication);
+
+	/**
+	 * Prepare to create, sign, and serialize a SAML 2.0 Error Logout Response.
+	 * @param request the HTTP request
+	 * @param authentication the current user
+	 * @param authenticationException the thrown exception when the logout request was
+	 * processed
+	 * @return a signed and serialized SAML 2.0 Logout Response, or {@code null} if it
+	 * cannot generate a SAML 2.0 Error Logout Response
+	 * @since 7.0
+	 */
+	default Saml2LogoutResponse resolve(HttpServletRequest request, Authentication authentication,
+			Saml2AuthenticationException authenticationException) {
+		return null;
+	}
 
 }

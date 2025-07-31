@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2022 the original author or authors.
+ * Copyright 2002-2025 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,6 +42,7 @@ import com.nimbusds.jose.JWSHeader;
 import com.nimbusds.jose.JWSSigner;
 import com.nimbusds.jose.crypto.MACSigner;
 import com.nimbusds.jose.crypto.RSASSASigner;
+import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.source.JWKSource;
 import com.nimbusds.jose.proc.BadJOSEException;
 import com.nimbusds.jose.proc.DefaultJOSEObjectTypeVerifier;
@@ -60,6 +61,7 @@ import org.mockito.ArgumentCaptor;
 
 import org.springframework.cache.Cache;
 import org.springframework.cache.concurrent.ConcurrentMapCache;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -96,7 +98,9 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
  */
 public class NimbusJwtDecoderTests {
 
-	private static final String JWK_SET = "{\"keys\":[{\"p\":\"49neceJFs8R6n7WamRGy45F5Tv0YM-R2ODK3eSBUSLOSH2tAqjEVKOkLE5fiNA3ygqq15NcKRadB2pTVf-Yb5ZIBuKzko8bzYIkIqYhSh_FAdEEr0vHF5fq_yWSvc6swsOJGqvBEtuqtJY027u-G2gAQasCQdhyejer68zsTn8M\",\"kty\":\"RSA\",\"q\":\"tWR-ysspjZ73B6p2vVRVyHwP3KQWL5KEQcdgcmMOE_P_cPs98vZJfLhxobXVmvzuEWBpRSiqiuyKlQnpstKt94Cy77iO8m8ISfF3C9VyLWXi9HUGAJb99irWABFl3sNDff5K2ODQ8CmuXLYM25OwN3ikbrhEJozlXg_NJFSGD4E\",\"d\":\"FkZHYZlw5KSoqQ1i2RA2kCUygSUOf1OqMt3uomtXuUmqKBm_bY7PCOhmwbvbn4xZYEeHuTR8Xix-0KpHe3NKyWrtRjkq1T_un49_1LLVUhJ0dL-9_x0xRquVjhl_XrsRXaGMEHs8G9pLTvXQ1uST585gxIfmCe0sxPZLvwoic-bXf64UZ9BGRV3lFexWJQqCZp2S21HfoU7wiz6kfLRNi-K4xiVNB1gswm_8o5lRuY7zB9bRARQ3TS2G4eW7p5sxT3CgsGiQD3_wPugU8iDplqAjgJ5ofNJXZezoj0t6JMB_qOpbrmAM1EnomIPebSLW7Ky9SugEd6KMdL5lW6AuAQ\",\"e\":\"AQAB\",\"use\":\"sig\",\"kid\":\"one\",\"qi\":\"wdkFu_tV2V1l_PWUUimG516Zvhqk2SWDw1F7uNDD-Lvrv_WNRIJVzuffZ8WYiPy8VvYQPJUrT2EXL8P0ocqwlaSTuXctrORcbjwgxDQDLsiZE0C23HYzgi0cofbScsJdhcBg7d07LAf7cdJWG0YVl1FkMCsxUlZ2wTwHfKWf-v4\",\"dp\":\"uwnPxqC-IxG4r33-SIT02kZC1IqC4aY7PWq0nePiDEQMQWpjjNH50rlq9EyLzbtdRdIouo-jyQXB01K15-XXJJ60dwrGLYNVqfsTd0eGqD1scYJGHUWG9IDgCsxyEnuG3s0AwbW2UolWVSsU2xMZGb9PurIUZECeD1XDZwMp2s0\",\"dq\":\"hra786AunB8TF35h8PpROzPoE9VJJMuLrc6Esm8eZXMwopf0yhxfN2FEAvUoTpLJu93-UH6DKenCgi16gnQ0_zt1qNNIVoRfg4rw_rjmsxCYHTVL3-RDeC8X_7TsEySxW0EgFTHh-nr6I6CQrAJjPM88T35KHtdFATZ7BCBB8AE\",\"n\":\"oXJ8OyOv_eRnce4akdanR4KYRfnC2zLV4uYNQpcFn6oHL0dj7D6kxQmsXoYgJV8ZVDn71KGmuLvolxsDncc2UrhyMBY6DVQVgMSVYaPCTgW76iYEKGgzTEw5IBRQL9w3SRJWd3VJTZZQjkXef48Ocz06PGF3lhbz4t5UEZtdF4rIe7u-977QwHuh7yRPBQ3sII-cVoOUMgaXB9SHcGF2iZCtPzL_IffDUcfhLQteGebhW8A6eUHgpD5A1PQ-JCw_G7UOzZAjjDjtNM2eqm8j-Ms_gqnm4MiCZ4E-9pDN77CAAPVN7kuX6ejs9KBXpk01z48i9fORYk9u7rAkh1HuQw\"}]}";
+	private static final String JWK_SET = "{\"keys\":[{\"kty\":\"RSA\",\"e\":\"AQAB\",\"use\":\"sig\",\"kid\":\"one\",\"n\":\"oXJ8OyOv_eRnce4akdanR4KYRfnC2zLV4uYNQpcFn6oHL0dj7D6kxQmsXoYgJV8ZVDn71KGmuLvolxsDncc2UrhyMBY6DVQVgMSVYaPCTgW76iYEKGgzTEw5IBRQL9w3SRJWd3VJTZZQjkXef48Ocz06PGF3lhbz4t5UEZtdF4rIe7u-977QwHuh7yRPBQ3sII-cVoOUMgaXB9SHcGF2iZCtPzL_IffDUcfhLQteGebhW8A6eUHgpD5A1PQ-JCw_G7UOzZAjjDjtNM2eqm8j-Ms_gqnm4MiCZ4E-9pDN77CAAPVN7kuX6ejs9KBXpk01z48i9fORYk9u7rAkh1HuQw\"}]}";
+
+	private static final String MALFORMED_TOKEN = "eyJhbGciOiJSUzI1NiJ9.eyJuYmYiOnt9LCJleHAiOjQ2ODQyMjUwODd9";
 
 	private static final String NEW_KID_JWK_SET = "{\"keys\":[{\"kty\":\"RSA\",\"e\":\"AQAB\",\"kid\":\"two\",\"n\":\"ra9UJw4I0fCHuOqr1xWJsh-qcVeZWtKEU3uoqq1sAg5fG67dujNCm_Q16yuO0ZdDiU0vlJkbc_MXFAvm4ZxdJ_qR7PAneV-BOGNtLpSaiPclscCy3m7zjRWkaqwt9ZZEsdK5UqXyPlBpcYhNKsmnQGjnX4sYb7d8b2jSCM_qto48-6451rbyEhXXywtFy_JqtTpbsw_IIdQHMr1O-MdSjsQxX9kkvZwPU8LsC-CcqlcsZ7mnpOhmIXaf4tbRwAaluXwYft0yykFsp8e5C4t9mMs9Vu8AB5gT8o-D_ovXd2qh4k3ejzVpYLtzD4nbfvPJA_TXmjhn-9GOPAqkzfON2Q\"}]}";
 
@@ -194,6 +198,12 @@ public class NimbusJwtDecoderTests {
 	}
 
 	@Test
+	public void decodeWhenTokenMalformedThenReturnsMalformedTokenMessage() {
+		assertThatExceptionOfType(BadJwtException.class).isThrownBy(() -> this.jwtDecoder.decode(MALFORMED_TOKEN))
+			.withMessage("An error occurred while attempting to decode the Jwt: Malformed token");
+	}
+
+	@Test
 	public void decodeWhenJwtFailsValidationThenReturnsCorrespondingErrorMessage() {
 		OAuth2Error failure = new OAuth2Error("mock-error", "mock-description", "mock-uri");
 		OAuth2TokenValidator<Jwt> jwtValidator = mock(OAuth2TokenValidator.class);
@@ -246,8 +256,8 @@ public class NimbusJwtDecoderTests {
 		given(claimSetConverter.convert(any(Map.class))).willReturn(Collections.singletonMap("custom", "value"));
 		this.jwtDecoder.setClaimSetConverter(claimSetConverter);
 		Jwt jwt = this.jwtDecoder.decode(SIGNED_JWT);
-		assertThat(jwt.getClaims().size()).isEqualTo(1);
-		assertThat(jwt.getClaims().get("custom")).isEqualTo("value");
+		assertThat(jwt.getClaims()).hasSize(1);
+		assertThat(jwt.getClaims()).containsEntry("custom", "value");
 	}
 
 	// gh-7885
@@ -309,6 +319,19 @@ public class NimbusJwtDecoderTests {
 					.withMessageContaining("An error occurred while attempting to decode the Jwt");
 			// @formatter:on
 		}
+	}
+
+	@Test
+	public void decodeWhenIssuerLocationThenOk() {
+		String issuer = "https://example.org/issuer";
+		RestOperations restOperations = mock(RestOperations.class);
+		given(restOperations.exchange(any(RequestEntity.class), any(ParameterizedTypeReference.class)))
+			.willReturn(new ResponseEntity<>(Map.of("issuer", issuer, "jwks_uri", issuer + "/jwks"), HttpStatus.OK));
+		given(restOperations.exchange(any(RequestEntity.class), eq(String.class)))
+			.willReturn(new ResponseEntity<>(JWK_SET, HttpStatus.OK));
+		JwtDecoder jwtDecoder = NimbusJwtDecoder.withIssuerLocation(issuer).restOperations(restOperations).build();
+		Jwt jwt = jwtDecoder.decode(SIGNED_JWT);
+		assertThat(jwt.hasClaim(JwtClaimNames.EXP)).isNotNull();
 	}
 
 	@Test
@@ -415,8 +438,9 @@ public class NimbusJwtDecoderTests {
 
 	@Test
 	public void decodeWhenSignatureMismatchesAlgorithmThenThrowsException() throws Exception {
-		NimbusJwtDecoder decoder = NimbusJwtDecoder.withPublicKey(key()).signatureAlgorithm(SignatureAlgorithm.RS512)
-				.build();
+		NimbusJwtDecoder decoder = NimbusJwtDecoder.withPublicKey(key())
+			.signatureAlgorithm(SignatureAlgorithm.RS512)
+			.build();
 		// @formatter:off
 		assertThatExceptionOfType(BadJwtException.class)
 				.isThrownBy(() -> decoder.decode(RS256_SIGNED_JWT));
@@ -430,15 +454,13 @@ public class NimbusJwtDecoderTests {
 		RSAPrivateKey privateKey = TestKeys.DEFAULT_PRIVATE_KEY;
 		JWSHeader header = new JWSHeader.Builder(JWSAlgorithm.RS256).type(new JOSEObjectType("JWS")).build();
 		JWTClaimsSet claimsSet = new JWTClaimsSet.Builder().expirationTime(Date.from(Instant.now().plusSeconds(60)))
-				.build();
+			.build();
 		SignedJWT signedJwt = signedJwt(privateKey, header, claimsSet);
 		// @formatter:off
 		NimbusJwtDecoder decoder = NimbusJwtDecoder.withPublicKey(publicKey)
 				.signatureAlgorithm(SignatureAlgorithm.RS256)
-				.jwtProcessorCustomizer((p) -> p
-						.setJWSTypeVerifier(new DefaultJOSEObjectTypeVerifier<>(new JOSEObjectType("JWS")))
-				)
 				.build();
+		decoder.setJwtValidator(JwtValidators.createDefaultWithValidators(new JwtTypeValidator("JWS")));
 		// @formatter:on
 		assertThat(decoder.decode(signedJwt.serialize()).hasClaim(JwtClaimNames.EXP)).isNotNull();
 	}
@@ -514,7 +536,7 @@ public class NimbusJwtDecoderTests {
 
 	// gh-7056
 	@Test
-	public void decodeWhenUsingSecertKeyWithKidThenStillUsesKey() throws Exception {
+	public void decodeWhenUsingSecretKeyWithKidThenStillUsesKey() throws Exception {
 		SecretKey secretKey = TestKeys.DEFAULT_SECRET_KEY;
 		// @formatter:off
 		JWSHeader header = new JWSHeader.Builder(JWSAlgorithm.HS256)
@@ -536,6 +558,15 @@ public class NimbusJwtDecoderTests {
 		// @formatter:on
 	}
 
+	@Test
+	public void withJwkSourceWhenDefaultsThenUsesProvidedJwkSource() throws Exception {
+		JWKSource<SecurityContext> source = mock(JWKSource.class);
+		given(source.get(any(), any())).willReturn(JWKSet.parse(JWK_SET).getKeys());
+		NimbusJwtDecoder decoder = NimbusJwtDecoder.withJwkSource(source).build();
+		Jwt jwt = decoder.decode(SIGNED_JWT);
+		assertThat(jwt.getClaimAsString("sub")).isEqualTo("test-subject");
+	}
+
 	// gh-8730
 	@Test
 	public void withSecretKeyWhenUsingCustomTypeHeaderThenSuccessfullyDecodes() throws Exception {
@@ -552,10 +583,8 @@ public class NimbusJwtDecoderTests {
 		// @formatter:off
 		NimbusJwtDecoder decoder = NimbusJwtDecoder.withSecretKey(secretKey)
 				.macAlgorithm(MacAlgorithm.HS256)
-				.jwtProcessorCustomizer((p) -> p
-						.setJWSTypeVerifier(new DefaultJOSEObjectTypeVerifier<>(new JOSEObjectType("JWS")))
-				)
 				.build();
+		decoder.setJwtValidator(JwtValidators.createDefaultWithValidators(new JwtTypeValidator("JWS")));
 		// @formatter:on
 		assertThat(decoder.decode(signedJwt.serialize()).hasClaim(JwtClaimNames.EXP)).isNotNull();
 	}
@@ -574,7 +603,7 @@ public class NimbusJwtDecoderTests {
 	public void jwsKeySelectorWhenNoAlgorithmThenReturnsRS256Selector() {
 		JWKSource<SecurityContext> jwkSource = mock(JWKSource.class);
 		JWSKeySelector<SecurityContext> jwsKeySelector = NimbusJwtDecoder.withJwkSetUri(JWK_SET_URI)
-				.jwsKeySelector(jwkSource);
+			.jwsKeySelector(jwkSource);
 		assertThat(jwsKeySelector instanceof JWSVerificationKeySelector);
 		JWSVerificationKeySelector<?> jwsVerificationKeySelector = (JWSVerificationKeySelector<?>) jwsKeySelector;
 		assertThat(jwsVerificationKeySelector.isAllowed(JWSAlgorithm.RS256)).isTrue();
@@ -613,7 +642,7 @@ public class NimbusJwtDecoderTests {
 	public void decodeWhenJwkSetRequestedThenAcceptHeaderJsonAndJwkSetJson() {
 		RestOperations restOperations = mock(RestOperations.class);
 		given(restOperations.exchange(any(RequestEntity.class), eq(String.class)))
-				.willReturn(new ResponseEntity<>(JWK_SET, HttpStatus.OK));
+			.willReturn(new ResponseEntity<>(JWK_SET, HttpStatus.OK));
 		// @formatter:off
 		JWTProcessor<SecurityContext> processor = NimbusJwtDecoder.withJwkSetUri(JWK_SET_URI)
 				.restOperations(restOperations)
@@ -632,7 +661,7 @@ public class NimbusJwtDecoderTests {
 		Cache cache = new ConcurrentMapCache("test-jwk-set-cache");
 		RestOperations restOperations = mock(RestOperations.class);
 		given(restOperations.exchange(any(RequestEntity.class), eq(String.class)))
-				.willReturn(new ResponseEntity<>(JWK_SET, HttpStatus.OK));
+			.willReturn(new ResponseEntity<>(JWK_SET, HttpStatus.OK));
 		// @formatter:off
 		NimbusJwtDecoder jwtDecoder = NimbusJwtDecoder.withJwkSetUri(JWK_SET_URI)
 				.restOperations(restOperations)
@@ -653,7 +682,7 @@ public class NimbusJwtDecoderTests {
 		Cache cache = new ConcurrentMapCache("test-jwk-set-cache");
 		RestOperations restOperations = mock(RestOperations.class);
 		given(restOperations.exchange(any(RequestEntity.class), eq(String.class)))
-				.willReturn(new ResponseEntity<>(JWK_SET, HttpStatus.OK));
+			.willReturn(new ResponseEntity<>(JWK_SET, HttpStatus.OK));
 		// @formatter:off
 		NimbusJwtDecoder jwtDecoder1 = NimbusJwtDecoder.withJwkSetUri(JWK_SET_URI)
 				.restOperations(restOperations)
@@ -678,9 +707,8 @@ public class NimbusJwtDecoderTests {
 	@Test
 	public void decodeWhenCacheThenRetrieveFromCache() throws Exception {
 		RestOperations restOperations = mock(RestOperations.class);
-		Cache cache = mock(Cache.class);
-		given(cache.get(eq(JWK_SET_URI), eq(String.class))).willReturn(JWK_SET);
-		given(cache.get(eq(JWK_SET_URI))).willReturn(mock(Cache.ValueWrapper.class));
+		Cache cache = new ConcurrentMapCache("cache");
+		cache.put(JWK_SET_URI, JWK_SET);
 		// @formatter:off
 		NimbusJwtDecoder jwtDecoder = NimbusJwtDecoder.withJwkSetUri(JWK_SET_URI)
 				.cache(cache)
@@ -688,9 +716,7 @@ public class NimbusJwtDecoderTests {
 				.build();
 		// @formatter:on
 		jwtDecoder.decode(SIGNED_JWT);
-		verify(cache).get(eq(JWK_SET_URI), eq(String.class));
-		verify(cache, times(2)).get(eq(JWK_SET_URI));
-		verifyNoMoreInteractions(cache);
+		assertThat(cache.get(JWK_SET_URI, String.class)).isSameAs(JWK_SET);
 		verifyNoInteractions(restOperations);
 	}
 
@@ -698,10 +724,10 @@ public class NimbusJwtDecoderTests {
 	@Test
 	public void decodeWhenCacheAndUnknownKidShouldTriggerFetchOfJwkSet() throws JOSEException {
 		RestOperations restOperations = mock(RestOperations.class);
-		Cache cache = mock(Cache.class);
-		given(cache.get(eq(JWK_SET_URI), eq(String.class))).willReturn(JWK_SET);
+		Cache cache = new ConcurrentMapCache("cache");
+		cache.put(JWK_SET_URI, JWK_SET);
 		given(restOperations.exchange(any(RequestEntity.class), eq(String.class)))
-				.willReturn(new ResponseEntity<>(NEW_KID_JWK_SET, HttpStatus.OK));
+			.willReturn(new ResponseEntity<>(NEW_KID_JWK_SET, HttpStatus.OK));
 
 		// @formatter:off
 		NimbusJwtDecoder jwtDecoder = NimbusJwtDecoder.withJwkSetUri(JWK_SET_URI)
@@ -752,7 +778,7 @@ public class NimbusJwtDecoderTests {
 		Cache cache = new ConcurrentMapCache("test-jwk-set-cache");
 		RestOperations restOperations = mock(RestOperations.class);
 		given(restOperations.exchange(any(RequestEntity.class), eq(String.class)))
-				.willThrow(new RestClientException("Cannot retrieve JWK Set"));
+			.willThrow(new RestClientException("Cannot retrieve JWK Set"));
 		// @formatter:off
 		NimbusJwtDecoder jwtDecoder = NimbusJwtDecoder.withJwkSetUri(JWK_SET_URI)
 				.restOperations(restOperations)
@@ -769,9 +795,8 @@ public class NimbusJwtDecoderTests {
 	@Test
 	public void decodeWhenCacheIsConfiguredAndParseFailsOnCachedValueThenExceptionIgnored() {
 		RestOperations restOperations = mock(RestOperations.class);
-		Cache cache = mock(Cache.class);
-		given(cache.get(eq(JWK_SET_URI), eq(String.class))).willReturn(JWK_SET);
-		given(cache.get(eq(JWK_SET_URI))).willReturn(mock(Cache.ValueWrapper.class));
+		Cache cache = new ConcurrentMapCache("cache");
+		cache.put(JWK_SET_URI, JWK_SET);
 		// @formatter:off
 		NimbusJwtDecoder jwtDecoder = NimbusJwtDecoder.withJwkSetUri(JWK_SET_URI)
 				.cache(cache)
@@ -779,9 +804,7 @@ public class NimbusJwtDecoderTests {
 				.build();
 		// @formatter:on
 		jwtDecoder.decode(SIGNED_JWT);
-		verify(cache).get(eq(JWK_SET_URI), eq(String.class));
-		verify(cache, times(2)).get(eq(JWK_SET_URI));
-		verifyNoMoreInteractions(cache);
+		assertThat(cache.get(JWK_SET_URI, String.class)).isSameAs(JWK_SET);
 		verifyNoInteractions(restOperations);
 
 	}
@@ -791,7 +814,7 @@ public class NimbusJwtDecoderTests {
 	public void withJwkSetUriWhenUsingCustomTypeHeaderThenRefuseOmittedType() throws Exception {
 		RestOperations restOperations = mock(RestOperations.class);
 		given(restOperations.exchange(any(RequestEntity.class), eq(String.class)))
-				.willReturn(new ResponseEntity<>(JWK_SET, HttpStatus.OK));
+			.willReturn(new ResponseEntity<>(JWK_SET, HttpStatus.OK));
 		// @formatter:off
 		NimbusJwtDecoder jwtDecoder = NimbusJwtDecoder.withJwkSetUri(JWK_SET_URI)
 				.restOperations(restOperations)
@@ -813,6 +836,31 @@ public class NimbusJwtDecoderTests {
 				.isThrownBy(() -> NimbusJwtDecoder.withJwkSetUri(JWK_SET_URI).jwtProcessorCustomizer(null))
 				.withMessage("jwtProcessorCustomizer cannot be null");
 		// @formatter:on
+	}
+
+	@Test
+	public void decodeWhenPublicKeyValidateTypeFalseThenSkipsNimbusTypeValidation() throws Exception {
+		NimbusJwtDecoder jwtDecoder = NimbusJwtDecoder.withPublicKey(TestKeys.DEFAULT_PUBLIC_KEY)
+			.validateType(false)
+			.build();
+		jwtDecoder.setJwtValidator((jwt) -> OAuth2TokenValidatorResult.success());
+		RSAPrivateKey privateKey = TestKeys.DEFAULT_PRIVATE_KEY;
+		SignedJWT jwt = signedJwt(privateKey,
+				new JWSHeader.Builder(JWSAlgorithm.RS256).type(JOSEObjectType.JOSE).build(),
+				new JWTClaimsSet.Builder().subject("subject").build());
+		jwtDecoder.decode(jwt.serialize());
+	}
+
+	@Test
+	public void decodeWhenSecretKeyValidateTypeFalseThenSkipsNimbusTypeValidation() throws Exception {
+		NimbusJwtDecoder jwtDecoder = NimbusJwtDecoder.withSecretKey(TestKeys.DEFAULT_SECRET_KEY)
+			.validateType(false)
+			.build();
+		jwtDecoder.setJwtValidator((jwt) -> OAuth2TokenValidatorResult.success());
+		SignedJWT jwt = signedJwt(TestKeys.DEFAULT_SECRET_KEY,
+				new JWSHeader.Builder(JWSAlgorithm.HS256).type(JOSEObjectType.JOSE).build(),
+				new JWTClaimsSet.Builder().subject("subject").build());
+		jwtDecoder.decode(jwt.serialize());
 	}
 
 	private RSAPublicKey key() throws InvalidKeySpecException {
@@ -845,7 +893,7 @@ public class NimbusJwtDecoderTests {
 	private static JWTProcessor<SecurityContext> withSigning(String jwkResponse) {
 		RestOperations restOperations = mock(RestOperations.class);
 		given(restOperations.exchange(any(RequestEntity.class), eq(String.class)))
-				.willReturn(new ResponseEntity<>(jwkResponse, HttpStatus.OK));
+			.willReturn(new ResponseEntity<>(jwkResponse, HttpStatus.OK));
 		// @formatter:off
 		return NimbusJwtDecoder.withJwkSetUri(JWK_SET_URI)
 				.restOperations(restOperations)

@@ -18,12 +18,12 @@ package org.springframework.security.web.access.intercept;
 
 import java.io.IOException;
 
-import javax.servlet.Filter;
-import javax.servlet.FilterChain;
-import javax.servlet.FilterConfig;
-import javax.servlet.ServletException;
-import javax.servlet.ServletRequest;
-import javax.servlet.ServletResponse;
+import jakarta.servlet.Filter;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.FilterConfig;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.ServletRequest;
+import jakarta.servlet.ServletResponse;
 
 import org.springframework.security.access.SecurityMetadataSource;
 import org.springframework.security.access.intercept.AbstractSecurityInterceptor;
@@ -41,14 +41,16 @@ import org.springframework.security.web.FilterInvocation;
  *
  * @author Ben Alex
  * @author Rob Winch
+ * @deprecated Use {@link AuthorizationFilter} instead
  */
+@Deprecated
 public class FilterSecurityInterceptor extends AbstractSecurityInterceptor implements Filter {
 
 	private static final String FILTER_APPLIED = "__spring_security_filterSecurityInterceptor_filterApplied";
 
 	private FilterInvocationSecurityMetadataSource securityMetadataSource;
 
-	private boolean observeOncePerRequest = true;
+	private boolean observeOncePerRequest = false;
 
 	/**
 	 * Not used (we rely on IoC container lifecycle services instead)

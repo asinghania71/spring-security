@@ -28,11 +28,12 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TimeZone;
 
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletRequestWrapper;
-
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletRequestWrapper;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+
+import org.springframework.http.HttpHeaders;
 
 /**
  * Provides request parameters, headers and cookies from either an original request or a
@@ -58,10 +59,7 @@ class SavedRequestAwareWrapper extends HttpServletRequestWrapper {
 
 	protected static final TimeZone GMT_ZONE = TimeZone.getTimeZone("GMT");
 
-	/** The default Locale if none are specified. */
-	protected static Locale defaultLocale = Locale.getDefault();
-
-	protected SavedRequest savedRequest = null;
+	protected SavedRequest savedRequest;
 
 	/**
 	 * The set of SimpleDateFormat formats to use in getDateHeader(). Notice that because
@@ -102,14 +100,12 @@ class SavedRequestAwareWrapper extends HttpServletRequestWrapper {
 	}
 
 	@Override
-	@SuppressWarnings("unchecked")
-	public Enumeration getHeaderNames() {
+	public Enumeration<String> getHeaderNames() {
 		return new Enumerator<>(this.savedRequest.getHeaderNames());
 	}
 
 	@Override
-	@SuppressWarnings("unchecked")
-	public Enumeration getHeaders(String name) {
+	public Enumeration<String> getHeaders(String name) {
 		return new Enumerator<>(this.savedRequest.getHeaderValues(name));
 	}
 
@@ -126,8 +122,7 @@ class SavedRequestAwareWrapper extends HttpServletRequestWrapper {
 	}
 
 	@Override
-	@SuppressWarnings("unchecked")
-	public Enumeration getLocales() {
+	public Enumeration<Locale> getLocales() {
 		List<Locale> locales = this.savedRequest.getLocales();
 		if (locales.isEmpty()) {
 			// Fall back to default locale
@@ -140,6 +135,11 @@ class SavedRequestAwareWrapper extends HttpServletRequestWrapper {
 	@Override
 	public String getMethod() {
 		return this.savedRequest.getMethod();
+	}
+
+	@Override
+	public String getContentType() {
+		return getHeader(HttpHeaders.CONTENT_TYPE);
 	}
 
 	/**
@@ -166,8 +166,7 @@ class SavedRequestAwareWrapper extends HttpServletRequestWrapper {
 	}
 
 	@Override
-	@SuppressWarnings("unchecked")
-	public Map getParameterMap() {
+	public Map<String, String[]> getParameterMap() {
 		Set<String> names = getCombinedParameterNames();
 		Map<String, String[]> parameterMap = new HashMap<>(names.size());
 		for (String name : names) {
@@ -176,7 +175,6 @@ class SavedRequestAwareWrapper extends HttpServletRequestWrapper {
 		return parameterMap;
 	}
 
-	@SuppressWarnings("unchecked")
 	private Set<String> getCombinedParameterNames() {
 		Set<String> names = new HashSet<>();
 		names.addAll(super.getParameterMap().keySet());
@@ -185,9 +183,8 @@ class SavedRequestAwareWrapper extends HttpServletRequestWrapper {
 	}
 
 	@Override
-	@SuppressWarnings("unchecked")
-	public Enumeration getParameterNames() {
-		return new Enumerator(getCombinedParameterNames());
+	public Enumeration<String> getParameterNames() {
+		return new Enumerator<>(getCombinedParameterNames());
 	}
 
 	@Override

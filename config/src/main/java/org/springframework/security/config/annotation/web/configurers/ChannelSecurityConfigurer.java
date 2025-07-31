@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2013 the original author or authors.
+ * Copyright 2002-2025 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,15 +22,14 @@ import java.util.LinkedHashMap;
 import java.util.List;
 
 import org.springframework.context.ApplicationContext;
-import org.springframework.http.HttpMethod;
 import org.springframework.security.access.ConfigAttribute;
 import org.springframework.security.access.SecurityConfig;
-import org.springframework.security.config.annotation.ObjectPostProcessor;
-import org.springframework.security.config.annotation.SecurityBuilder;
-import org.springframework.security.config.annotation.SecurityConfigurer;
+import org.springframework.security.config.ObjectPostProcessor;
 import org.springframework.security.config.annotation.web.HttpSecurityBuilder;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.web.DefaultRedirectStrategy;
 import org.springframework.security.web.PortMapper;
+import org.springframework.security.web.RedirectStrategy;
 import org.springframework.security.web.access.channel.ChannelDecisionManagerImpl;
 import org.springframework.security.web.access.channel.ChannelProcessingFilter;
 import org.springframework.security.web.access.channel.ChannelProcessor;
@@ -39,7 +38,6 @@ import org.springframework.security.web.access.channel.RetryWithHttpEntryPoint;
 import org.springframework.security.web.access.channel.RetryWithHttpsEntryPoint;
 import org.springframework.security.web.access.channel.SecureChannelProcessor;
 import org.springframework.security.web.access.intercept.DefaultFilterInvocationSecurityMetadataSource;
-import org.springframework.security.web.servlet.util.matcher.MvcRequestMatcher;
 import org.springframework.security.web.util.matcher.RequestMatcher;
 
 /**
@@ -75,8 +73,11 @@ import org.springframework.security.web.util.matcher.RequestMatcher;
  *
  * @param <H> the type of {@link HttpSecurityBuilder} that is being configured
  * @author Rob Winch
+ * @author Onur Kagan Ozcan
  * @since 3.2
+ * @deprecated please use {@link HttpsRedirectConfigurer} instead
  */
+@Deprecated
 public final class ChannelSecurityConfigurer<H extends HttpSecurityBuilder<H>>
 		extends AbstractHttpConfigurer<ChannelSecurityConfigurer<H>, H> {
 
@@ -86,11 +87,13 @@ public final class ChannelSecurityConfigurer<H extends HttpSecurityBuilder<H>>
 
 	private List<ChannelProcessor> channelProcessors;
 
+	private RedirectStrategy redirectStrategy = new DefaultRedirectStrategy();
+
 	private final ChannelRequestMatcherRegistry REGISTRY;
 
 	/**
 	 * Creates a new instance
-	 * @see HttpSecurity#requiresChannel()
+	 * @see HttpSecurity#requiresChannel(Customizer)
 	 */
 	public ChannelSecurityConfigurer(ApplicationContext context) {
 		this.REGISTRY = new ChannelRequestMatcherRegistry(context);
@@ -123,9 +126,11 @@ public final class ChannelSecurityConfigurer<H extends HttpSecurityBuilder<H>>
 		if (portMapper != null) {
 			RetryWithHttpEntryPoint httpEntryPoint = new RetryWithHttpEntryPoint();
 			httpEntryPoint.setPortMapper(portMapper);
+			httpEntryPoint.setRedirectStrategy(this.redirectStrategy);
 			insecureChannelProcessor.setEntryPoint(httpEntryPoint);
 			RetryWithHttpsEntryPoint httpsEntryPoint = new RetryWithHttpsEntryPoint();
 			httpsEntryPoint.setPortMapper(portMapper);
+			httpsEntryPoint.setRedirectStrategy(this.redirectStrategy);
 			secureChannelProcessor.setEntryPoint(httpsEntryPoint);
 		}
 		insecureChannelProcessor = postProcess(insecureChannelProcessor);
@@ -141,22 +146,15 @@ public final class ChannelSecurityConfigurer<H extends HttpSecurityBuilder<H>>
 		return this.REGISTRY;
 	}
 
+	/**
+	 * @deprecated no replacement planned
+	 */
+	@Deprecated
 	public final class ChannelRequestMatcherRegistry
 			extends AbstractConfigAttributeRequestMatcherRegistry<RequiresChannelUrl> {
 
 		private ChannelRequestMatcherRegistry(ApplicationContext context) {
 			setApplicationContext(context);
-		}
-
-		@Override
-		public MvcMatchersRequiresChannelUrl mvcMatchers(HttpMethod method, String... mvcPatterns) {
-			List<MvcRequestMatcher> mvcMatchers = createMvcMatchers(method, mvcPatterns);
-			return new MvcMatchersRequiresChannelUrl(mvcMatchers);
-		}
-
-		@Override
-		public MvcMatchersRequiresChannelUrl mvcMatchers(String... patterns) {
-			return mvcMatchers(null, patterns);
 		}
 
 		@Override
@@ -186,31 +184,22 @@ public final class ChannelSecurityConfigurer<H extends HttpSecurityBuilder<H>>
 		}
 
 		/**
-		 * Return the {@link SecurityBuilder} when done using the
-		 * {@link SecurityConfigurer}. This is useful for method chaining.
-		 * @return the type of {@link HttpSecurityBuilder} that is being configured
+		 * Sets the {@link RedirectStrategy} instances to use in
+		 * {@link RetryWithHttpEntryPoint} and {@link RetryWithHttpsEntryPoint}
+		 * @param redirectStrategy
+		 * @return the {@link ChannelSecurityConfigurer} for further customizations
 		 */
-		public H and() {
-			return ChannelSecurityConfigurer.this.and();
-		}
-
-	}
-
-	public final class MvcMatchersRequiresChannelUrl extends RequiresChannelUrl {
-
-		private MvcMatchersRequiresChannelUrl(List<MvcRequestMatcher> matchers) {
-			super(matchers);
-		}
-
-		public RequiresChannelUrl servletPath(String servletPath) {
-			for (RequestMatcher matcher : this.requestMatchers) {
-				((MvcRequestMatcher) matcher).setServletPath(servletPath);
-			}
+		public ChannelRequestMatcherRegistry redirectStrategy(RedirectStrategy redirectStrategy) {
+			ChannelSecurityConfigurer.this.redirectStrategy = redirectStrategy;
 			return this;
 		}
 
 	}
 
+	/**
+	 * @deprecated no replacement planned
+	 */
+	@Deprecated
 	public class RequiresChannelUrl {
 
 		protected List<? extends RequestMatcher> requestMatchers;

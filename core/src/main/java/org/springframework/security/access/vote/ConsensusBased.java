@@ -22,6 +22,7 @@ import java.util.List;
 import org.springframework.security.access.AccessDecisionVoter;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.ConfigAttribute;
+import org.springframework.security.authorization.AuthorizationManager;
 import org.springframework.security.core.Authentication;
 
 /**
@@ -32,7 +33,10 @@ import org.springframework.security.core.Authentication;
  * "Consensus" here means majority-rule (ignoring abstains) rather than unanimous
  * agreement (ignoring abstains). If you require unanimity, please see
  * {@link UnanimousBased}.
+ *
+ * @deprecated Use {@link AuthorizationManager} instead
  */
+@Deprecated
 public class ConsensusBased extends AbstractAccessDecisionManager {
 
 	private boolean allowIfEqualGrantedDeniedDecisions = true;
@@ -67,14 +71,10 @@ public class ConsensusBased extends AbstractAccessDecisionManager {
 		for (AccessDecisionVoter voter : getDecisionVoters()) {
 			int result = voter.vote(authentication, object, configAttributes);
 			switch (result) {
-			case AccessDecisionVoter.ACCESS_GRANTED:
-				grant++;
-				break;
-			case AccessDecisionVoter.ACCESS_DENIED:
-				deny++;
-				break;
-			default:
-				break;
+				case AccessDecisionVoter.ACCESS_GRANTED -> grant++;
+				case AccessDecisionVoter.ACCESS_DENIED -> deny++;
+				default -> {
+				}
 			}
 		}
 		if (grant > deny) {

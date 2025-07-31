@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2019 the original author or authors.
+ * Copyright 2002-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -54,7 +54,7 @@ public final class JwtDecoders {
 	public static <T extends JwtDecoder> T fromOidcIssuerLocation(String oidcIssuerLocation) {
 		Assert.hasText(oidcIssuerLocation, "oidcIssuerLocation cannot be empty");
 		Map<String, Object> configuration = JwtDecoderProviderConfigurationUtils
-				.getConfigurationForOidcIssuerLocation(oidcIssuerLocation);
+			.getConfigurationForOidcIssuerLocation(oidcIssuerLocation);
 		return (T) withProviderConfiguration(configuration, oidcIssuerLocation);
 	}
 
@@ -89,9 +89,10 @@ public final class JwtDecoders {
 	@SuppressWarnings("unchecked")
 	public static <T extends JwtDecoder> T fromIssuerLocation(String issuer) {
 		Assert.hasText(issuer, "issuer cannot be empty");
-		Map<String, Object> configuration = JwtDecoderProviderConfigurationUtils
-				.getConfigurationForIssuerLocation(issuer);
-		return (T) withProviderConfiguration(configuration, issuer);
+		NimbusJwtDecoder jwtDecoder = NimbusJwtDecoder.withIssuerLocation(issuer).build();
+		OAuth2TokenValidator<Jwt> jwtValidator = JwtValidators.createDefaultWithIssuer(issuer);
+		jwtDecoder.setJwtValidator(jwtValidator);
+		return (T) jwtDecoder;
 	}
 
 	/**
@@ -110,7 +111,8 @@ public final class JwtDecoders {
 		OAuth2TokenValidator<Jwt> jwtValidator = JwtValidators.createDefaultWithIssuer(issuer);
 		String jwkSetUri = configuration.get("jwks_uri").toString();
 		NimbusJwtDecoder jwtDecoder = NimbusJwtDecoder.withJwkSetUri(jwkSetUri)
-				.jwtProcessorCustomizer(JwtDecoderProviderConfigurationUtils::addJWSAlgorithms).build();
+			.jwtProcessorCustomizer(JwtDecoderProviderConfigurationUtils::addJWSAlgorithms)
+			.build();
 		jwtDecoder.setJwtValidator(jwtValidator);
 		return jwtDecoder;
 	}

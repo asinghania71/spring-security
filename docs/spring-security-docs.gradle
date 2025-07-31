@@ -1,95 +1,97 @@
 plugins {
-	id 'org.antora' version '1.0.0-alpha.7'
+	id 'org.antora' version '1.0.0'
+	id 'io.spring.antora.generate-antora-yml' version '0.0.1'
+	id 'io.spring.convention.repository'
+	id 'security-kotlin'
 }
 
 apply plugin: 'io.spring.convention.docs'
 apply plugin: 'java'
 
 antora {
-	playbook = 'cached-antora-playbook.yml'
-	playbookProvider {
-		repository = 'spring-projects/spring-security'
-		branch = 'docs-build'
-		path = 'lib/antora/templates/per-branch-antora-playbook.yml'
-		checkLocalBranch = true
-	}
-	options = [clean: true, stacktrace: true]
+	options = [clean: true, fetch: !project.gradle.startParameter.offline, stacktrace: true]
+	environment = [
+		'BUILD_REFNAME': 'HEAD',
+		'BUILD_VERSION': project.version,
+	]
 }
 
-tasks.register('generateAntora') {
+tasks.register("syncAntoraAttachments", Sync) {
 	group = 'Documentation'
-	description = 'Generates the antora.yml for dynamic properties'
-	doLast {
-		def docsTag = snapshotBuild ? 'current' : project.version
-		def ghTag = snapshotBuild ? 'main' : project.version
-		def ghUrl = "https://github.com/spring-projects/spring-security/tree/$ghTag"
-		def ghOldSamplesUrl = 'https://github.com/spring-projects/spring-security/tree/5.4.x/samples'
-		def ghSamplesUrl = "https://github.com/spring-projects/spring-security-samples/tree/$samplesBranch"
-		def securityDocsUrl = "https://docs.spring.io/spring-security/site/docs/$docsTag"
-		def securityApiUrl = "$securityDocsUrl/api/"
-		def securityReferenceUrl = "$securityDocsUrl/reference/html5/"
-		def springFrameworkApiUrl = "https://docs.spring.io/spring-framework/docs/$springFrameworkVersion/javadoc-api/"
-		def springFrameworkReferenceUrl = "https://docs.spring.io/spring-framework/docs/$springFrameworkVersion/reference/html/"
-		def ymlVersions = resolvedVersions(project.configurations.testRuntimeClasspath).call()
-			.collect(v -> "    ${v.getKey()}: ${v.getValue()}")
-			.join('\n')
-		def outputFile = layout.buildDirectory.file('generateAntora/antora.yml').get().asFile
-		mkdir(outputFile.getParentFile())
-		def mainVersion = project.version
-		def prerelease = null
-		def versionComponents = mainVersion.split(/(?=-)/)
-        if (versionComponents.length > 1) {
-          if (versionComponents[1] == '-SNAPSHOT') {
-            mainVersion = versionComponents[0]
-            prerelease = "'-SNAPSHOT'"
-          } else {
-            prerelease = 'true'
-          }
-        }
-		def antoraYmlText = file('antora.yml').text
-		layout.buildDirectory.file('.antora.yml').get().asFile.text = antoraYmlText
-		antoraYmlText = antoraYmlText.lines().collect { l ->
-			if (l.startsWith('version: ')) {
-				return prerelease == null ? "version: '${mainVersion}'" : "version: '${mainVersion}'\nprerelease: ${prerelease}"
-			}
-			if (l.startsWith('title: ')) return "title: ${project.parent.description}"
-			return l == 'ext:' || l.getAt(0) == ' ' ? null : l
-		}.findAll(Objects::nonNull).join('\n')
-		outputFile.text = """$antoraYmlText
-asciidoc:
-  attributes:
-    icondir: icons
-    gh-old-samples-url: $ghOldSamplesUrl
-    gh-samples-url: $ghSamplesUrl
-    gh-url: $ghUrl
-    security-api-url: $securityApiUrl
-    security-reference-url: $securityReferenceUrl
-    spring-framework-api-url: $springFrameworkApiUrl
-    spring-framework-reference-url: $springFrameworkReferenceUrl
-    spring-security-version: ${project.version}
-${ymlVersions}
-"""
-	}
+	description = 'Syncs the Antora attachments'
+	from project.provider( { project.tasks.api.outputs } )
+	into project.layout.buildDirectory.dir('generated-antora-resources/modules/ROOT/assets/attachments/api/java')
+}
+
+tasks.named("generateAntoraYml") {
+	asciidocAttributes = project.provider( { generateAttributes() } )
+	asciidocAttributes.putAll(providers.provider( { resolvedVersions(project.configurations.testRuntimeClasspath) }))
+}
+
+tasks.register("generateAntoraResources") {
+	dependsOn 'generateAntoraYml', 'syncAntoraAttachments'
 }
 
 dependencies {
 	testImplementation platform(project(':spring-security-dependencies'))
+	testImplementation project(':spring-security-config')
+	testImplementation project(path : ':spring-security-config', configuration : 'tests')
+	testImplementation project(':spring-security-test')
+	testImplementation project(':spring-security-oauth2-client')
+	testImplementation 'com.squareup.okhttp3:mockwebserver'
 	testImplementation 'com.unboundid:unboundid-ldapsdk'
-	testImplementation 'org.apache.directory.server:apacheds-core'
+	testImplementation libs.webauthn4j.core
+	testImplementation 'org.jetbrains.kotlin:kotlin-reflect'
+	testImplementation 'org.jetbrains.kotlin:kotlin-stdlib-jdk8'
 	testImplementation 'org.springframework:spring-core'
+	testImplementation 'org.springframework:spring-test'
+
+	testImplementation 'org.springframework:spring-webmvc'
+	testImplementation 'jakarta.servlet:jakarta.servlet-api'
+	testImplementation 'io.mockk:mockk'
+	testImplementation "org.junit.jupiter:junit-jupiter-api"
+	testImplementation "org.junit.jupiter:junit-jupiter-params"
+	testImplementation "org.junit.jupiter:junit-jupiter-engine"
+	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+def generateAttributes() {
+	def springFrameworkVersion = libs.org.springframework.spring.framework.bom.get().versionConstraint.displayName
+	def springBootVersion = project.property("springBootVersion")
+	def samplesBranch = project.property("samplesBranch")
+
+	def docsTag = snapshotBuild ? 'current' : project.version
+	def ghTag = snapshotBuild ? 'main' : project.version
+	def ghUrl = "https://github.com/spring-projects/spring-security/tree/$ghTag"
+	def ghOldSamplesUrl = 'https://github.com/spring-projects/spring-security/tree/5.4.x/samples'
+	def ghSamplesUrl = "https://github.com/spring-projects/spring-security-samples/tree/$samplesBranch"
+	def securityDocsUrl = "https://docs.spring.io/spring-security/site/docs/$docsTag"
+	def securityApiUrl = "$securityDocsUrl/api/"
+	def securityReferenceUrl = "$securityDocsUrl/reference/html5/"
+	def springFrameworkApiUrl = "https://docs.spring.io/spring-framework/docs/$springFrameworkVersion/javadoc-api/"
+	def springFrameworkReferenceUrl = "https://docs.spring.io/spring-framework/reference/$springFrameworkVersion/"
+	def springBootReferenceUrl = "https://docs.spring.io/spring-boot/$springBootVersion/"
+	def springBootApiUrl = "https://docs.spring.io/spring-boot/$springBootVersion/api/java/"
+
+	return	['gh-old-samples-url': ghOldSamplesUrl.toString(),
+		'gh-samples-url': ghSamplesUrl.toString(),
+		'gh-url': ghUrl.toString(),
+		'security-api-url': securityApiUrl.toString(),
+		'security-reference-url': securityReferenceUrl.toString(),
+		'spring-framework-api-url': springFrameworkApiUrl.toString(),
+		'spring-framework-reference-url': springFrameworkReferenceUrl.toString(),
+		'spring-boot-api-url': springBootApiUrl.toString(),
+		'spring-boot-reference-url': springBootReferenceUrl.toString(),
+		'spring-security-version': project.version]
+		+ resolvedVersions(project.configurations.testRuntimeClasspath)
 }
 
 def resolvedVersions(Configuration configuration) {
-	return {
-		configuration.resolvedConfiguration
+	return configuration.resolvedConfiguration
 				.resolvedArtifacts
 				.collectEntries { [(it.name + '-version'): it.moduleVersion.id.version] }
-	}
 }
 
-repositories {
-	mavenCentral()
-	maven { url 'https://repo.spring.io/release' }
-	maven { url 'https://repo.spring.io/milestone' }
-	maven { url 'https://repo.spring.io/snapshot' }
+test {
+	useJUnitPlatform()
 }

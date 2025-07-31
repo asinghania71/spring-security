@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2025 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,13 +22,14 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.security.oauth2.core.OAuth2AccessToken;
 import org.springframework.security.oauth2.core.OAuth2RefreshToken;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Tests for {@link DefaultMapOAuth2AccessTokenResponseConverter}.
@@ -56,24 +57,24 @@ public class DefaultMapOAuth2AccessTokenResponseConverterTests {
 		map.put("custom_parameter_2", "custom-value-2");
 		OAuth2AccessTokenResponse converted = this.messageConverter.convert(map);
 		OAuth2AccessToken accessToken = converted.getAccessToken();
-		Assertions.assertNotNull(accessToken);
-		Assertions.assertEquals("access-token-1234", accessToken.getTokenValue());
-		Assertions.assertEquals(OAuth2AccessToken.TokenType.BEARER, accessToken.getTokenType());
+		assertThat(accessToken).isNotNull();
+		assertThat(accessToken.getTokenValue()).isEqualTo("access-token-1234");
+		assertThat(accessToken.getTokenType()).isEqualTo(OAuth2AccessToken.TokenType.BEARER);
 		Set<String> scopes = accessToken.getScopes();
-		Assertions.assertNotNull(scopes);
-		Assertions.assertEquals(2, scopes.size());
-		Assertions.assertTrue(scopes.contains("read"));
-		Assertions.assertTrue(scopes.contains("write"));
-		Assertions.assertEquals(3600,
-				Duration.between(accessToken.getIssuedAt(), accessToken.getExpiresAt()).getSeconds());
+		assertThat(scopes).isNotNull();
+		assertThat(scopes).hasSize(2);
+		assertThat(scopes).contains("read");
+		assertThat(scopes).contains("write");
+		assertThat(Duration.between(accessToken.getIssuedAt(), accessToken.getExpiresAt()).getSeconds())
+			.isEqualTo(3600);
 		OAuth2RefreshToken refreshToken = converted.getRefreshToken();
-		Assertions.assertNotNull(refreshToken);
-		Assertions.assertEquals("refresh-token-1234", refreshToken.getTokenValue());
+		assertThat(refreshToken).isNotNull();
+		assertThat(refreshToken.getTokenValue()).isEqualTo("refresh-token-1234");
 		Map<String, Object> additionalParameters = converted.getAdditionalParameters();
-		Assertions.assertNotNull(additionalParameters);
-		Assertions.assertEquals(2, additionalParameters.size());
-		Assertions.assertEquals("custom-value-1", additionalParameters.get("custom_parameter_1"));
-		Assertions.assertEquals("custom-value-2", additionalParameters.get("custom_parameter_2"));
+		assertThat(additionalParameters).isNotNull();
+		assertThat(additionalParameters).hasSize(2);
+		assertThat(additionalParameters).containsEntry("custom_parameter_1", "custom-value-1");
+		assertThat(additionalParameters).containsEntry("custom_parameter_2", "custom-value-2");
 	}
 
 	@Test
@@ -83,19 +84,30 @@ public class DefaultMapOAuth2AccessTokenResponseConverterTests {
 		map.put("token_type", "bearer");
 		OAuth2AccessTokenResponse converted = this.messageConverter.convert(map);
 		OAuth2AccessToken accessToken = converted.getAccessToken();
-		Assertions.assertNotNull(accessToken);
-		Assertions.assertEquals("access-token-1234", accessToken.getTokenValue());
-		Assertions.assertEquals(OAuth2AccessToken.TokenType.BEARER, accessToken.getTokenType());
+		assertThat(accessToken).isNotNull();
+		assertThat(accessToken.getTokenValue()).isEqualTo("access-token-1234");
+		assertThat(accessToken.getTokenType()).isEqualTo(OAuth2AccessToken.TokenType.BEARER);
 		Set<String> scopes = accessToken.getScopes();
-		Assertions.assertNotNull(scopes);
-		Assertions.assertEquals(0, scopes.size());
-		Assertions.assertEquals(1,
-				Duration.between(accessToken.getIssuedAt(), accessToken.getExpiresAt()).getSeconds());
+		assertThat(scopes).isNotNull();
+		assertThat(scopes).isEmpty();
+		assertThat(Duration.between(accessToken.getIssuedAt(), accessToken.getExpiresAt()).getSeconds()).isEqualTo(1);
 		OAuth2RefreshToken refreshToken = converted.getRefreshToken();
-		Assertions.assertNull(refreshToken);
+		assertThat(refreshToken).isNull();
 		Map<String, Object> additionalParameters = converted.getAdditionalParameters();
-		Assertions.assertNotNull(additionalParameters);
-		Assertions.assertEquals(0, additionalParameters.size());
+		assertThat(additionalParameters).isNotNull();
+		assertThat(additionalParameters).isEmpty();
+	}
+
+	@Test
+	public void shouldConvertDPoPToken() {
+		Map<String, Object> map = new HashMap<>();
+		map.put("access_token", "access-token-1234");
+		map.put("token_type", "dpop");
+		OAuth2AccessTokenResponse converted = this.messageConverter.convert(map);
+		OAuth2AccessToken accessToken = converted.getAccessToken();
+		assertThat(accessToken).isNotNull();
+		assertThat(accessToken.getTokenValue()).isEqualTo("access-token-1234");
+		assertThat(accessToken.getTokenType()).isEqualTo(OAuth2AccessToken.TokenType.DPOP);
 	}
 
 	@Test
@@ -106,19 +118,18 @@ public class DefaultMapOAuth2AccessTokenResponseConverterTests {
 		map.put("expires_in", "2100-01-01-abc");
 		OAuth2AccessTokenResponse converted = this.messageConverter.convert(map);
 		OAuth2AccessToken accessToken = converted.getAccessToken();
-		Assertions.assertNotNull(accessToken);
-		Assertions.assertEquals("access-token-1234", accessToken.getTokenValue());
-		Assertions.assertEquals(OAuth2AccessToken.TokenType.BEARER, accessToken.getTokenType());
+		assertThat(accessToken).isNotNull();
+		assertThat(accessToken.getTokenValue()).isEqualTo("access-token-1234");
+		assertThat(accessToken.getTokenType()).isEqualTo(OAuth2AccessToken.TokenType.BEARER);
 		Set<String> scopes = accessToken.getScopes();
-		Assertions.assertNotNull(scopes);
-		Assertions.assertEquals(0, scopes.size());
-		Assertions.assertEquals(1,
-				Duration.between(accessToken.getIssuedAt(), accessToken.getExpiresAt()).getSeconds());
+		assertThat(scopes).isNotNull();
+		assertThat(scopes).isEmpty();
+		assertThat(Duration.between(accessToken.getIssuedAt(), accessToken.getExpiresAt()).getSeconds()).isEqualTo(1);
 		OAuth2RefreshToken refreshToken = converted.getRefreshToken();
-		Assertions.assertNull(refreshToken);
+		assertThat(refreshToken).isNull();
 		Map<String, Object> additionalParameters = converted.getAdditionalParameters();
-		Assertions.assertNotNull(additionalParameters);
-		Assertions.assertEquals(0, additionalParameters.size());
+		assertThat(additionalParameters).isNotNull();
+		assertThat(additionalParameters).isEmpty();
 	}
 
 	// gh-9685
@@ -130,11 +141,11 @@ public class DefaultMapOAuth2AccessTokenResponseConverterTests {
 		map.put("expires_in", 3600);
 		OAuth2AccessTokenResponse converted = this.messageConverter.convert(map);
 		OAuth2AccessToken accessToken = converted.getAccessToken();
-		Assertions.assertNotNull(accessToken);
-		Assertions.assertEquals("access-token-1234", accessToken.getTokenValue());
-		Assertions.assertEquals(OAuth2AccessToken.TokenType.BEARER, accessToken.getTokenType());
-		Assertions.assertEquals(3600,
-				Duration.between(accessToken.getIssuedAt(), accessToken.getExpiresAt()).getSeconds());
+		assertThat(accessToken).isNotNull();
+		assertThat(accessToken.getTokenValue()).isEqualTo("access-token-1234");
+		assertThat(accessToken.getTokenType()).isEqualTo(OAuth2AccessToken.TokenType.BEARER);
+		assertThat(Duration.between(accessToken.getIssuedAt(), accessToken.getExpiresAt()).getSeconds())
+			.isEqualTo(3600);
 	}
 
 	// gh-9685
@@ -153,24 +164,24 @@ public class DefaultMapOAuth2AccessTokenResponseConverterTests {
 		map.put("custom_parameter_2", "custom-value-2");
 		OAuth2AccessTokenResponse converted = this.messageConverter.convert(map);
 		OAuth2AccessToken accessToken = converted.getAccessToken();
-		Assertions.assertNotNull(accessToken);
-		Assertions.assertEquals("access-token-1234", accessToken.getTokenValue());
-		Assertions.assertEquals(OAuth2AccessToken.TokenType.BEARER, accessToken.getTokenType());
+		assertThat(accessToken).isNotNull();
+		assertThat(accessToken.getTokenValue()).isEqualTo("access-token-1234");
+		assertThat(accessToken.getTokenType()).isEqualTo(OAuth2AccessToken.TokenType.BEARER);
 		Set<String> scopes = accessToken.getScopes();
-		Assertions.assertNotNull(scopes);
-		Assertions.assertEquals(2, scopes.size());
-		Assertions.assertTrue(scopes.contains("read"));
-		Assertions.assertTrue(scopes.contains("write"));
-		Assertions.assertEquals(3600,
-				Duration.between(accessToken.getIssuedAt(), accessToken.getExpiresAt()).getSeconds());
+		assertThat(scopes).isNotNull();
+		assertThat(scopes).hasSize(2);
+		assertThat(scopes).contains("read");
+		assertThat(scopes).contains("write");
+		assertThat(Duration.between(accessToken.getIssuedAt(), accessToken.getExpiresAt()).getSeconds())
+			.isEqualTo(3600);
 		OAuth2RefreshToken refreshToken = converted.getRefreshToken();
-		Assertions.assertNotNull(refreshToken);
-		Assertions.assertEquals("refresh-token-1234", refreshToken.getTokenValue());
+		assertThat(refreshToken).isNotNull();
+		assertThat(refreshToken.getTokenValue()).isEqualTo("refresh-token-1234");
 		Map<String, Object> additionalParameters = converted.getAdditionalParameters();
-		Assertions.assertNotNull(additionalParameters);
-		Assertions.assertEquals(2, additionalParameters.size());
-		Assertions.assertEquals(nestedObject, additionalParameters.get("custom_parameter_1"));
-		Assertions.assertEquals("custom-value-2", additionalParameters.get("custom_parameter_2"));
+		assertThat(additionalParameters).isNotNull();
+		assertThat(additionalParameters).hasSize(2);
+		assertThat(additionalParameters).containsEntry("custom_parameter_1", nestedObject);
+		assertThat(additionalParameters).containsEntry("custom_parameter_2", "custom-value-2");
 	}
 
 }

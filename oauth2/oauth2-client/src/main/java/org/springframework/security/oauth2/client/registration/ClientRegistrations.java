@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2025 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +17,7 @@
 package org.springframework.security.oauth2.client.registration;
 
 import java.net.URI;
-import java.util.Collections;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -30,12 +30,14 @@ import net.minidev.json.JSONObject;
 
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.RequestEntity;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.security.oauth2.core.AuthorizationGrantType;
 import org.springframework.security.oauth2.core.ClientAuthenticationMethod;
 import org.springframework.security.oauth2.core.oidc.IdTokenClaimNames;
 import org.springframework.util.Assert;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.util.UriComponents;
 import org.springframework.web.util.UriComponentsBuilder;
 
 /**
@@ -48,6 +50,7 @@ import org.springframework.web.util.UriComponentsBuilder;
  * @author Rob Winch
  * @author Josh Cummings
  * @author Rafiullah Hamedy
+ * @author Evgeniy Cheban
  * @since 5.1
  */
 public final class ClientRegistrations {
@@ -58,10 +61,57 @@ public final class ClientRegistrations {
 
 	private static final RestTemplate rest = new RestTemplate();
 
-	private static final ParameterizedTypeReference<Map<String, Object>> typeReference = new ParameterizedTypeReference<Map<String, Object>>() {
+	static {
+		SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+		requestFactory.setConnectTimeout(30_000);
+		requestFactory.setReadTimeout(30_000);
+		rest.setRequestFactory(requestFactory);
+	}
+
+	private static final ParameterizedTypeReference<Map<String, Object>> typeReference = new ParameterizedTypeReference<>() {
 	};
 
 	private ClientRegistrations() {
+	}
+
+	/**
+	 * Creates a {@link ClientRegistration.Builder} using the provided map representation
+	 * of an <a href=
+	 * "https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderConfigurationResponse">OpenID
+	 * Provider Configuration Response</a> to initialize the
+	 * {@link ClientRegistration.Builder}.
+	 *
+	 * <p>
+	 * This is useful when the OpenID Provider Configuration is not available at a
+	 * well-known location, or if custom validation is needed for the issuer location
+	 * (e.g. if the issuer is only accessible from a back-channel URI that is different
+	 * from the issuer value in the configuration).
+	 * </p>
+	 *
+	 * <p>
+	 * Example usage:
+	 * </p>
+	 * <pre>
+	 * RequestEntity&lt;Void&gt; request = RequestEntity.get(metadataEndpoint).build();
+	 * ParameterizedTypeReference&lt;Map&lt;String, Object&gt;&gt; typeReference = new ParameterizedTypeReference&lt;&gt;() {};
+	 * Map&lt;String, Object&gt; configuration = rest.exchange(request, typeReference).getBody();
+	 * // Validate configuration.get("issuer") as per in the OIDC specification
+	 * ClientRegistration registration = ClientRegistrations.fromOidcConfiguration(configuration)
+	 *     .clientId("client-id")
+	 *     .clientSecret("client-secret")
+	 *     .build();
+	 * </pre>
+	 * @param the OpenID Provider configuration map
+	 * @return the {@link ClientRegistration} built from the configuration
+	 */
+	public static ClientRegistration.Builder fromOidcConfiguration(Map<String, Object> configuration) {
+		OIDCProviderMetadata metadata = parse(configuration, OIDCProviderMetadata::parse);
+		ClientRegistration.Builder builder = withProviderConfiguration(metadata, metadata.getIssuer().getValue());
+		builder.jwkSetUri(metadata.getJWKSetURI().toASCIIString());
+		if (metadata.getUserInfoEndpointURI() != null) {
+			builder.userInfoUri(metadata.getUserInfoEndpointURI().toASCIIString());
+		}
+		return builder;
 	}
 
 	/**
@@ -97,7 +147,7 @@ public final class ClientRegistrations {
 	 */
 	public static ClientRegistration.Builder fromOidcIssuerLocation(String issuer) {
 		Assert.hasText(issuer, "issuer cannot be empty");
-		return getBuilder(issuer, oidc(URI.create(issuer)));
+		return getBuilder(issuer, oidc(issuer));
 	}
 
 	/**
@@ -140,22 +190,18 @@ public final class ClientRegistrations {
 	 */
 	public static ClientRegistration.Builder fromIssuerLocation(String issuer) {
 		Assert.hasText(issuer, "issuer cannot be empty");
-		URI uri = URI.create(issuer);
-		return getBuilder(issuer, oidc(uri), oidcRfc8414(uri), oauth(uri));
+		return getBuilder(issuer, oidc(issuer), oidcRfc8414(issuer), oauth(issuer));
 	}
 
-	private static Supplier<ClientRegistration.Builder> oidc(URI issuer) {
-		// @formatter:off
-		URI uri = UriComponentsBuilder.fromUri(issuer)
-				.replacePath(issuer.getPath() + OIDC_METADATA_PATH)
-				.build(Collections.emptyMap());
+	static Supplier<ClientRegistration.Builder> oidc(String issuer) {
+		UriComponents uri = oidcUri(issuer);
 		// @formatter:on
 		return () -> {
-			RequestEntity<Void> request = RequestEntity.get(uri).build();
+			RequestEntity<Void> request = RequestEntity.get(uri.toUriString()).build();
 			Map<String, Object> configuration = rest.exchange(request, typeReference).getBody();
 			OIDCProviderMetadata metadata = parse(configuration, OIDCProviderMetadata::parse);
-			ClientRegistration.Builder builder = withProviderConfiguration(metadata, issuer.toASCIIString())
-					.jwkSetUri(metadata.getJWKSetURI().toASCIIString());
+			ClientRegistration.Builder builder = withProviderConfiguration(metadata, issuer)
+				.jwkSetUri(metadata.getJWKSetURI().toASCIIString());
 			if (metadata.getUserInfoEndpointURI() != null) {
 				builder.userInfoUri(metadata.getUserInfoEndpointURI().toASCIIString());
 			}
@@ -163,30 +209,48 @@ public final class ClientRegistrations {
 		};
 	}
 
-	private static Supplier<ClientRegistration.Builder> oidcRfc8414(URI issuer) {
+	static UriComponents oidcUri(String issuer) {
+		UriComponents uri = UriComponentsBuilder.fromUriString(issuer).build();
 		// @formatter:off
-		URI uri = UriComponentsBuilder.fromUri(issuer)
-				.replacePath(OIDC_METADATA_PATH + issuer.getPath())
-				.build(Collections.emptyMap());
+		return UriComponentsBuilder.newInstance().uriComponents(uri)
+				.replacePath(uri.getPath() + OIDC_METADATA_PATH)
+				.build();
+	}
+
+	static Supplier<ClientRegistration.Builder> oidcRfc8414(String issuer) {
+		UriComponents uri = oidcRfc8414Uri(issuer);
 		// @formatter:on
 		return getRfc8414Builder(issuer, uri);
 	}
 
-	private static Supplier<ClientRegistration.Builder> oauth(URI issuer) {
+	static UriComponents oidcRfc8414Uri(String issuer) {
+		UriComponents uri = UriComponentsBuilder.fromUriString(issuer).build();
 		// @formatter:off
-		URI uri = UriComponentsBuilder.fromUri(issuer)
-				.replacePath(OAUTH_METADATA_PATH + issuer.getPath())
-				.build(Collections.emptyMap());
-		// @formatter:on
+		return UriComponentsBuilder.newInstance().uriComponents(uri)
+				.replacePath(OIDC_METADATA_PATH + uri.getPath())
+				.build();
+	}
+
+	static Supplier<ClientRegistration.Builder> oauth(String issuer) {
+		UriComponents uri = oauthUri(issuer);
 		return getRfc8414Builder(issuer, uri);
 	}
 
-	private static Supplier<ClientRegistration.Builder> getRfc8414Builder(URI issuer, URI uri) {
+	static UriComponents oauthUri(String issuer) {
+		UriComponents uri = UriComponentsBuilder.fromUriString(issuer).build();
+		// @formatter:off
+		return UriComponentsBuilder.newInstance().uriComponents(uri)
+				.replacePath(OAUTH_METADATA_PATH + uri.getPath())
+				.build();
+		// @formatter:on
+	}
+
+	private static Supplier<ClientRegistration.Builder> getRfc8414Builder(String issuer, UriComponents uri) {
 		return () -> {
-			RequestEntity<Void> request = RequestEntity.get(uri).build();
+			RequestEntity<Void> request = RequestEntity.get(uri.toUriString()).build();
 			Map<String, Object> configuration = rest.exchange(request, typeReference).getBody();
 			AuthorizationServerMetadata metadata = parse(configuration, AuthorizationServerMetadata::parse);
-			ClientRegistration.Builder builder = withProviderConfiguration(metadata, issuer.toASCIIString());
+			ClientRegistration.Builder builder = withProviderConfiguration(metadata, issuer);
 			URI jwkSetUri = metadata.getJWKSetURI();
 			if (jwkSetUri != null) {
 				builder.jwkSetUri(jwkSetUri.toASCIIString());
@@ -203,6 +267,7 @@ public final class ClientRegistrations {
 	private static ClientRegistration.Builder getBuilder(String issuer,
 			Supplier<ClientRegistration.Builder>... suppliers) {
 		String errorMessage = "Unable to resolve Configuration with the provided Issuer of \"" + issuer + "\"";
+		List<String> errors = new ArrayList<>();
 		for (Supplier<ClientRegistration.Builder> supplier : suppliers) {
 			try {
 				return supplier.get();
@@ -211,6 +276,7 @@ public final class ClientRegistrations {
 				if (!ex.getStatusCode().is4xxClientError()) {
 					throw ex;
 				}
+				errors.add(ex.getMessage());
 				// else try another endpoint
 			}
 			catch (IllegalArgumentException | IllegalStateException ex) {
@@ -219,6 +285,9 @@ public final class ClientRegistrations {
 			catch (RuntimeException ex) {
 				throw new IllegalArgumentException(errorMessage, ex);
 			}
+		}
+		if (!errors.isEmpty()) {
+			throw new IllegalArgumentException(errorMessage + ", errors: " + errors);
 		}
 		throw new IllegalArgumentException(errorMessage);
 	}
@@ -258,7 +327,7 @@ public final class ClientRegistrations {
 	private static ClientAuthenticationMethod getClientAuthenticationMethod(
 			List<com.nimbusds.oauth2.sdk.auth.ClientAuthenticationMethod> metadataAuthMethods) {
 		if (metadataAuthMethods == null || metadataAuthMethods
-				.contains(com.nimbusds.oauth2.sdk.auth.ClientAuthenticationMethod.CLIENT_SECRET_BASIC)) {
+			.contains(com.nimbusds.oauth2.sdk.auth.ClientAuthenticationMethod.CLIENT_SECRET_BASIC)) {
 			// If null, the default includes client_secret_basic
 			return ClientAuthenticationMethod.CLIENT_SECRET_BASIC;
 		}

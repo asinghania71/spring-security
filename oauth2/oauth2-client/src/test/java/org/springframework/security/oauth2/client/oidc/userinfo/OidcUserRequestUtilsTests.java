@@ -71,7 +71,7 @@ public class OidcUserRequestUtilsTests {
 
 	@Test
 	public void shouldRetrieveUserInfoWhenNotAuthorizationCodeThenFalse() {
-		this.registration.authorizationGrantType(AuthorizationGrantType.IMPLICIT);
+		this.registration.authorizationGrantType(AuthorizationGrantType.CLIENT_CREDENTIALS);
 		assertThat(OidcUserRequestUtils.shouldRetrieveUserInfo(userRequest(), accessibleScopes)).isFalse();
 	}
 

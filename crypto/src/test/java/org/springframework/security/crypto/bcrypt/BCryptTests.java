@@ -332,13 +332,13 @@ public class BCryptTests {
 	@Test
 	public void emptyByteArrayCannotBeEncoded() {
 		assertThatIllegalArgumentException()
-				.isThrownBy(() -> BCrypt.encode_base64(new byte[0], 0, new StringBuilder()));
+			.isThrownBy(() -> BCrypt.encode_base64(new byte[0], 0, new StringBuilder()));
 	}
 
 	@Test
 	public void moreBytesThanInTheArrayCannotBeEncoded() {
 		assertThatIllegalArgumentException()
-				.isThrownBy(() -> BCrypt.encode_base64(new byte[1], 2, new StringBuilder()));
+			.isThrownBy(() -> BCrypt.encode_base64(new byte[1], 2, new StringBuilder()));
 	}
 
 	@Test
@@ -390,7 +390,7 @@ public class BCryptTests {
 				Arrays.fill(ba, (byte) 0);
 				ba[i] = (byte) b;
 				String s = encode_base64(ba, 3);
-				assertThat(s.length()).isEqualTo(4);
+				assertThat(s).hasSize(4);
 				byte[] decoded = BCrypt.decode_base64(s, 3);
 				assertThat(decoded).isEqualTo(ba);
 			}
@@ -421,13 +421,13 @@ public class BCryptTests {
 	@Test
 	public void hashpwFailsWhenSaltSpecifiesTooFewRounds() {
 		assertThatIllegalArgumentException()
-				.isThrownBy(() -> BCrypt.hashpw("password", "$2a$03$......................"));
+			.isThrownBy(() -> BCrypt.hashpw("password", "$2a$03$......................"));
 	}
 
 	@Test
 	public void hashpwFailsWhenSaltSpecifiesTooManyRounds() {
 		assertThatIllegalArgumentException()
-				.isThrownBy(() -> BCrypt.hashpw("password", "$2a$32$......................"));
+			.isThrownBy(() -> BCrypt.hashpw("password", "$2a$32$......................"));
 	}
 
 	@Test
@@ -438,13 +438,13 @@ public class BCryptTests {
 	@Test
 	public void hashpwWorksWithOldRevision() {
 		assertThat(BCrypt.hashpw("password", "$2$05$......................"))
-				.isEqualTo("$2$05$......................bvpG2UfzdyW/S0ny/4YyEZrmczoJfVm");
+			.isEqualTo("$2$05$......................bvpG2UfzdyW/S0ny/4YyEZrmczoJfVm");
 	}
 
 	@Test
 	public void hashpwFailsWhenSaltIsTooShort() {
 		assertThatIllegalArgumentException()
-				.isThrownBy(() -> BCrypt.hashpw("password", "$2a$10$123456789012345678901"));
+			.isThrownBy(() -> BCrypt.hashpw("password", "$2a$10$123456789012345678901"));
 	}
 
 	@Test

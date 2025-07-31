@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2018 the original author or authors.
+ * Copyright 2002-2025 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,10 +16,12 @@
 
 package org.springframework.security.config.annotation.web.configurers;
 
-import javax.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletRequest;
 
+import org.springframework.context.ApplicationContext;
 import org.springframework.security.authentication.AuthenticationDetailsSource;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.HttpSecurityBuilder;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.core.Authentication;
@@ -34,6 +36,7 @@ import org.springframework.security.web.authentication.preauth.PreAuthenticatedG
 import org.springframework.security.web.authentication.preauth.x509.SubjectDnX509PrincipalExtractor;
 import org.springframework.security.web.authentication.preauth.x509.X509AuthenticationFilter;
 import org.springframework.security.web.authentication.preauth.x509.X509PrincipalExtractor;
+import org.springframework.security.web.context.RequestAttributeSecurityContextRepository;
 
 /**
  * Adds X509 based pre authentication to an application. Since validating the certificate
@@ -71,6 +74,7 @@ import org.springframework.security.web.authentication.preauth.x509.X509Principa
  * </ul>
  *
  * @author Rob Winch
+ * @author Ngoc Nhan
  * @since 3.2
  */
 public final class X509Configurer<H extends HttpSecurityBuilder<H>>
@@ -87,7 +91,7 @@ public final class X509Configurer<H extends HttpSecurityBuilder<H>>
 	/**
 	 * Creates a new instance
 	 *
-	 * @see HttpSecurity#x509()
+	 * @see HttpSecurity#x509(Customizer)
 	 */
 	public X509Configurer() {
 	}
@@ -140,8 +144,7 @@ public final class X509Configurer<H extends HttpSecurityBuilder<H>>
 
 	/**
 	 * Specifies the {@link AuthenticationUserDetailsService} to use. If not specified,
-	 * the shared {@link UserDetailsService} will be used to create a
-	 * {@link UserDetailsByNameServiceWrapper}.
+	 * then the {@link UserDetailsService} bean will be used by default.
 	 * @param authenticationUserDetailsService the
 	 * {@link AuthenticationUserDetailsService} to use
 	 * @return the {@link X509Configurer} for further customizations
@@ -159,7 +162,10 @@ public final class X509Configurer<H extends HttpSecurityBuilder<H>>
 	 * @param subjectPrincipalRegex the regex to extract the user principal from the
 	 * certificate (i.e. "CN=(.*?)(?:,|$)").
 	 * @return the {@link X509Configurer} for further customizations
+	 * @deprecated Please use {{@link #x509PrincipalExtractor(X509PrincipalExtractor)}
+	 * instead
 	 */
+	@Deprecated
 	public X509Configurer<H> subjectPrincipalRegex(String subjectPrincipalRegex) {
 		SubjectDnX509PrincipalExtractor principalExtractor = new SubjectDnX509PrincipalExtractor();
 		principalExtractor.setSubjectDnRegex(subjectPrincipalRegex);
@@ -171,17 +177,17 @@ public final class X509Configurer<H extends HttpSecurityBuilder<H>>
 	public void init(H http) {
 		PreAuthenticatedAuthenticationProvider authenticationProvider = new PreAuthenticatedAuthenticationProvider();
 		authenticationProvider.setPreAuthenticatedUserDetailsService(getAuthenticationUserDetailsService(http));
-		http.authenticationProvider(authenticationProvider).setSharedObject(AuthenticationEntryPoint.class,
-				new Http403ForbiddenEntryPoint());
+		http.authenticationProvider(authenticationProvider)
+			.setSharedObject(AuthenticationEntryPoint.class, new Http403ForbiddenEntryPoint());
 	}
 
 	@Override
 	public void configure(H http) {
-		X509AuthenticationFilter filter = getFilter(http.getSharedObject(AuthenticationManager.class));
+		X509AuthenticationFilter filter = getFilter(http.getSharedObject(AuthenticationManager.class), http);
 		http.addFilter(filter);
 	}
 
-	private X509AuthenticationFilter getFilter(AuthenticationManager authenticationManager) {
+	private X509AuthenticationFilter getFilter(AuthenticationManager authenticationManager, H http) {
 		if (this.x509AuthenticationFilter == null) {
 			this.x509AuthenticationFilter = new X509AuthenticationFilter();
 			this.x509AuthenticationFilter.setAuthenticationManager(authenticationManager);
@@ -191,6 +197,8 @@ public final class X509Configurer<H extends HttpSecurityBuilder<H>>
 			if (this.authenticationDetailsSource != null) {
 				this.x509AuthenticationFilter.setAuthenticationDetailsSource(this.authenticationDetailsSource);
 			}
+			this.x509AuthenticationFilter.setSecurityContextRepository(new RequestAttributeSecurityContextRepository());
+			this.x509AuthenticationFilter.setSecurityContextHolderStrategy(getSecurityContextHolderStrategy());
 			this.x509AuthenticationFilter = postProcess(this.x509AuthenticationFilter);
 		}
 
@@ -200,9 +208,21 @@ public final class X509Configurer<H extends HttpSecurityBuilder<H>>
 	private AuthenticationUserDetailsService<PreAuthenticatedAuthenticationToken> getAuthenticationUserDetailsService(
 			H http) {
 		if (this.authenticationUserDetailsService == null) {
-			userDetailsService(http.getSharedObject(UserDetailsService.class));
+			userDetailsService(getSharedOrBean(http, UserDetailsService.class));
 		}
 		return this.authenticationUserDetailsService;
+	}
+
+	private <C> C getSharedOrBean(H http, Class<C> type) {
+		C shared = http.getSharedObject(type);
+		if (shared != null) {
+			return shared;
+		}
+		ApplicationContext context = getBuilder().getSharedObject(ApplicationContext.class);
+		if (context == null) {
+			return null;
+		}
+		return context.getBeanProvider(type).getIfUnique();
 	}
 
 }

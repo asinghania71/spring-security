@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2016 the original author or authors.
+ * Copyright 2002-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,10 @@ package org.springframework.security.config.authentication;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.w3c.dom.Element;
+import org.xml.sax.SAXParseException;
 
+import org.springframework.beans.factory.parsing.BeanDefinitionParsingException;
+import org.springframework.beans.factory.xml.XmlBeanDefinitionStoreException;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.CachingUserDetailsService;
 import org.springframework.security.authentication.ProviderManager;
@@ -33,6 +36,7 @@ import org.springframework.security.provisioning.JdbcUserDetailsManager;
 import org.springframework.security.util.FieldUtils;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.Mockito.mock;
 
 /**
@@ -65,7 +69,7 @@ public class JdbcUserServiceBeanDefinitionParserTests {
 	@Test
 	public void beanNameIsCorrect() {
 		assertThat(JdbcUserDetailsManager.class.getName())
-				.isEqualTo(new JdbcUserServiceBeanDefinitionParser().getBeanClassName(mock(Element.class)));
+			.isEqualTo(new JdbcUserServiceBeanDefinitionParser().getBeanClassName(mock(Element.class)));
 	}
 
 	@Test
@@ -112,7 +116,7 @@ public class JdbcUserServiceBeanDefinitionParserTests {
 		setContext("<jdbc-user-service id='myUserService' cache-ref='userCache' data-source-ref='dataSource'/>"
 				+ DATA_SOURCE + USER_CACHE_XML);
 		CachingUserDetailsService cachingUserService = (CachingUserDetailsService) this.appContext
-				.getBean("myUserService" + AbstractUserDetailsServiceBeanDefinitionParser.CACHING_SUFFIX);
+			.getBean("myUserService" + AbstractUserDetailsServiceBeanDefinitionParser.CACHING_SUFFIX);
 		assertThat(this.appContext.getBean("userCache")).isSameAs(cachingUserService.getUserCache());
 		assertThat(cachingUserService.loadUserByUsername("rod")).isNotNull();
 		assertThat(cachingUserService.loadUserByUsername("rod")).isNotNull();
@@ -129,7 +133,7 @@ public class JdbcUserServiceBeanDefinitionParserTests {
 				+ DATA_SOURCE);
 		// @formatter:on
 		AuthenticationManager mgr = (AuthenticationManager) this.appContext.getBean(BeanIds.AUTHENTICATION_MANAGER);
-		mgr.authenticate(new UsernamePasswordAuthenticationToken("rod", "koala"));
+		mgr.authenticate(UsernamePasswordAuthenticationToken.unauthenticated("rod", "koala"));
 	}
 
 	@Test
@@ -146,9 +150,9 @@ public class JdbcUserServiceBeanDefinitionParserTests {
 		ProviderManager mgr = (ProviderManager) this.appContext.getBean(BeanIds.AUTHENTICATION_MANAGER);
 		DaoAuthenticationProvider provider = (DaoAuthenticationProvider) mgr.getProviders().get(0);
 		assertThat(this.appContext.getBean("userCache")).isSameAs(provider.getUserCache());
-		provider.authenticate(new UsernamePasswordAuthenticationToken("rod", "koala"));
+		provider.authenticate(UsernamePasswordAuthenticationToken.unauthenticated("rod", "koala"));
 		assertThat(provider.getUserCache().getUserFromCache("rod")).isNotNull()
-				.withFailMessage("Cache should contain user after authentication");
+			.withFailMessage("Cache should contain user after authentication");
 	}
 
 	@Test
@@ -158,6 +162,38 @@ public class JdbcUserServiceBeanDefinitionParserTests {
 		JdbcUserDetailsManager mgr = (JdbcUserDetailsManager) this.appContext.getBean("myUserService");
 		UserDetails rod = mgr.loadUserByUsername("rod");
 		assertThat(AuthorityUtils.authorityListToSet(rod.getAuthorities())).contains("PREFIX_ROLE_SUPERVISOR");
+	}
+
+	@Test
+	public void testEmptyDataSourceRef() {
+		// @formatter:off
+		String xml = "<authentication-manager>"
+					+ "  <authentication-provider>"
+					+ "    <jdbc-user-service data-source-ref=''/>"
+					+ "  </authentication-provider>"
+					+ "</authentication-manager>";
+		assertThatExceptionOfType(BeanDefinitionParsingException.class)
+				.isThrownBy(() -> setContext(xml))
+				.withFailMessage("Expected exception due to empty data-source-ref")
+				.withMessageContaining("data-source-ref is required for jdbc-user-service");
+		// @formatter:on
+	}
+
+	@Test
+	public void testMissingDataSourceRef() {
+		// @formatter:off
+		String xml = "<authentication-manager>"
+					+ "  <authentication-provider>"
+					+ "    <jdbc-user-service/>"
+					+ "  </authentication-provider>"
+					+ "</authentication-manager>";
+		assertThatExceptionOfType(XmlBeanDefinitionStoreException.class)
+				.isThrownBy(() -> setContext(xml))
+				.withFailMessage("Expected exception due to missing data-source-ref")
+				.havingRootCause()
+				.isInstanceOf(SAXParseException.class)
+				.withMessageContaining("Attribute 'data-source-ref' must appear on element 'jdbc-user-service'");
+		// @formatter:on
 	}
 
 	private void setContext(String context) {

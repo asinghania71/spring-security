@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2019 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,9 +21,8 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
@@ -33,9 +32,9 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpSession;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
 import org.springframework.security.config.test.SpringTestContext;
 import org.springframework.security.config.test.SpringTestContextExtension;
 import org.springframework.security.core.Authentication;
@@ -45,6 +44,7 @@ import org.springframework.security.core.session.SessionRegistryImpl;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.provisioning.InMemoryUserDetailsManager;
+import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.session.NullAuthenticatedSessionStrategy;
 import org.springframework.security.web.authentication.session.SessionAuthenticationException;
 import org.springframework.security.web.authentication.session.SessionAuthenticationStrategy;
@@ -63,6 +63,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
+import static org.springframework.security.config.Customizer.withDefaults;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
@@ -83,7 +84,7 @@ public class NamespaceSessionManagementTests {
 	@Test
 	public void authenticateWhenDefaultSessionManagementThenMatchesNamespace() throws Exception {
 		this.spring.register(SessionManagementConfig.class, BasicController.class, UserDetailsServiceConfig.class)
-				.autowire();
+			.autowire();
 		MockHttpSession session = new MockHttpSession();
 		String sessionId = session.getId();
 		MockHttpServletRequestBuilder request = get("/auth").session(session).with(httpBasic("user", "password"));
@@ -120,16 +121,16 @@ public class NamespaceSessionManagementTests {
 	@Test
 	public void authenticateWhenUsingMaxSessionsThenMatchesNamespace() throws Exception {
 		this.spring.register(CustomSessionManagementConfig.class, BasicController.class, UserDetailsServiceConfig.class)
-				.autowire();
+			.autowire();
 		this.mvc.perform(get("/auth").with(httpBasic("user", "password"))).andExpect(status().isOk());
 		this.mvc.perform(get("/auth").with(httpBasic("user", "password")))
-				.andExpect(redirectedUrl("/session-auth-error"));
+			.andExpect(redirectedUrl("/session-auth-error"));
 	}
 
 	@Test
 	public void authenticateWhenUsingFailureUrlThenMatchesNamespace() throws Exception {
 		this.spring.register(CustomSessionManagementConfig.class, BasicController.class, UserDetailsServiceConfig.class)
-				.autowire();
+			.autowire();
 		MockHttpServletRequest mock = spy(MockHttpServletRequest.class);
 		mock.setSession(new MockHttpSession());
 		given(mock.changeSessionId()).willThrow(SessionAuthenticationException.class);
@@ -145,7 +146,7 @@ public class NamespaceSessionManagementTests {
 	@Test
 	public void authenticateWhenUsingSessionRegistryThenMatchesNamespace() throws Exception {
 		this.spring.register(CustomSessionManagementConfig.class, BasicController.class, UserDetailsServiceConfig.class)
-				.autowire();
+			.autowire();
 		SessionRegistry sessionRegistry = this.spring.getContext().getBean(SessionRegistry.class);
 		MockHttpServletRequestBuilder request = get("/auth").with(httpBasic("user", "password"));
 		this.mvc.perform(request).andExpect(status().isOk());
@@ -169,7 +170,7 @@ public class NamespaceSessionManagementTests {
 	@Test
 	public void authenticateWhenUsingCustomSessionAuthenticationStrategyThenMatchesNamespace() throws Exception {
 		this.spring.register(RefsSessionManagementConfig.class, BasicController.class, UserDetailsServiceConfig.class)
-				.autowire();
+			.autowire();
 		MockHttpServletRequestBuilder request = get("/auth").with(httpBasic("user", "password"));
 		this.mvc.perform(request).andExpect(status().isOk());
 		verifyBean(SessionAuthenticationStrategy.class).onAuthentication(any(Authentication.class),
@@ -179,8 +180,8 @@ public class NamespaceSessionManagementTests {
 	@Test
 	public void authenticateWhenNoSessionFixationProtectionThenMatchesNamespace() throws Exception {
 		this.spring
-				.register(SFPNoneSessionManagementConfig.class, BasicController.class, UserDetailsServiceConfig.class)
-				.autowire();
+			.register(SFPNoneSessionManagementConfig.class, BasicController.class, UserDetailsServiceConfig.class)
+			.autowire();
 		MockHttpSession givenSession = new MockHttpSession();
 		String givenSessionId = givenSession.getId();
 		// @formatter:off
@@ -198,8 +199,9 @@ public class NamespaceSessionManagementTests {
 
 	@Test
 	public void authenticateWhenMigrateSessionFixationProtectionThenMatchesNamespace() throws Exception {
-		this.spring.register(SFPMigrateSessionManagementConfig.class, BasicController.class,
-				UserDetailsServiceConfig.class).autowire();
+		this.spring
+			.register(SFPMigrateSessionManagementConfig.class, BasicController.class, UserDetailsServiceConfig.class)
+			.autowire();
 		MockHttpSession givenSession = new MockHttpSession();
 		String givenSessionId = givenSession.getId();
 		givenSession.setAttribute("name", "value");
@@ -255,32 +257,48 @@ public class NamespaceSessionManagementTests {
 		return new SessionResultMatcher();
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class SessionManagementConfig extends WebSecurityConfigurerAdapter {
+	static class SessionManagementConfig {
+
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+			// @formatter:off
+			http
+				.authorizeHttpRequests((authorize) -> authorize
+					.anyRequest().authenticated()
+				)
+				.sessionManagement((sessions) -> sessions
+					.requireExplicitAuthenticationStrategy(false)
+				)
+				.httpBasic(Customizer.withDefaults());
+			// @formatter:on
+			return http.build();
+		}
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class CustomSessionManagementConfig extends WebSecurityConfigurerAdapter {
+	static class CustomSessionManagementConfig {
 
 		SessionRegistry sessionRegistry = spy(SessionRegistryImpl.class);
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.authorizeRequests()
-					.anyRequest().authenticated()
-					.and()
-				.httpBasic()
-					.and()
-				.sessionManagement()
+				.authorizeHttpRequests((requests) -> requests
+					.anyRequest().authenticated())
+				.httpBasic(withDefaults())
+				.sessionManagement((management) -> management
 					.invalidSessionUrl("/invalid-session") // session-management@invalid-session-url
 					.sessionAuthenticationErrorUrl("/session-auth-error") // session-management@session-authentication-error-url
 					.maximumSessions(1) // session-management/concurrency-control@max-sessions
-						.maxSessionsPreventsLogin(true) // session-management/concurrency-control@error-if-maximum-exceeded
-						.expiredUrl("/expired-session") // session-management/concurrency-control@expired-url
-						.sessionRegistry(sessionRegistry()); // session-management/concurrency-control@session-registry-ref
+					.maxSessionsPreventsLogin(true) // session-management/concurrency-control@error-if-maximum-exceeded
+					.expiredUrl("/expired-session") // session-management/concurrency-control@expired-url
+					.sessionRegistry(sessionRegistry()));
+			return http.build(); // session-management/concurrency-control@session-registry-ref
 			// @formatter:on
 		}
 
@@ -291,17 +309,19 @@ public class NamespaceSessionManagementTests {
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class InvalidSessionStrategyConfig extends WebSecurityConfigurerAdapter {
+	static class InvalidSessionStrategyConfig {
 
 		InvalidSessionStrategy invalidSessionStrategy = mock(InvalidSessionStrategy.class);
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.sessionManagement()
-					.invalidSessionStrategy(invalidSessionStrategy());
+				.sessionManagement((management) -> management
+					.invalidSessionStrategy(invalidSessionStrategy()));
+			return http.build();
 			// @formatter:on
 		}
 
@@ -312,19 +332,20 @@ public class NamespaceSessionManagementTests {
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class RefsSessionManagementConfig extends WebSecurityConfigurerAdapter {
+	static class RefsSessionManagementConfig {
 
 		SessionAuthenticationStrategy sessionAuthenticationStrategy = mock(SessionAuthenticationStrategy.class);
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.sessionManagement()
-					.sessionAuthenticationStrategy(sessionAuthenticationStrategy()) // session-management@session-authentication-strategy-ref
-					.and()
-				.httpBasic();
+				.sessionManagement((management) -> management
+					.sessionAuthenticationStrategy(sessionAuthenticationStrategy()))
+				.httpBasic(withDefaults());
+			return http.build();
 			// @formatter:on
 		}
 
@@ -335,47 +356,53 @@ public class NamespaceSessionManagementTests {
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class SFPNoneSessionManagementConfig extends WebSecurityConfigurerAdapter {
+	static class SFPNoneSessionManagementConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.sessionManagement()
-					.sessionAuthenticationStrategy(new NullAuthenticatedSessionStrategy())
-					.and()
-				.httpBasic();
+				.sessionManagement((management) -> management
+					.sessionAuthenticationStrategy(new NullAuthenticatedSessionStrategy()))
+				.httpBasic(withDefaults());
+			return http.build();
 			// @formatter:on
 		}
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class SFPMigrateSessionManagementConfig extends WebSecurityConfigurerAdapter {
+	static class SFPMigrateSessionManagementConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.sessionManagement()
-					.and()
-				.httpBasic();
+				.sessionManagement((management) -> management
+					.requireExplicitAuthenticationStrategy(false))
+				.httpBasic(withDefaults());
+			return http.build();
 			// @formatter:on
 		}
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class SFPPostProcessedConfig extends WebSecurityConfigurerAdapter {
+	static class SFPPostProcessedConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.sessionManagement()
-					.and()
-				.httpBasic();
+				.sessionManagement((sessions) -> sessions
+						.requireExplicitAuthenticationStrategy(false)
+				)
+				.httpBasic(withDefaults());
+			return http.build();
 			// @formatter:on
 		}
 
@@ -386,17 +413,20 @@ public class NamespaceSessionManagementTests {
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class SFPNewSessionSessionManagementConfig extends WebSecurityConfigurerAdapter {
+	static class SFPNewSessionSessionManagementConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.sessionManagement()
-					.sessionFixation().newSession()
-					.and()
-				.httpBasic();
+				.sessionManagement((sessions) -> sessions
+						.sessionFixation().newSession()
+						.requireExplicitAuthenticationStrategy(false)
+				)
+				.httpBasic(withDefaults());
+			return http.build();
 			// @formatter:on
 		}
 

@@ -1,5 +1,5 @@
 /*
- * Copyright 2004, 2005, 2006 Acegi Technology Pty Limited
+ * Copyright 2002-2025 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,33 +18,44 @@ package org.springframework.security.cas.web;
 
 import java.io.IOException;
 
-import javax.servlet.FilterChain;
-import javax.servlet.ServletException;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-
-import org.jasig.cas.client.proxy.ProxyGrantingTicketStorage;
-import org.jasig.cas.client.util.CommonUtils;
-import org.jasig.cas.client.validation.TicketValidator;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpSession;
+import org.apereo.cas.client.proxy.ProxyGrantingTicketStorage;
+import org.apereo.cas.client.util.WebUtils;
+import org.apereo.cas.client.validation.TicketValidator;
 
 import org.springframework.core.log.LogMessage;
-import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.authentication.AuthenticationDetailsSource;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.authentication.AuthenticationTrustResolver;
+import org.springframework.security.authentication.AuthenticationTrustResolverImpl;
 import org.springframework.security.authentication.event.InteractiveAuthenticationSuccessEvent;
 import org.springframework.security.cas.ServiceProperties;
-import org.springframework.security.cas.web.authentication.ServiceAuthenticationDetails;
+import org.springframework.security.cas.authentication.CasServiceTicketAuthenticationToken;
+import org.springframework.security.cas.authentication.ServiceAuthenticationDetails;
 import org.springframework.security.cas.web.authentication.ServiceAuthenticationDetailsSource;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.context.SecurityContextHolderStrategy;
+import org.springframework.security.web.DefaultRedirectStrategy;
+import org.springframework.security.web.RedirectStrategy;
 import org.springframework.security.web.authentication.AbstractAuthenticationProcessingFilter;
 import org.springframework.security.web.authentication.AuthenticationFailureHandler;
 import org.springframework.security.web.authentication.SimpleUrlAuthenticationFailureHandler;
-import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
+import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
+import org.springframework.security.web.context.SecurityContextRepository;
+import org.springframework.security.web.savedrequest.HttpSessionRequestCache;
+import org.springframework.security.web.savedrequest.RequestCache;
+import org.springframework.security.web.savedrequest.SavedRequest;
 import org.springframework.security.web.util.matcher.RequestMatcher;
 import org.springframework.util.Assert;
+import org.springframework.util.StringUtils;
+
+import static org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher.pathPattern;
 
 /**
  * Processes a CAS service ticket, obtains proxy granting tickets, and processes proxy
@@ -52,52 +63,52 @@ import org.springframework.util.Assert;
  * <h2>Service Tickets</h2>
  * <p>
  * A service ticket consists of an opaque ticket string. It arrives at this filter by the
- * user's browser successfully authenticating using CAS, and then receiving a HTTP
+ * user's browser successfully authenticating using CAS, and then receiving an HTTP
  * redirect to a <code>service</code>. The opaque ticket string is presented in the
  * <code>ticket</code> request parameter.
  * <p>
- * This filter monitors the <code>service</code> URL so it can receive the service ticket
- * and process it. By default this filter processes the URL <tt>/login/cas</tt>. When
- * processing this URL, the value of {@link ServiceProperties#getService()} is used as the
- * <tt>service</tt> when validating the <code>ticket</code>. This means that it is
+ * This filter monitors the <code>service</code> URL so that it can receive the service
+ * ticket and process it. By default, this filter processes the URL <tt>/login/cas</tt>.
+ * When processing this URL, the value of {@link ServiceProperties#getService()} is used
+ * as the <tt>service</tt> when validating the <code>ticket</code>. This means that it is
  * important that {@link ServiceProperties#getService()} specifies the same value as the
  * <tt>filterProcessesUrl</tt>.
  * <p>
  * Processing the service ticket involves creating a
- * <code>UsernamePasswordAuthenticationToken</code> which uses
- * {@link #CAS_STATEFUL_IDENTIFIER} for the <code>principal</code> and the opaque ticket
- * string as the <code>credentials</code>.
+ * <code>CasServiceTicketAuthenticationToken</code> which uses
+ * {@link CasServiceTicketAuthenticationToken#CAS_STATEFUL_IDENTIFIER} for the
+ * <code>principal</code> and the opaque ticket string as the <code>credentials</code>.
  * <h2>Obtaining Proxy Granting Tickets</h2>
  * <p>
  * If specified, the filter can also monitor the <code>proxyReceptorUrl</code>. The filter
- * will respond to requests matching this url so that the CAS Server can provide a PGT to
- * the filter. Note that in addition to the <code>proxyReceptorUrl</code> a non-null
+ * will respond to the requests matching this url so that the CAS Server can provide a PGT
+ * to the filter. Note that in addition to the <code>proxyReceptorUrl</code> a non-null
  * <code>proxyGrantingTicketStorage</code> must be provided in order for the filter to
  * respond to proxy receptor requests. By configuring a shared
  * {@link ProxyGrantingTicketStorage} between the {@link TicketValidator} and the
- * CasAuthenticationFilter one can have the CasAuthenticationFilter handle the proxying
- * requirements for CAS.
+ * <code>CasAuthenticationFilter</code>, one can have the
+ * <code>CasAuthenticationFilter</code> handling the proxying requirements for CAS.
  * <h2>Proxy Tickets</h2>
  * <p>
- * The filter can process tickets present on any url. This is useful when wanting to
- * process proxy tickets. In order for proxy tickets to get processed
+ * The filter can process tickets present on any url. This is useful when one wants to
+ * process proxy tickets. In order for proxy tickets to get processed,
  * {@link ServiceProperties#isAuthenticateAllArtifacts()} must return <code>true</code>.
  * Additionally, if the request is already authenticated, authentication will <b>not</b>
  * occur. Last, {@link AuthenticationDetailsSource#buildDetails(Object)} must return a
  * {@link ServiceAuthenticationDetails}. This can be accomplished using the
- * {@link ServiceAuthenticationDetailsSource}. In this case
+ * {@link ServiceAuthenticationDetailsSource}. In this case,
  * {@link ServiceAuthenticationDetails#getServiceUrl()} will be used for the service url.
  * <p>
  * Processing the proxy ticket involves creating a
- * <code>UsernamePasswordAuthenticationToken</code> which uses
- * {@link #CAS_STATELESS_IDENTIFIER} for the <code>principal</code> and the opaque ticket
- * string as the <code>credentials</code>. When a proxy ticket is successfully
- * authenticated, the FilterChain continues and the
+ * <code>CasServiceTicketAuthenticationToken</code> which uses
+ * {@link CasServiceTicketAuthenticationToken#CAS_STATELESS_IDENTIFIER} for the
+ * <code>principal</code> and the opaque ticket string as the <code>credentials</code>.
+ * When a proxy ticket is successfully authenticated, the FilterChain continues and the
  * <code>authenticationSuccessHandler</code> is not used.
  * <h2>Notes about the <code>AuthenticationManager</code></h2>
  * <p>
  * The configured <code>AuthenticationManager</code> is expected to provide a provider
- * that can recognise <code>UsernamePasswordAuthenticationToken</code>s containing this
+ * that can recognise <code>CasServiceTicketAuthenticationToken</code>s containing this
  * special <code>principal</code> name, and process them accordingly by validation with
  * the CAS server. Additionally, it should be capable of using the result of
  * {@link ServiceAuthenticationDetails#getServiceUrl()} as the service when validating the
@@ -133,7 +144,7 @@ import org.springframework.util.Assert;
  *     NOTE: In a real application you should not use an in memory implementation. You will also want
  *           to ensure to clean up expired tickets by calling ProxyGrantingTicketStorage.cleanup()
  *  --&gt;
- * &lt;b:bean id=&quot;pgtStorage&quot; class=&quot;org.jasig.cas.client.proxy.ProxyGrantingTicketStorageImpl&quot;/&gt;
+ * &lt;b:bean id=&quot;pgtStorage&quot; class=&quot;org.apereo.cas.client.proxy.ProxyGrantingTicketStorageImpl&quot;/&gt;
  * &lt;b:bean id=&quot;casAuthProvider&quot; class=&quot;org.springframework.security.cas.authentication.CasAuthenticationProvider&quot;
  *     p:serviceProperties-ref=&quot;serviceProperties&quot;
  *     p:key=&quot;casAuthProviderKey&quot;&gt;
@@ -145,7 +156,7 @@ import org.springframework.util.Assert;
  *     &lt;/b:property&gt;
  *     &lt;b:property name=&quot;ticketValidator&quot;&gt;
  *         &lt;b:bean
- *             class=&quot;org.jasig.cas.client.validation.Cas20ProxyTicketValidator&quot;
+ *             class=&quot;org.apereo.cas.client.validation.Cas20ProxyTicketValidator&quot;
  *             p:acceptAnyProxy=&quot;true&quot;
  *             p:proxyCallbackUrl=&quot;https://service.example.com/cas-sample/login/cas/proxyreceptor&quot;
  *             p:proxyGrantingTicketStorage-ref=&quot;pgtStorage&quot;&gt;
@@ -177,19 +188,6 @@ import org.springframework.util.Assert;
 public class CasAuthenticationFilter extends AbstractAuthenticationProcessingFilter {
 
 	/**
-	 * Used to identify a CAS request for a stateful user agent, such as a web browser.
-	 */
-	public static final String CAS_STATEFUL_IDENTIFIER = "_cas_stateful_";
-
-	/**
-	 * Used to identify a CAS request for a stateless user agent, such as a remoting
-	 * protocol client (e.g. Hessian, Burlap, SOAP etc). Results in a more aggressive
-	 * caching strategy being used, as the absence of a <code>HttpSession</code> will
-	 * result in a new authentication attempt on every request.
-	 */
-	public static final String CAS_STATELESS_IDENTIFIER = "_cas_stateless_";
-
-	/**
 	 * The last portion of the receptor url, i.e. /proxy/receptor
 	 */
 	private RequestMatcher proxyReceptorMatcher;
@@ -205,9 +203,23 @@ public class CasAuthenticationFilter extends AbstractAuthenticationProcessingFil
 
 	private AuthenticationFailureHandler proxyFailureHandler = new SimpleUrlAuthenticationFailureHandler();
 
+	private SecurityContextRepository securityContextRepository = new HttpSessionSecurityContextRepository();
+
+	private SecurityContextHolderStrategy securityContextHolderStrategy = SecurityContextHolder
+		.getContextHolderStrategy();
+
+	private RedirectStrategy redirectStrategy = new DefaultRedirectStrategy();
+
+	private RequestCache requestCache = new HttpSessionRequestCache();
+
+	private final AuthenticationTrustResolver trustResolver = new AuthenticationTrustResolverImpl();
+
 	public CasAuthenticationFilter() {
 		super("/login/cas");
+		RequestMatcher processUri = pathPattern("/login/cas");
+		setRequiresAuthenticationRequestMatcher(processUri);
 		setAuthenticationFailureHandler(new SimpleUrlAuthenticationFailureHandler());
+		setSecurityContextRepository(this.securityContextRepository);
 	}
 
 	@Override
@@ -220,9 +232,11 @@ public class CasAuthenticationFilter extends AbstractAuthenticationProcessingFil
 		}
 		this.logger.debug(
 				LogMessage.format("Authentication success. Updating SecurityContextHolder to contain: %s", authResult));
-		SecurityContext context = SecurityContextHolder.createEmptyContext();
+
+		SecurityContext context = this.securityContextHolderStrategy.createEmptyContext();
 		context.setAuthentication(authResult);
-		SecurityContextHolder.setContext(context);
+		this.securityContextHolderStrategy.setContext(context);
+		this.securityContextRepository.saveContext(context, request, response);
 		if (this.eventPublisher != null) {
 			this.eventPublisher.publishEvent(new InteractiveAuthenticationSuccessEvent(authResult, this.getClass()));
 		}
@@ -236,17 +250,33 @@ public class CasAuthenticationFilter extends AbstractAuthenticationProcessingFil
 		// request has been processed
 		if (proxyReceptorRequest(request)) {
 			this.logger.debug("Responding to proxy receptor request");
-			CommonUtils.readAndRespondToProxyReceptorRequest(request, response, this.proxyGrantingTicketStorage);
+			WebUtils.readAndRespondToProxyReceptorRequest(request, response, this.proxyGrantingTicketStorage);
 			return null;
 		}
-		boolean serviceTicketRequest = serviceTicketRequest(request, response);
-		String username = serviceTicketRequest ? CAS_STATEFUL_IDENTIFIER : CAS_STATELESS_IDENTIFIER;
-		String password = obtainArtifact(request);
-		if (password == null) {
+		String serviceTicket = obtainArtifact(request);
+		if (!StringUtils.hasText(serviceTicket)) {
+			HttpSession session = request.getSession(false);
+			if (session != null && session
+				.getAttribute(CasGatewayAuthenticationRedirectFilter.CAS_GATEWAY_AUTHENTICATION_ATTR) != null) {
+				this.logger.debug("Failed authentication response from CAS gateway request");
+				session.removeAttribute(CasGatewayAuthenticationRedirectFilter.CAS_GATEWAY_AUTHENTICATION_ATTR);
+				SavedRequest savedRequest = this.requestCache.getRequest(request, response);
+				if (savedRequest != null) {
+					String redirectUrl = savedRequest.getRedirectUrl();
+					this.logger.debug(LogMessage.format("Redirecting to: %s", redirectUrl));
+					this.requestCache.removeRequest(request, response);
+					this.redirectStrategy.sendRedirect(request, response, redirectUrl);
+					return null;
+				}
+			}
+
 			this.logger.debug("Failed to obtain an artifact (cas ticket)");
-			password = "";
+			serviceTicket = "";
 		}
-		UsernamePasswordAuthenticationToken authRequest = new UsernamePasswordAuthenticationToken(username, password);
+		boolean serviceTicketRequest = serviceTicketRequest(request, response);
+		CasServiceTicketAuthenticationToken authRequest = serviceTicketRequest
+				? CasServiceTicketAuthenticationToken.stateful(serviceTicket)
+				: CasServiceTicketAuthenticationToken.stateless(serviceTicket);
 		authRequest.setDetails(this.authenticationDetailsSource.buildDetails(request));
 		return this.getAuthenticationManager().authenticate(authRequest);
 	}
@@ -292,8 +322,20 @@ public class CasAuthenticationFilter extends AbstractAuthenticationProcessingFil
 		super.setAuthenticationFailureHandler(new CasAuthenticationFailureHandler(failureHandler));
 	}
 
+	/**
+	 * Use this {@code RequestMatcher} to match proxy receptor requests. Without setting
+	 * this matcher, {@link CasAuthenticationFilter} will not capture any proxy receptor
+	 * requets.
+	 * @param proxyReceptorMatcher the {@link RequestMatcher} to use
+	 * @since 6.5
+	 */
+	public final void setProxyReceptorMatcher(RequestMatcher proxyReceptorMatcher) {
+		Assert.notNull(proxyReceptorMatcher, "proxyReceptorMatcher cannot be null");
+		this.proxyReceptorMatcher = proxyReceptorMatcher;
+	}
+
 	public final void setProxyReceptorUrl(final String proxyReceptorUrl) {
-		this.proxyReceptorMatcher = new AntPathRequestMatcher("/**" + proxyReceptorUrl);
+		this.proxyReceptorMatcher = pathPattern(proxyReceptorUrl);
 	}
 
 	public final void setProxyGrantingTicketStorage(final ProxyGrantingTicketStorage proxyGrantingTicketStorage) {
@@ -303,6 +345,40 @@ public class CasAuthenticationFilter extends AbstractAuthenticationProcessingFil
 	public final void setServiceProperties(final ServiceProperties serviceProperties) {
 		this.artifactParameter = serviceProperties.getArtifactParameter();
 		this.authenticateAllArtifacts = serviceProperties.isAuthenticateAllArtifacts();
+	}
+
+	@Override
+	public void setSecurityContextRepository(SecurityContextRepository securityContextRepository) {
+		super.setSecurityContextRepository(securityContextRepository);
+		this.securityContextRepository = securityContextRepository;
+	}
+
+	@Override
+	public void setSecurityContextHolderStrategy(SecurityContextHolderStrategy securityContextHolderStrategy) {
+		super.setSecurityContextHolderStrategy(securityContextHolderStrategy);
+		this.securityContextHolderStrategy = securityContextHolderStrategy;
+	}
+
+	/**
+	 * Set the {@link RedirectStrategy} used to redirect to the saved request if there is
+	 * one saved. Defaults to {@link DefaultRedirectStrategy}.
+	 * @param redirectStrategy the redirect strategy to use
+	 * @since 6.3
+	 */
+	public final void setRedirectStrategy(RedirectStrategy redirectStrategy) {
+		Assert.notNull(redirectStrategy, "redirectStrategy cannot be null");
+		this.redirectStrategy = redirectStrategy;
+	}
+
+	/**
+	 * The {@link RequestCache} used to retrieve the saved request in failed gateway
+	 * authentication scenarios.
+	 * @param requestCache the request cache to use
+	 * @since 6.3
+	 */
+	public final void setRequestCache(RequestCache requestCache) {
+		Assert.notNull(requestCache, "requestCache cannot be null");
+		this.requestCache = requestCache;
 	}
 
 	/**
@@ -338,8 +414,7 @@ public class CasAuthenticationFilter extends AbstractAuthenticationProcessingFil
 	 */
 	private boolean authenticated() {
 		Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-		return authentication != null && authentication.isAuthenticated()
-				&& !(authentication instanceof AnonymousAuthenticationToken);
+		return this.trustResolver.isAuthenticated(authentication);
 	}
 
 	/**

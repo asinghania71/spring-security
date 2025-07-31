@@ -16,10 +16,9 @@
 
 package org.springframework.security.web.authentication.rememberme;
 
-import javax.servlet.FilterChain;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -36,14 +35,17 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.authentication.NullRememberMeServices;
 import org.springframework.security.web.authentication.RememberMeServices;
 import org.springframework.security.web.authentication.SimpleUrlAuthenticationSuccessHandler;
+import org.springframework.security.web.authentication.session.SessionAuthenticationStrategy;
+import org.springframework.security.web.context.SecurityContextRepository;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyZeroInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 /**
  * Tests {@link RememberMeAuthenticationFilter}.
@@ -67,13 +69,13 @@ public class RememberMeAuthenticationFilterTests {
 	@Test
 	public void testDetectsAuthenticationManagerProperty() {
 		assertThatIllegalArgumentException()
-				.isThrownBy(() -> new RememberMeAuthenticationFilter(null, new NullRememberMeServices()));
+			.isThrownBy(() -> new RememberMeAuthenticationFilter(null, new NullRememberMeServices()));
 	}
 
 	@Test
 	public void testDetectsRememberMeServicesProperty() {
 		assertThatIllegalArgumentException()
-				.isThrownBy(() -> new RememberMeAuthenticationFilter(mock(AuthenticationManager.class), null));
+			.isThrownBy(() -> new RememberMeAuthenticationFilter(mock(AuthenticationManager.class), null));
 	}
 
 	@Test
@@ -149,7 +151,41 @@ public class RememberMeAuthenticationFilterTests {
 		filter.doFilter(request, response, fc);
 		assertThat(response.getRedirectedUrl()).isEqualTo("/target");
 		// Should return after success handler is invoked, so chain should not proceed
-		verifyZeroInteractions(fc);
+		verifyNoMoreInteractions(fc);
+	}
+
+	@Test
+	public void securityContextRepositoryInvokedIfSet() throws Exception {
+		SecurityContextRepository securityContextRepository = mock(SecurityContextRepository.class);
+		AuthenticationManager am = mock(AuthenticationManager.class);
+		given(am.authenticate(this.remembered)).willReturn(this.remembered);
+		RememberMeAuthenticationFilter filter = new RememberMeAuthenticationFilter(am,
+				new MockRememberMeServices(this.remembered));
+		filter.setAuthenticationSuccessHandler(new SimpleUrlAuthenticationSuccessHandler("/target"));
+		filter.setSecurityContextRepository(securityContextRepository);
+		MockHttpServletRequest request = new MockHttpServletRequest();
+		MockHttpServletResponse response = new MockHttpServletResponse();
+		FilterChain fc = mock(FilterChain.class);
+		request.setRequestURI("x");
+		filter.doFilter(request, response, fc);
+		verify(securityContextRepository).saveContext(any(), eq(request), eq(response));
+	}
+
+	@Test
+	public void sessionAuthenticationStrategyInvokedIfSet() throws Exception {
+		SessionAuthenticationStrategy sessionAuthenticationStrategy = mock(SessionAuthenticationStrategy.class);
+		AuthenticationManager am = mock(AuthenticationManager.class);
+		given(am.authenticate(this.remembered)).willReturn(this.remembered);
+		RememberMeAuthenticationFilter filter = new RememberMeAuthenticationFilter(am,
+				new MockRememberMeServices(this.remembered));
+		filter.setAuthenticationSuccessHandler(new SimpleUrlAuthenticationSuccessHandler("/target"));
+		filter.setSessionAuthenticationStrategy(sessionAuthenticationStrategy);
+		MockHttpServletRequest request = new MockHttpServletRequest();
+		MockHttpServletResponse response = new MockHttpServletResponse();
+		FilterChain fc = mock(FilterChain.class);
+		request.setRequestURI("x");
+		filter.doFilter(request, response, fc);
+		verify(sessionAuthenticationStrategy).onAuthentication(any(), eq(request), eq(response));
 	}
 
 	private class MockRememberMeServices implements RememberMeServices {

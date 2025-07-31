@@ -18,9 +18,8 @@ package org.springframework.security.web.access.channel;
 
 import java.io.IOException;
 
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -35,7 +34,11 @@ import org.springframework.util.Assert;
 
 /**
  * @author Luke Taylor
+ * @deprecated please use
+ * {@link org.springframework.security.web.transport.HttpsRedirectFilter} and its
+ * associated {@link PortMapper}
  */
+@Deprecated
 public abstract class AbstractRetryEntryPoint implements ChannelEntryPoint {
 
 	protected final Log logger = LogFactory.getLog(getClass());
@@ -87,11 +90,13 @@ public abstract class AbstractRetryEntryPoint implements ChannelEntryPoint {
 		this.portMapper = portMapper;
 	}
 
+	@Deprecated(forRemoval = true)
 	public void setPortResolver(PortResolver portResolver) {
 		Assert.notNull(portResolver, "portResolver cannot be null");
 		this.portResolver = portResolver;
 	}
 
+	@Deprecated(forRemoval = true)
 	protected final PortResolver getPortResolver() {
 		return this.portResolver;
 	}

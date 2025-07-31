@@ -1,96 +1,164 @@
 apply plugin: 'io.spring.convention.spring-module'
-apply plugin: 'nebula.facet'
 
-facets {
-	opensaml3Main {
-		parentSourceSet = 'main'
-	}
-	opensaml4Main {
-		parentSourceSet = 'main'
-	}
-	opensaml3Test {
-		parentSourceSet = 'opensaml3Main'
-	}
-	opensaml4Test {
-		parentSourceSet = 'opensaml4Main'
-	}
+configurations {
+	opensamlFiveMain { extendsFrom(optional, provided) }
+	opensamlFiveTest { extendsFrom(opensamlFiveMain, testImplementation, testRuntimeOnly) }
 }
 
 sourceSets {
-	opensaml3Test {
-		compileClasspath += sourceSets.test.output
-		runtimeClasspath += sourceSets.test.output
+	opensaml4Main {
+		java {
+			compileClasspath += main.output
+			srcDir 'src/opensaml4Main/java'
+		}
+	}
+	opensaml5Main {
+		java {
+			compileClasspath = main.output + configurations.opensamlFiveMain
+			srcDir 'src/opensaml5Main/java'
+		}
 	}
 	opensaml4Test {
-		compileClasspath += sourceSets.test.output
-		runtimeClasspath += sourceSets.test.output
+		java {
+			compileClasspath += main.output + test.output + opensaml4Main.output + test.compileClasspath
+			runtimeClasspath += main.output + test.output + opensaml4Main.output + test.runtimeClasspath
+			srcDir 'src/opensaml4Test/java'
+		}
+	}
+	opensaml5Test {
+		java {
+			compileClasspath = main.output + test.output + opensaml5Main.output + configurations.opensamlFiveTest
+			runtimeClasspath = main.output + test.output + opensaml5Main.output + configurations.opensamlFiveTest
+			srcDir 'src/opensaml5Test/java'
+		}
 	}
 }
 
-configurations {
-	opensaml3TestImplementation.extendsFrom testImplementation
-	opensaml4TestImplementation.extendsFrom testImplementation
-	opensaml4MainImplementation {
-		canBeConsumed = true
+sourceSets.configureEach { set ->
+	if (!set.name.containsIgnoreCase("main")) {
+		return
 	}
-}
+	def from = copySpec {
+		from("$projectDir/src/$set.name/java/org/springframework/security/saml2/internal")
+	}
 
-compileOpensaml4MainJava {
-	sourceCompatibility = '11'
-	targetCompatibility = '11'
+	copy {
+		into "$projectDir/src/$set.name/java/org/springframework/security/saml2/provider/service/authentication/logout"
+		filter { line -> line.replaceAll(".saml2.internal", ".saml2.provider.service.authentication.logout") }
+		with from
+	}
+
+	copy {
+		into "$projectDir/src/$set.name/java/org/springframework/security/saml2/provider/service/authentication"
+		filter { line -> line.replaceAll(".saml2.internal", ".saml2.provider.service.authentication") }
+		with from
+	}
+
+	copy {
+		into "$projectDir/src/$set.name/java/org/springframework/security/saml2/provider/service/metadata"
+		filter { line -> line.replaceAll(".saml2.internal", ".saml2.provider.service.metadata") }
+		with from
+	}
+
+	copy {
+		into "$projectDir/src/$set.name/java/org/springframework/security/saml2/provider/service/web/authentication/logout"
+		filter { line -> line.replaceAll(".saml2.internal", ".saml2.provider.service.web.authentication.logout") }
+		with from
+	}
+
+	copy {
+		into "$projectDir/src/$set.name/java/org/springframework/security/saml2/provider/service/web/authentication"
+		filter { line -> line.replaceAll(".saml2.internal", ".saml2.provider.service.web.authentication") }
+		with from
+	}
+
+	copy {
+		into "$projectDir/src/$set.name/java/org/springframework/security/saml2/provider/service/web"
+		filter { line -> line.replaceAll(".saml2.internal", ".saml2.provider.service.web") }
+		with from
+	}
+
+	copy {
+		into "$projectDir/src/$set.name/java/org/springframework/security/saml2/provider/service/registration"
+		filter { line -> line.replaceAll(".saml2.internal", ".saml2.provider.service.registration") }
+		with from
+	}
 }
 
 dependencies {
 	management platform(project(":spring-security-dependencies"))
 	api project(':spring-security-web')
-	api "org.opensaml:opensaml-core"
-	api "org.opensaml:opensaml-saml-api"
-	api "org.opensaml:opensaml-saml-impl"
-	opensaml4MainImplementation "org.opensaml:opensaml-core:4.1.1"
-	opensaml4MainImplementation "org.opensaml:opensaml-saml-api:4.1.1"
-	opensaml4MainImplementation "org.opensaml:opensaml-saml-impl:4.1.1"
+
+	api ('org.opensaml:opensaml-saml-api')  {
+		exclude group: 'commons-logging', module: 'commons-logging'
+	}
+	api ('org.opensaml:opensaml-saml-impl')  {
+		exclude group: 'commons-logging', module: 'commons-logging'
+	}
+
+	opensamlFiveMain (libs.org.opensaml.opensaml5.saml.api)  {
+		exclude group: 'commons-logging', module: 'commons-logging'
+	}
+	opensamlFiveMain (libs.org.opensaml.opensaml5.saml.impl)  {
+		exclude group: 'commons-logging', module: 'commons-logging'
+	}
 
 	provided 'jakarta.servlet:jakarta.servlet-api'
 
+	optional 'com.fasterxml.jackson.core:jackson-databind'
+	optional 'org.springframework:spring-jdbc'
+
+	testImplementation project(path: ':spring-security-web', configuration: 'tests')
 	testImplementation 'com.squareup.okhttp3:mockwebserver'
 	testImplementation "org.assertj:assertj-core"
+	testImplementation "org.skyscreamer:jsonassert"
 	testImplementation "org.junit.jupiter:junit-jupiter-api"
 	testImplementation "org.junit.jupiter:junit-jupiter-params"
 	testImplementation "org.junit.jupiter:junit-jupiter-engine"
 	testImplementation "org.mockito:mockito-core"
-	testImplementation "org.mockito:mockito-inline"
 	testImplementation "org.mockito:mockito-junit-jupiter"
 	testImplementation "org.springframework:spring-test"
+
+	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+	testRuntimeOnly 'org.hsqldb:hsqldb'
 }
 
-project.tasks.matching { t -> t.name == "jar"}.configureEach {
+jar {
 	duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-	from {
-		compileOpensaml3MainJava
-	}
-	from {
-		compileOpensaml4MainJava
-	}
+	from sourceSets.opensaml4Main.output
+	from sourceSets.opensaml5Main.output
 }
 
-project.tasks.matching { t -> t.name == "sourcesJar"}.configureEach {
-	from {
-		sourceSets.opensaml3Main.allSource
-	}
-	from {
-		sourceSets.opensaml4Main.allSource
-	}
+sourcesJar {
+	duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+	from sourceSets.opensaml4Main.allJava
+	from sourceSets.opensaml5Main.allJava
 }
 
+testJar {
+	duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+	from sourceSets.opensaml4Test.output
+	from sourceSets.opensaml5Test.output
+}
 
 javadoc {
-	source += sourceSets.opensaml3Main.allJava + sourceSets.opensaml4Main.allJava
+	classpath += configurations.opensamlFiveMain
+	source = sourceSets.main.allJava + sourceSets.opensaml4Main.allJava + sourceSets.opensaml5Main.allJava
 }
 
-opensaml3Test {
+tasks.register("opensaml4Test", Test) {
 	useJUnitPlatform()
+	testClassesDirs = sourceSets.opensaml4Test.output.classesDirs
+	classpath = sourceSets.opensaml4Test.runtimeClasspath
 }
 
-opensaml4Test {
+tasks.register("opensaml5Test", Test) {
 	useJUnitPlatform()
+	testClassesDirs = sourceSets.opensaml5Test.output.classesDirs
+	classpath = sourceSets.opensaml5Test.output + sourceSets.opensaml5Test.runtimeClasspath
+}
+
+tasks.named("test") {
+	dependsOn opensaml4Test
+	dependsOn opensaml5Test
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2019-2021 the original author or authors.
+ * Copyright 2019-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -55,6 +55,7 @@ import org.springframework.security.rsocket.util.matcher.RoutePayloadExchangeMat
  * A minimal example can be found below:
  *
  * <pre class="code">
+ * &#064;Configuration
  * &#064;EnableRSocketSecurity
  * public class SecurityConfig {
  *     &#064;Bean
@@ -82,6 +83,7 @@ import org.springframework.security.rsocket.util.matcher.RoutePayloadExchangeMat
  * A more advanced configuration can be seen below:
  *
  * <pre class="code">
+ * &#064;Configuration
  * &#064;EnableRSocketSecurity
  * public class SecurityConfig {
  *     &#064;Bean
@@ -106,6 +108,7 @@ import org.springframework.security.rsocket.util.matcher.RoutePayloadExchangeMat
  * @author Luis Felipe Vega
  * @author Manuel Tejeda
  * @author Ebert Toribio
+ * @author Ngoc Nhan
  * @since 5.2
  */
 public class RSocketSecurity {
@@ -236,15 +239,12 @@ public class RSocketSecurity {
 		return getBeanOrNull(ResolvableType.forClass(beanClass));
 	}
 
+	@SuppressWarnings("unchecked")
 	private <T> T getBeanOrNull(ResolvableType type) {
 		if (this.context == null) {
 			return null;
 		}
-		String[] names = this.context.getBeanNamesForType(type);
-		if (names.length == 1) {
-			return (T) this.context.getBean(names[0]);
-		}
-		return null;
+		return (T) this.context.getBeanProvider(type).getIfUnique();
 	}
 
 	protected void setApplicationContext(ApplicationContext applicationContext) throws BeansException {
@@ -351,7 +351,7 @@ public class RSocketSecurity {
 	public class AuthorizePayloadsSpec {
 
 		private PayloadExchangeMatcherReactiveAuthorizationManager.Builder authzBuilder = PayloadExchangeMatcherReactiveAuthorizationManager
-				.builder();
+			.builder();
 
 		public Access setup() {
 			return matcher(PayloadExchangeMatchers.setup());
@@ -427,7 +427,7 @@ public class RSocketSecurity {
 			public AuthorizePayloadsSpec access(
 					ReactiveAuthorizationManager<PayloadExchangeAuthorizationContext> authorization) {
 				AuthorizePayloadsSpec.this.authzBuilder
-						.add(new PayloadExchangeMatcherEntry<>(this.matcher, authorization));
+					.add(new PayloadExchangeMatcherEntry<>(this.matcher, authorization));
 				return AuthorizePayloadsSpec.this;
 			}
 

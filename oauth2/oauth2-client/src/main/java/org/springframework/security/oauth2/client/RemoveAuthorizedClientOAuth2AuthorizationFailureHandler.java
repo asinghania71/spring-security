@@ -103,16 +103,15 @@ public class RemoveAuthorizedClientOAuth2AuthorizationFailureHandler implements 
 		Assert.notNull(authorizedClientRemover, "authorizedClientRemover cannot be null");
 		Assert.notNull(removeAuthorizedClientErrorCodes, "removeAuthorizedClientErrorCodes cannot be null");
 		this.removeAuthorizedClientErrorCodes = Collections
-				.unmodifiableSet(new HashSet<>(removeAuthorizedClientErrorCodes));
+			.unmodifiableSet(new HashSet<>(removeAuthorizedClientErrorCodes));
 		this.delegate = authorizedClientRemover;
 	}
 
 	@Override
 	public void onAuthorizationFailure(OAuth2AuthorizationException authorizationException, Authentication principal,
 			Map<String, Object> attributes) {
-		if (authorizationException instanceof ClientAuthorizationException
+		if (authorizationException instanceof ClientAuthorizationException clientAuthorizationException
 				&& hasRemovalErrorCode(authorizationException)) {
-			ClientAuthorizationException clientAuthorizationException = (ClientAuthorizationException) authorizationException;
 			this.delegate.removeAuthorizedClient(clientAuthorizationException.getClientRegistrationId(), principal,
 					attributes);
 		}
@@ -143,9 +142,9 @@ public class RemoveAuthorizedClientOAuth2AuthorizationFailureHandler implements 
 		 * @param principal the End-User {@link Authentication} (Resource Owner)
 		 * @param attributes an immutable {@code Map} of (optional) attributes present
 		 * under certain conditions. For example, this might contain a
-		 * {@code javax.servlet.http.HttpServletRequest} and
-		 * {@code javax.servlet.http.HttpServletResponse} if the authorization was
-		 * performed within the context of a {@code javax.servlet.ServletContext}.
+		 * {@code jakarta.servlet.http.HttpServletRequest} and
+		 * {@code jakarta.servlet.http.HttpServletResponse} if the authorization was
+		 * performed within the context of a {@code jakarta.servlet.ServletContext}.
 		 */
 		void removeAuthorizedClient(String clientRegistrationId, Authentication principal,
 				Map<String, Object> attributes);

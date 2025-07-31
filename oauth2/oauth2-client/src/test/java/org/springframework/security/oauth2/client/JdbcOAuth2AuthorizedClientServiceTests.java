@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2020 the original author or authors.
+ * Copyright 2002-2025 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -60,6 +60,7 @@ import static org.assertj.core.api.Assertions.within;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
@@ -114,8 +115,8 @@ public class JdbcOAuth2AuthorizedClientServiceTests {
 	@Test
 	public void constructorWhenClientRegistrationRepositoryIsNullThenThrowIllegalArgumentException() {
 		assertThatIllegalArgumentException()
-				.isThrownBy(() -> new JdbcOAuth2AuthorizedClientService(this.jdbcOperations, null))
-				.withMessage("clientRegistrationRepository cannot be null");
+			.isThrownBy(() -> new JdbcOAuth2AuthorizedClientService(this.jdbcOperations, null))
+			.withMessage("clientRegistrationRepository cannot be null");
 	}
 
 	@Test
@@ -158,7 +159,7 @@ public class JdbcOAuth2AuthorizedClientServiceTests {
 	@Test
 	public void loadAuthorizedClientWhenDoesNotExistThenReturnNull() {
 		OAuth2AuthorizedClient authorizedClient = this.authorizedClientService
-				.loadAuthorizedClient("registration-not-found", "principalName");
+			.loadAuthorizedClient("registration-not-found", "principalName");
 		assertThat(authorizedClient).isNull();
 	}
 
@@ -168,21 +169,21 @@ public class JdbcOAuth2AuthorizedClientServiceTests {
 		OAuth2AuthorizedClient expected = createAuthorizedClient(principal, this.clientRegistration);
 		this.authorizedClientService.saveAuthorizedClient(expected, principal);
 		OAuth2AuthorizedClient authorizedClient = this.authorizedClientService
-				.loadAuthorizedClient(this.clientRegistration.getRegistrationId(), principal.getName());
+			.loadAuthorizedClient(this.clientRegistration.getRegistrationId(), principal.getName());
 		assertThat(authorizedClient).isNotNull();
 		assertThat(authorizedClient.getClientRegistration()).isEqualTo(expected.getClientRegistration());
 		assertThat(authorizedClient.getPrincipalName()).isEqualTo(expected.getPrincipalName());
 		assertThat(authorizedClient.getAccessToken().getTokenType())
-				.isEqualTo(expected.getAccessToken().getTokenType());
+			.isEqualTo(expected.getAccessToken().getTokenType());
 		assertThat(authorizedClient.getAccessToken().getTokenValue())
-				.isEqualTo(expected.getAccessToken().getTokenValue());
+			.isEqualTo(expected.getAccessToken().getTokenValue());
 		assertThat(authorizedClient.getAccessToken().getIssuedAt()).isCloseTo(expected.getAccessToken().getIssuedAt(),
 				within(1, ChronoUnit.MILLIS));
 		assertThat(authorizedClient.getAccessToken().getExpiresAt()).isCloseTo(expected.getAccessToken().getExpiresAt(),
 				within(1, ChronoUnit.MILLIS));
 		assertThat(authorizedClient.getAccessToken().getScopes()).isEqualTo(expected.getAccessToken().getScopes());
 		assertThat(authorizedClient.getRefreshToken().getTokenValue())
-				.isEqualTo(expected.getRefreshToken().getTokenValue());
+			.isEqualTo(expected.getRefreshToken().getTokenValue());
 		assertThat(authorizedClient.getRefreshToken().getIssuedAt()).isCloseTo(expected.getRefreshToken().getIssuedAt(),
 				within(1, ChronoUnit.MILLIS));
 	}
@@ -194,18 +195,18 @@ public class JdbcOAuth2AuthorizedClientServiceTests {
 		OAuth2AuthorizedClient expected = createAuthorizedClient(principal, this.clientRegistration);
 		this.authorizedClientService.saveAuthorizedClient(expected, principal);
 		assertThatExceptionOfType(DataRetrievalFailureException.class)
-				.isThrownBy(() -> this.authorizedClientService
-						.loadAuthorizedClient(this.clientRegistration.getRegistrationId(), principal.getName()))
-				.withMessage("The ClientRegistration with id '" + this.clientRegistration.getRegistrationId()
-						+ "' exists in the data source, however, it was not found in the ClientRegistrationRepository.");
+			.isThrownBy(() -> this.authorizedClientService
+				.loadAuthorizedClient(this.clientRegistration.getRegistrationId(), principal.getName()))
+			.withMessage("The ClientRegistration with id '" + this.clientRegistration.getRegistrationId()
+					+ "' exists in the data source, however, it was not found in the ClientRegistrationRepository.");
 	}
 
 	@Test
 	public void saveAuthorizedClientWhenAuthorizedClientIsNullThenThrowIllegalArgumentException() {
 		Authentication principal = createPrincipal();
 		assertThatIllegalArgumentException()
-				.isThrownBy(() -> this.authorizedClientService.saveAuthorizedClient(null, principal))
-				.withMessage("authorizedClient cannot be null");
+			.isThrownBy(() -> this.authorizedClientService.saveAuthorizedClient(null, principal))
+			.withMessage("authorizedClient cannot be null");
 	}
 
 	@Test
@@ -213,8 +214,8 @@ public class JdbcOAuth2AuthorizedClientServiceTests {
 		Authentication principal = createPrincipal();
 		OAuth2AuthorizedClient authorizedClient = createAuthorizedClient(principal, this.clientRegistration);
 		assertThatIllegalArgumentException()
-				.isThrownBy(() -> this.authorizedClientService.saveAuthorizedClient(authorizedClient, null))
-				.withMessage("principal cannot be null");
+			.isThrownBy(() -> this.authorizedClientService.saveAuthorizedClient(authorizedClient, null))
+			.withMessage("principal cannot be null");
 	}
 
 	@Test
@@ -223,21 +224,21 @@ public class JdbcOAuth2AuthorizedClientServiceTests {
 		OAuth2AuthorizedClient expected = createAuthorizedClient(principal, this.clientRegistration);
 		this.authorizedClientService.saveAuthorizedClient(expected, principal);
 		OAuth2AuthorizedClient authorizedClient = this.authorizedClientService
-				.loadAuthorizedClient(this.clientRegistration.getRegistrationId(), principal.getName());
+			.loadAuthorizedClient(this.clientRegistration.getRegistrationId(), principal.getName());
 		assertThat(authorizedClient).isNotNull();
 		assertThat(authorizedClient.getClientRegistration()).isEqualTo(expected.getClientRegistration());
 		assertThat(authorizedClient.getPrincipalName()).isEqualTo(expected.getPrincipalName());
 		assertThat(authorizedClient.getAccessToken().getTokenType())
-				.isEqualTo(expected.getAccessToken().getTokenType());
+			.isEqualTo(expected.getAccessToken().getTokenType());
 		assertThat(authorizedClient.getAccessToken().getTokenValue())
-				.isEqualTo(expected.getAccessToken().getTokenValue());
+			.isEqualTo(expected.getAccessToken().getTokenValue());
 		assertThat(authorizedClient.getAccessToken().getIssuedAt()).isCloseTo(expected.getAccessToken().getIssuedAt(),
 				within(1, ChronoUnit.MILLIS));
 		assertThat(authorizedClient.getAccessToken().getExpiresAt()).isCloseTo(expected.getAccessToken().getExpiresAt(),
 				within(1, ChronoUnit.MILLIS));
 		assertThat(authorizedClient.getAccessToken().getScopes()).isEqualTo(expected.getAccessToken().getScopes());
 		assertThat(authorizedClient.getRefreshToken().getTokenValue())
-				.isEqualTo(expected.getRefreshToken().getTokenValue());
+			.isEqualTo(expected.getRefreshToken().getTokenValue());
 		assertThat(authorizedClient.getRefreshToken().getIssuedAt()).isCloseTo(expected.getRefreshToken().getIssuedAt(),
 				within(1, ChronoUnit.MILLIS));
 		// Test save/load of NOT NULL attributes only
@@ -245,14 +246,14 @@ public class JdbcOAuth2AuthorizedClientServiceTests {
 		expected = createAuthorizedClient(principal, this.clientRegistration, true);
 		this.authorizedClientService.saveAuthorizedClient(expected, principal);
 		authorizedClient = this.authorizedClientService
-				.loadAuthorizedClient(this.clientRegistration.getRegistrationId(), principal.getName());
+			.loadAuthorizedClient(this.clientRegistration.getRegistrationId(), principal.getName());
 		assertThat(authorizedClient).isNotNull();
 		assertThat(authorizedClient.getClientRegistration()).isEqualTo(expected.getClientRegistration());
 		assertThat(authorizedClient.getPrincipalName()).isEqualTo(expected.getPrincipalName());
 		assertThat(authorizedClient.getAccessToken().getTokenType())
-				.isEqualTo(expected.getAccessToken().getTokenType());
+			.isEqualTo(expected.getAccessToken().getTokenType());
 		assertThat(authorizedClient.getAccessToken().getTokenValue())
-				.isEqualTo(expected.getAccessToken().getTokenValue());
+			.isEqualTo(expected.getAccessToken().getTokenValue());
 		assertThat(authorizedClient.getAccessToken().getIssuedAt()).isCloseTo(expected.getAccessToken().getIssuedAt(),
 				within(1, ChronoUnit.MILLIS));
 		assertThat(authorizedClient.getAccessToken().getExpiresAt()).isCloseTo(expected.getAccessToken().getExpiresAt(),
@@ -272,21 +273,21 @@ public class JdbcOAuth2AuthorizedClientServiceTests {
 		this.authorizedClientService.saveAuthorizedClient(updatedClient, principal);
 		// Then the saved client is updated
 		OAuth2AuthorizedClient savedClient = this.authorizedClientService
-				.loadAuthorizedClient(this.clientRegistration.getRegistrationId(), principal.getName());
+			.loadAuthorizedClient(this.clientRegistration.getRegistrationId(), principal.getName());
 		assertThat(savedClient).isNotNull();
 		assertThat(savedClient.getClientRegistration()).isEqualTo(updatedClient.getClientRegistration());
 		assertThat(savedClient.getPrincipalName()).isEqualTo(updatedClient.getPrincipalName());
 		assertThat(savedClient.getAccessToken().getTokenType())
-				.isEqualTo(updatedClient.getAccessToken().getTokenType());
+			.isEqualTo(updatedClient.getAccessToken().getTokenType());
 		assertThat(savedClient.getAccessToken().getTokenValue())
-				.isEqualTo(updatedClient.getAccessToken().getTokenValue());
+			.isEqualTo(updatedClient.getAccessToken().getTokenValue());
 		assertThat(savedClient.getAccessToken().getIssuedAt()).isCloseTo(updatedClient.getAccessToken().getIssuedAt(),
 				within(1, ChronoUnit.MILLIS));
 		assertThat(savedClient.getAccessToken().getExpiresAt()).isCloseTo(updatedClient.getAccessToken().getExpiresAt(),
 				within(1, ChronoUnit.MILLIS));
 		assertThat(savedClient.getAccessToken().getScopes()).isEqualTo(updatedClient.getAccessToken().getScopes());
 		assertThat(savedClient.getRefreshToken().getTokenValue())
-				.isEqualTo(updatedClient.getRefreshToken().getTokenValue());
+			.isEqualTo(updatedClient.getRefreshToken().getTokenValue());
 		assertThat(savedClient.getRefreshToken().getIssuedAt()).isCloseTo(updatedClient.getRefreshToken().getIssuedAt(),
 				within(1, ChronoUnit.MILLIS));
 	}
@@ -306,22 +307,22 @@ public class JdbcOAuth2AuthorizedClientServiceTests {
 		this.authorizedClientService.loadAuthorizedClient(this.clientRegistration.getRegistrationId(),
 				principal.getName());
 		verify(authorizedClientRowMapper).mapRow(any(), anyInt());
-		verify(authorizedClientParametersMapper).apply(any());
+		verify(authorizedClientParametersMapper, atLeastOnce()).apply(any());
 	}
 
 	@Test
 	public void removeAuthorizedClientWhenClientRegistrationIdIsNullThenThrowIllegalArgumentException() {
 		assertThatIllegalArgumentException()
-				.isThrownBy(() -> this.authorizedClientService.removeAuthorizedClient(null, "principalName"))
-				.withMessage("clientRegistrationId cannot be empty");
+			.isThrownBy(() -> this.authorizedClientService.removeAuthorizedClient(null, "principalName"))
+			.withMessage("clientRegistrationId cannot be empty");
 	}
 
 	@Test
 	public void removeAuthorizedClientWhenPrincipalNameIsNullThenThrowIllegalArgumentException() {
 		assertThatIllegalArgumentException()
-				.isThrownBy(() -> this.authorizedClientService
-						.removeAuthorizedClient(this.clientRegistration.getRegistrationId(), null))
-				.withMessage("principalName cannot be empty");
+			.isThrownBy(() -> this.authorizedClientService
+				.removeAuthorizedClient(this.clientRegistration.getRegistrationId(), null))
+			.withMessage("principalName cannot be empty");
 	}
 
 	@Test
@@ -330,12 +331,12 @@ public class JdbcOAuth2AuthorizedClientServiceTests {
 		OAuth2AuthorizedClient authorizedClient = createAuthorizedClient(principal, this.clientRegistration);
 		this.authorizedClientService.saveAuthorizedClient(authorizedClient, principal);
 		authorizedClient = this.authorizedClientService
-				.loadAuthorizedClient(this.clientRegistration.getRegistrationId(), principal.getName());
+			.loadAuthorizedClient(this.clientRegistration.getRegistrationId(), principal.getName());
 		assertThat(authorizedClient).isNotNull();
 		this.authorizedClientService.removeAuthorizedClient(this.clientRegistration.getRegistrationId(),
 				principal.getName());
 		authorizedClient = this.authorizedClientService
-				.loadAuthorizedClient(this.clientRegistration.getRegistrationId(), principal.getName());
+			.loadAuthorizedClient(this.clientRegistration.getRegistrationId(), principal.getName());
 		assertThat(authorizedClient).isNull();
 	}
 
@@ -347,12 +348,12 @@ public class JdbcOAuth2AuthorizedClientServiceTests {
 		OAuth2AuthorizedClient authorizedClient = createAuthorizedClient(principal, this.clientRegistration);
 		customAuthorizedClientService.saveAuthorizedClient(authorizedClient, principal);
 		authorizedClient = customAuthorizedClientService
-				.loadAuthorizedClient(this.clientRegistration.getRegistrationId(), principal.getName());
+			.loadAuthorizedClient(this.clientRegistration.getRegistrationId(), principal.getName());
 		assertThat(authorizedClient).isNotNull();
 		customAuthorizedClientService.removeAuthorizedClient(this.clientRegistration.getRegistrationId(),
 				principal.getName());
 		authorizedClient = customAuthorizedClientService
-				.loadAuthorizedClient(this.clientRegistration.getRegistrationId(), principal.getName());
+			.loadAuthorizedClient(this.clientRegistration.getRegistrationId(), principal.getName());
 		assertThat(authorizedClient).isNull();
 	}
 
@@ -437,7 +438,7 @@ public class JdbcOAuth2AuthorizedClientServiceTests {
 		@Override
 		public void saveAuthorizedClient(OAuth2AuthorizedClient authorizedClient, Authentication principal) {
 			List<SqlParameterValue> parameters = this.authorizedClientParametersMapper
-					.apply(new OAuth2AuthorizedClientHolder(authorizedClient, principal));
+				.apply(new OAuth2AuthorizedClientHolder(authorizedClient, principal));
 			PreparedStatementSetter pss = new ArgumentPreparedStatementSetter(parameters.toArray());
 			this.jdbcOperations.update(SAVE_AUTHORIZED_CLIENT_SQL, pss);
 		}
@@ -464,7 +465,7 @@ public class JdbcOAuth2AuthorizedClientServiceTests {
 			public OAuth2AuthorizedClient mapRow(ResultSet rs, int rowNum) throws SQLException {
 				String clientRegistrationId = rs.getString("clientRegistrationId");
 				ClientRegistration clientRegistration = this.clientRegistrationRepository
-						.findByRegistrationId(clientRegistrationId);
+					.findByRegistrationId(clientRegistrationId);
 				if (clientRegistration == null) {
 					throw new DataRetrievalFailureException(
 							"The ClientRegistration with id '" + clientRegistrationId + "' exists in the data source, "

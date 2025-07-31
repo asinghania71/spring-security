@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2019 the original author or authors.
+ * Copyright 2002-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -58,6 +58,7 @@ import org.springframework.util.StringUtils;
  * @author Joe Grandja
  * @author Rafael Dominguez
  * @author Mark Heckler
+ * @author Ubaid ur Rehman
  * @since 5.2
  * @see ReactiveJwtDecoderFactory
  * @see ClientRegistration
@@ -69,7 +70,7 @@ public final class ReactiveOidcIdTokenDecoderFactory implements ReactiveJwtDecod
 
 	private static final Map<JwsAlgorithm, String> JCA_ALGORITHM_MAPPINGS;
 	static {
-		Map<JwsAlgorithm, String> mappings = new HashMap<JwsAlgorithm, String>();
+		Map<JwsAlgorithm, String> mappings = new HashMap<>();
 		mappings.put(MacAlgorithm.HS256, "HmacSHA256");
 		mappings.put(MacAlgorithm.HS384, "HmacSHA384");
 		mappings.put(MacAlgorithm.HS512, "HmacSHA512");
@@ -118,8 +119,8 @@ public final class ReactiveOidcIdTokenDecoderFactory implements ReactiveJwtDecod
 
 	private static Converter<Object, ?> getConverter(TypeDescriptor targetDescriptor) {
 		final TypeDescriptor sourceDescriptor = TypeDescriptor.valueOf(Object.class);
-		return (source) -> ClaimConversionService.getSharedInstance().convert(source, sourceDescriptor,
-				targetDescriptor);
+		return (source) -> ClaimConversionService.getSharedInstance()
+			.convert(source, sourceDescriptor, targetDescriptor);
 	}
 
 	@Override
@@ -129,7 +130,7 @@ public final class ReactiveOidcIdTokenDecoderFactory implements ReactiveJwtDecod
 			NimbusReactiveJwtDecoder jwtDecoder = buildDecoder(clientRegistration);
 			jwtDecoder.setJwtValidator(this.jwtValidatorFactory.apply(clientRegistration));
 			Converter<Map<String, Object>, Map<String, Object>> claimTypeConverter = this.claimTypeConverterFactory
-					.apply(clientRegistration);
+				.apply(clientRegistration);
 			if (claimTypeConverter != null) {
 				jwtDecoder.setClaimSetConverter(claimTypeConverter);
 			}
@@ -163,8 +164,9 @@ public final class ReactiveOidcIdTokenDecoderFactory implements ReactiveJwtDecod
 						null);
 				throw new OAuth2AuthenticationException(oauth2Error, oauth2Error.toString());
 			}
-			return NimbusReactiveJwtDecoder.withJwkSetUri(jwkSetUri).jwsAlgorithm((SignatureAlgorithm) jwsAlgorithm)
-					.build();
+			return NimbusReactiveJwtDecoder.withJwkSetUri(jwkSetUri)
+				.jwsAlgorithm((SignatureAlgorithm) jwsAlgorithm)
+				.build();
 		}
 		if (jwsAlgorithm != null && MacAlgorithm.class.isAssignableFrom(jwsAlgorithm.getClass())) {
 			// https://openid.net/specs/openid-connect-core-1_0.html#IDTokenValidation
@@ -189,8 +191,9 @@ public final class ReactiveOidcIdTokenDecoderFactory implements ReactiveJwtDecod
 			}
 			SecretKeySpec secretKeySpec = new SecretKeySpec(clientSecret.getBytes(StandardCharsets.UTF_8),
 					JCA_ALGORITHM_MAPPINGS.get(jwsAlgorithm));
-			return NimbusReactiveJwtDecoder.withSecretKey(secretKeySpec).macAlgorithm((MacAlgorithm) jwsAlgorithm)
-					.build();
+			return NimbusReactiveJwtDecoder.withSecretKey(secretKeySpec)
+				.macAlgorithm((MacAlgorithm) jwsAlgorithm)
+				.build();
 		}
 		OAuth2Error oauth2Error = new OAuth2Error(MISSING_SIGNATURE_VERIFIER_ERROR_CODE,
 				"Failed to find a Signature Verifier for Client Registration: '"

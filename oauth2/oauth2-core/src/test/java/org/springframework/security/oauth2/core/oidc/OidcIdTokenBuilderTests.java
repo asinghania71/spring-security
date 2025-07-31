@@ -41,11 +41,11 @@ public class OidcIdTokenBuilderTests {
 				.build();
 		// @formatter:on
 		assertThat(first.getClaims()).hasSize(1);
-		assertThat(first.getClaims().get("TEST_CLAIM_1")).isEqualTo("C1");
+		assertThat(first.getClaims()).containsEntry("TEST_CLAIM_1", "C1");
 		assertThat(first.getTokenValue()).isEqualTo("V1");
 		assertThat(second.getClaims()).hasSize(2);
-		assertThat(second.getClaims().get("TEST_CLAIM_1")).isEqualTo("C2");
-		assertThat(second.getClaims().get("TEST_CLAIM_2")).isEqualTo("C3");
+		assertThat(second.getClaims()).containsEntry("TEST_CLAIM_1", "C2");
+		assertThat(second.getClaims()).containsEntry("TEST_CLAIM_2", "C3");
 		assertThat(second.getTokenValue()).isEqualTo("V2");
 	}
 
@@ -58,7 +58,7 @@ public class OidcIdTokenBuilderTests {
 		idToken = idTokenBuilder.expiresAt(now).build();
 		assertThat(idToken.getExpiresAt()).isSameAs(now);
 		assertThatIllegalArgumentException()
-				.isThrownBy(() -> idTokenBuilder.claim(IdTokenClaimNames.EXP, "not an instant").build());
+			.isThrownBy(() -> idTokenBuilder.claim(IdTokenClaimNames.EXP, "not an instant").build());
 	}
 
 	@Test
@@ -70,7 +70,7 @@ public class OidcIdTokenBuilderTests {
 		idToken = idTokenBuilder.issuedAt(now).build();
 		assertThat(idToken.getIssuedAt()).isSameAs(now);
 		assertThatIllegalArgumentException()
-				.isThrownBy(() -> idTokenBuilder.claim(IdTokenClaimNames.IAT, "not an instant").build());
+			.isThrownBy(() -> idTokenBuilder.claim(IdTokenClaimNames.IAT, "not an instant").build());
 	}
 
 	@Test

@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2020 the original author or authors.
+ * Copyright 2002-2025 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,9 +16,9 @@
 
 package org.springframework.security.oauth2.client.web.reactive.function.client;
 
-import java.time.Duration;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Consumer;
@@ -29,31 +29,24 @@ import reactor.core.publisher.Mono;
 
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.AuthorityUtils;
 import org.springframework.security.core.context.ReactiveSecurityContextHolder;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.oauth2.client.ClientAuthorizationException;
-import org.springframework.security.oauth2.client.ClientCredentialsReactiveOAuth2AuthorizedClientProvider;
-import org.springframework.security.oauth2.client.OAuth2AuthorizationContext;
 import org.springframework.security.oauth2.client.OAuth2AuthorizeRequest;
 import org.springframework.security.oauth2.client.OAuth2AuthorizedClient;
 import org.springframework.security.oauth2.client.ReactiveOAuth2AuthorizationFailureHandler;
-import org.springframework.security.oauth2.client.ReactiveOAuth2AuthorizationSuccessHandler;
 import org.springframework.security.oauth2.client.ReactiveOAuth2AuthorizedClientManager;
-import org.springframework.security.oauth2.client.ReactiveOAuth2AuthorizedClientProvider;
-import org.springframework.security.oauth2.client.ReactiveOAuth2AuthorizedClientProviderBuilder;
-import org.springframework.security.oauth2.client.RefreshTokenReactiveOAuth2AuthorizedClientProvider;
 import org.springframework.security.oauth2.client.RemoveAuthorizedClientReactiveOAuth2AuthorizationFailureHandler;
 import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken;
-import org.springframework.security.oauth2.client.endpoint.OAuth2ClientCredentialsGrantRequest;
-import org.springframework.security.oauth2.client.endpoint.ReactiveOAuth2AccessTokenResponseClient;
 import org.springframework.security.oauth2.client.registration.ClientRegistration;
 import org.springframework.security.oauth2.client.registration.ReactiveClientRegistrationRepository;
+import org.springframework.security.oauth2.client.web.ClientAttributes;
 import org.springframework.security.oauth2.client.web.DefaultReactiveOAuth2AuthorizedClientManager;
 import org.springframework.security.oauth2.client.web.server.ServerOAuth2AuthorizedClientRepository;
-import org.springframework.security.oauth2.client.web.server.UnAuthenticatedServerOAuth2AuthorizedClientRepository;
 import org.springframework.security.oauth2.core.OAuth2AuthorizationException;
 import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.oauth2.core.OAuth2ErrorCodes;
@@ -113,13 +106,6 @@ public final class ServerOAuth2AuthorizedClientExchangeFilterFunction implements
 	private static final String OAUTH2_AUTHORIZED_CLIENT_ATTR_NAME = OAuth2AuthorizedClient.class.getName();
 
 	/**
-	 * The client request attribute name used to locate the
-	 * {@link ClientRegistration#getRegistrationId()}
-	 */
-	private static final String CLIENT_REGISTRATION_ID_ATTR_NAME = OAuth2AuthorizedClient.class.getName()
-			.concat(".CLIENT_REGISTRATION_ID");
-
-	/**
 	 * The request attribute name used to locate the
 	 * {@link org.springframework.web.server.ServerWebExchange}.
 	 */
@@ -129,7 +115,8 @@ public final class ServerOAuth2AuthorizedClientExchangeFilterFunction implements
 			"anonymous", "anonymousUser", AuthorityUtils.createAuthorityList("ROLE_USER"));
 
 	private final Mono<Authentication> currentAuthenticationMono = ReactiveSecurityContextHolder.getContext()
-			.map(SecurityContext::getAuthentication).defaultIfEmpty(ANONYMOUS_USER_TOKEN);
+		.map(SecurityContext::getAuthentication)
+		.defaultIfEmpty(ANONYMOUS_USER_TOKEN);
 
 	// @formatter:off
 	private final Mono<String> clientRegistrationIdMono = this.currentAuthenticationMono
@@ -139,24 +126,16 @@ public final class ServerOAuth2AuthorizedClientExchangeFilterFunction implements
 	// @formatter:on
 
 	// @formatter:off
-	private final Mono<ServerWebExchange> currentServerWebExchangeMono = Mono.subscriberContext()
+	private final Mono<ServerWebExchange> currentServerWebExchangeMono = Mono.deferContextual(Mono::just)
 			.filter((c) -> c.hasKey(ServerWebExchange.class))
 			.map((c) -> c.get(ServerWebExchange.class));
 	// @formatter:on
 
 	private final ReactiveOAuth2AuthorizedClientManager authorizedClientManager;
 
-	private boolean defaultAuthorizedClientManager;
-
 	private boolean defaultOAuth2AuthorizedClient;
 
 	private String defaultClientRegistrationId;
-
-	@Deprecated
-	private Duration accessTokenExpiresSkew = Duration.ofMinutes(1);
-
-	@Deprecated
-	private ReactiveOAuth2AccessTokenResponseClient<OAuth2ClientCredentialsGrantRequest> clientCredentialsTokenResponseClient;
 
 	private ClientResponseHandler clientResponseHandler;
 
@@ -219,7 +198,6 @@ public final class ServerOAuth2AuthorizedClientExchangeFilterFunction implements
 		this.authorizedClientManager = createDefaultAuthorizedClientManager(clientRegistrationRepository,
 				authorizedClientRepository, authorizationFailureHandler);
 		this.clientResponseHandler = new AuthorizationFailureForwarder(authorizationFailureHandler);
-		this.defaultAuthorizedClientManager = true;
 	}
 
 	private static ReactiveOAuth2AuthorizedClientManager createDefaultAuthorizedClientManager(
@@ -227,16 +205,6 @@ public final class ServerOAuth2AuthorizedClientExchangeFilterFunction implements
 			ServerOAuth2AuthorizedClientRepository authorizedClientRepository,
 			ReactiveOAuth2AuthorizationFailureHandler authorizationFailureHandler) {
 		// gh-7544
-		if (authorizedClientRepository instanceof UnAuthenticatedServerOAuth2AuthorizedClientRepository) {
-			UnAuthenticatedReactiveOAuth2AuthorizedClientManager unauthenticatedAuthorizedClientManager = new UnAuthenticatedReactiveOAuth2AuthorizedClientManager(
-					clientRegistrationRepository,
-					(UnAuthenticatedServerOAuth2AuthorizedClientRepository) authorizedClientRepository,
-					authorizationFailureHandler);
-			unauthenticatedAuthorizedClientManager
-					.setAuthorizedClientProvider(ReactiveOAuth2AuthorizedClientProviderBuilder.builder()
-							.authorizationCode().refreshToken().clientCredentials().password().build());
-			return unauthenticatedAuthorizedClientManager;
-		}
 		DefaultReactiveOAuth2AuthorizedClientManager authorizedClientManager = new DefaultReactiveOAuth2AuthorizedClientManager(
 				clientRegistrationRepository, authorizedClientRepository);
 		authorizedClientManager.setAuthorizationFailureHandler(authorizationFailureHandler);
@@ -266,14 +234,13 @@ public final class ServerOAuth2AuthorizedClientExchangeFilterFunction implements
 	 *
 	 * <ul>
 	 * <li>A refresh token is present on the OAuth2AuthorizedClient</li>
-	 * <li>The access token will be expired in
-	 * {@link #setAccessTokenExpiresSkew(Duration)}</li>
+	 * <li>The access token will be expired in 1 minute (the default)</li>
 	 * <li>The {@link ReactiveSecurityContextHolder} will be used to attempt to save the
 	 * token. If it is empty, then the principal name on the OAuth2AuthorizedClient will
 	 * be used to create an Authentication for saving.</li>
 	 * </ul>
 	 * @param authorizedClient the {@link OAuth2AuthorizedClient} to use.
-	 * @return the {@link Consumer} to populate the
+	 * @return the {@link Consumer} to populate the attributes
 	 */
 	public static Consumer<Map<String, Object>> oauth2AuthorizedClient(OAuth2AuthorizedClient authorizedClient) {
 		return (attributes) -> attributes.put(OAUTH2_AUTHORIZED_CLIENT_ATTR_NAME, authorizedClient);
@@ -319,7 +286,7 @@ public final class ServerOAuth2AuthorizedClientExchangeFilterFunction implements
 	 * @return the {@link Consumer} to populate the attributes
 	 */
 	public static Consumer<Map<String, Object>> clientRegistrationId(String clientRegistrationId) {
-		return (attributes) -> attributes.put(CLIENT_REGISTRATION_ID_ATTR_NAME, clientRegistrationId);
+		return ClientAttributes.clientRegistrationId(clientRegistrationId);
 	}
 
 	private static String clientRegistrationId(ClientRequest request) {
@@ -327,7 +294,7 @@ public final class ServerOAuth2AuthorizedClientExchangeFilterFunction implements
 		if (authorizedClient != null) {
 			return authorizedClient.getClientRegistration().getRegistrationId();
 		}
-		return (String) request.attributes().get(CLIENT_REGISTRATION_ID_ATTR_NAME);
+		return ClientAttributes.resolveClientRegistrationId(request.attributes());
 	}
 
 	/**
@@ -352,79 +319,6 @@ public final class ServerOAuth2AuthorizedClientExchangeFilterFunction implements
 		this.defaultClientRegistrationId = clientRegistrationId;
 	}
 
-	/**
-	 * Sets the {@link ReactiveOAuth2AccessTokenResponseClient} used for getting an
-	 * {@link OAuth2AuthorizedClient} for the client_credentials grant.
-	 * @param clientCredentialsTokenResponseClient the client to use
-	 * @deprecated Use
-	 * {@link #ServerOAuth2AuthorizedClientExchangeFilterFunction(ReactiveOAuth2AuthorizedClientManager)}
-	 * instead. Create an instance of
-	 * {@link ClientCredentialsReactiveOAuth2AuthorizedClientProvider} configured with a
-	 * {@link ClientCredentialsReactiveOAuth2AuthorizedClientProvider#setAccessTokenResponseClient(ReactiveOAuth2AccessTokenResponseClient)
-	 * WebClientReactiveClientCredentialsTokenResponseClient} (or a custom one) and than
-	 * supply it to
-	 * {@link DefaultReactiveOAuth2AuthorizedClientManager#setAuthorizedClientProvider(ReactiveOAuth2AuthorizedClientProvider)
-	 * DefaultReactiveOAuth2AuthorizedClientManager}.
-	 */
-	@Deprecated
-	public void setClientCredentialsTokenResponseClient(
-			ReactiveOAuth2AccessTokenResponseClient<OAuth2ClientCredentialsGrantRequest> clientCredentialsTokenResponseClient) {
-		Assert.notNull(clientCredentialsTokenResponseClient, "clientCredentialsTokenResponseClient cannot be null");
-		Assert.state(this.defaultAuthorizedClientManager,
-				"The client cannot be set when the constructor used is \"ServerOAuth2AuthorizedClientExchangeFilterFunction(ReactiveOAuth2AuthorizedClientManager)\". "
-						+ "Instead, use the constructor \"ServerOAuth2AuthorizedClientExchangeFilterFunction(ClientRegistrationRepository, OAuth2AuthorizedClientRepository)\".");
-		this.clientCredentialsTokenResponseClient = clientCredentialsTokenResponseClient;
-		updateDefaultAuthorizedClientManager();
-	}
-
-	private void updateDefaultAuthorizedClientManager() {
-		// @formatter:off
-		ReactiveOAuth2AuthorizedClientProvider authorizedClientProvider = ReactiveOAuth2AuthorizedClientProviderBuilder.builder()
-				.authorizationCode()
-				.refreshToken((configurer) -> configurer.clockSkew(this.accessTokenExpiresSkew))
-				.clientCredentials(this::updateClientCredentialsProvider)
-				.password((configurer) -> configurer.clockSkew(this.accessTokenExpiresSkew))
-				.build();
-		// @formatter:on
-		if (this.authorizedClientManager instanceof UnAuthenticatedReactiveOAuth2AuthorizedClientManager) {
-			((UnAuthenticatedReactiveOAuth2AuthorizedClientManager) this.authorizedClientManager)
-					.setAuthorizedClientProvider(authorizedClientProvider);
-		}
-		else {
-			((DefaultReactiveOAuth2AuthorizedClientManager) this.authorizedClientManager)
-					.setAuthorizedClientProvider(authorizedClientProvider);
-		}
-	}
-
-	private void updateClientCredentialsProvider(
-			ReactiveOAuth2AuthorizedClientProviderBuilder.ClientCredentialsGrantBuilder builder) {
-		if (this.clientCredentialsTokenResponseClient != null) {
-			builder.accessTokenResponseClient(this.clientCredentialsTokenResponseClient);
-		}
-		builder.clockSkew(this.accessTokenExpiresSkew);
-	}
-
-	/**
-	 * An access token will be considered expired by comparing its expiration to now +
-	 * this skewed Duration. The default is 1 minute.
-	 * @param accessTokenExpiresSkew the Duration to use.
-	 * @deprecated The {@code accessTokenExpiresSkew} should be configured with the
-	 * specific {@link ReactiveOAuth2AuthorizedClientProvider} implementation, e.g.
-	 * {@link ClientCredentialsReactiveOAuth2AuthorizedClientProvider#setClockSkew(Duration)
-	 * ClientCredentialsReactiveOAuth2AuthorizedClientProvider} or
-	 * {@link RefreshTokenReactiveOAuth2AuthorizedClientProvider#setClockSkew(Duration)
-	 * RefreshTokenReactiveOAuth2AuthorizedClientProvider}.
-	 */
-	@Deprecated
-	public void setAccessTokenExpiresSkew(Duration accessTokenExpiresSkew) {
-		Assert.notNull(accessTokenExpiresSkew, "accessTokenExpiresSkew cannot be null");
-		Assert.state(this.defaultAuthorizedClientManager,
-				"The accessTokenExpiresSkew cannot be set when the constructor used is \"ServerOAuth2AuthorizedClientExchangeFilterFunction(ReactiveOAuth2AuthorizedClientManager)\". "
-						+ "Instead, use the constructor \"ServerOAuth2AuthorizedClientExchangeFilterFunction(ClientRegistrationRepository, OAuth2AuthorizedClientRepository)\".");
-		this.accessTokenExpiresSkew = accessTokenExpiresSkew;
-		updateDefaultAuthorizedClientManager();
-	}
-
 	@Override
 	public Mono<ClientResponse> filter(ClientRequest request, ExchangeFunction next) {
 		// @formatter:off
@@ -437,7 +331,7 @@ public final class ServerOAuth2AuthorizedClientExchangeFilterFunction implements
 
 	private Mono<ClientResponse> exchangeAndHandleResponse(ClientRequest request, ExchangeFunction next) {
 		return next.exchange(request)
-				.transform((responseMono) -> this.clientResponseHandler.handleResponse(request, responseMono));
+			.transform((responseMono) -> this.clientResponseHandler.handleResponse(request, responseMono));
 	}
 
 	private Mono<OAuth2AuthorizedClient> authorizedClient(ClientRequest request) {
@@ -558,114 +452,6 @@ public final class ServerOAuth2AuthorizedClientExchangeFilterFunction implements
 
 	}
 
-	private static final class UnAuthenticatedReactiveOAuth2AuthorizedClientManager
-			implements ReactiveOAuth2AuthorizedClientManager {
-
-		private final ReactiveClientRegistrationRepository clientRegistrationRepository;
-
-		private final UnAuthenticatedServerOAuth2AuthorizedClientRepository authorizedClientRepository;
-
-		private final ReactiveOAuth2AuthorizationSuccessHandler authorizationSuccessHandler;
-
-		private final ReactiveOAuth2AuthorizationFailureHandler authorizationFailureHandler;
-
-		private ReactiveOAuth2AuthorizedClientProvider authorizedClientProvider;
-
-		private UnAuthenticatedReactiveOAuth2AuthorizedClientManager(
-				ReactiveClientRegistrationRepository clientRegistrationRepository,
-				UnAuthenticatedServerOAuth2AuthorizedClientRepository authorizedClientRepository,
-				ReactiveOAuth2AuthorizationFailureHandler authorizationFailureHandler) {
-			this.clientRegistrationRepository = clientRegistrationRepository;
-			this.authorizedClientRepository = authorizedClientRepository;
-			this.authorizationSuccessHandler = (authorizedClient, principal, attributes) -> authorizedClientRepository
-					.saveAuthorizedClient(authorizedClient, principal, null);
-			this.authorizationFailureHandler = authorizationFailureHandler;
-		}
-
-		@Override
-		public Mono<OAuth2AuthorizedClient> authorize(OAuth2AuthorizeRequest authorizeRequest) {
-			Assert.notNull(authorizeRequest, "authorizeRequest cannot be null");
-			String clientRegistrationId = authorizeRequest.getClientRegistrationId();
-			Authentication principal = authorizeRequest.getPrincipal();
-			// @formatter:off
-			return Mono.justOrEmpty(authorizeRequest.getAuthorizedClient())
-					.switchIfEmpty(loadAuthorizedClient(clientRegistrationId, principal))
-					.flatMap((authorizedClient) -> reauthorize(authorizedClient, authorizeRequest, principal))
-					.switchIfEmpty(findAndAuthorize(clientRegistrationId, principal));
-			// @formatter:on
-		}
-
-		private Mono<OAuth2AuthorizedClient> loadAuthorizedClient(String clientRegistrationId,
-				Authentication principal) {
-			return Mono.defer(
-					() -> this.authorizedClientRepository.loadAuthorizedClient(clientRegistrationId, principal, null));
-		}
-
-		private Mono<OAuth2AuthorizedClient> reauthorize(OAuth2AuthorizedClient authorizedClient,
-				OAuth2AuthorizeRequest authorizeRequest, Authentication principal) {
-			return Mono
-					.just(OAuth2AuthorizationContext.withAuthorizedClient(authorizedClient).principal(principal)
-							.build())
-					.flatMap((authorizationContext) -> authorize(authorizationContext, principal))
-					// Default to the existing authorizedClient if the client was not
-					// re-authorized
-					.defaultIfEmpty((authorizeRequest.getAuthorizedClient() != null)
-							? authorizeRequest.getAuthorizedClient() : authorizedClient);
-		}
-
-		private Mono<OAuth2AuthorizedClient> findAndAuthorize(String clientRegistrationId, Authentication principal) {
-			// @formatter:off
-			return Mono.defer(() ->
-					this.clientRegistrationRepository.findByRegistrationId(clientRegistrationId)
-						.switchIfEmpty(Mono.error(() ->
-								new IllegalArgumentException("Could not find ClientRegistration with id '" + clientRegistrationId + "'"))
-						)
-						.flatMap((clientRegistration) -> Mono.just(OAuth2AuthorizationContext
-							.withClientRegistration(clientRegistration).principal(principal).build())
-						)
-						.flatMap((authorizationContext) -> authorize(authorizationContext, principal))
-			);
-			// @formatter:on
-		}
-
-		/**
-		 * Performs authorization and then delegates to either the
-		 * {@link #authorizationSuccessHandler} or {@link #authorizationFailureHandler},
-		 * depending on the authorization result.
-		 * @param authorizationContext the context to authorize
-		 * @param principal the principle to authorize
-		 * @return a {@link Mono} that emits the authorized client after the authorization
-		 * attempt succeeds and the {@link #authorizationSuccessHandler} has completed, or
-		 * completes with an exception after the authorization attempt fails and the
-		 * {@link #authorizationFailureHandler} has completed
-		 */
-		private Mono<OAuth2AuthorizedClient> authorize(OAuth2AuthorizationContext authorizationContext,
-				Authentication principal) {
-			// @formatter:off
-			return this.authorizedClientProvider.authorize(authorizationContext)
-					// Delegates to the authorizationSuccessHandler of the successful
-					// authorization
-					.flatMap((authorizedClient) -> this.authorizationSuccessHandler
-							.onAuthorizationSuccess(authorizedClient, principal, Collections.emptyMap())
-							.thenReturn(authorizedClient)
-					)
-					// Delegates to the authorizationFailureHandler of the failed
-					// authorization
-					.onErrorResume(OAuth2AuthorizationException.class, (authorizationException) ->
-							this.authorizationFailureHandler
-									.onAuthorizationFailure(authorizationException, principal, Collections.emptyMap())
-									.then(Mono.error(authorizationException))
-					);
-			// @formatter:on
-		}
-
-		private void setAuthorizedClientProvider(ReactiveOAuth2AuthorizedClientProvider authorizedClientProvider) {
-			Assert.notNull(authorizedClientProvider, "authorizedClientProvider cannot be null");
-			this.authorizedClientProvider = authorizedClientProvider;
-		}
-
-	}
-
 	/**
 	 * Forwards authentication and authorization failures to a
 	 * {@link ReactiveOAuth2AuthorizationFailureHandler}.
@@ -678,7 +464,7 @@ public final class ServerOAuth2AuthorizedClientExchangeFilterFunction implements
 		 * A map of HTTP Status Code to OAuth 2.0 Error codes for HTTP status codes that
 		 * should be interpreted as authentication or authorization failures.
 		 */
-		private final Map<Integer, String> httpStatusToOAuth2ErrorCodeMap;
+		private final Map<HttpStatusCode, String> httpStatusToOAuth2ErrorCodeMap;
 
 		/**
 		 * The {@link ReactiveOAuth2AuthorizationFailureHandler} to notify when an
@@ -689,9 +475,9 @@ public final class ServerOAuth2AuthorizedClientExchangeFilterFunction implements
 		private AuthorizationFailureForwarder(ReactiveOAuth2AuthorizationFailureHandler authorizationFailureHandler) {
 			Assert.notNull(authorizationFailureHandler, "authorizationFailureHandler cannot be null");
 			this.authorizationFailureHandler = authorizationFailureHandler;
-			Map<Integer, String> httpStatusToOAuth2Error = new HashMap<>();
-			httpStatusToOAuth2Error.put(HttpStatus.UNAUTHORIZED.value(), OAuth2ErrorCodes.INVALID_TOKEN);
-			httpStatusToOAuth2Error.put(HttpStatus.FORBIDDEN.value(), OAuth2ErrorCodes.INSUFFICIENT_SCOPE);
+			Map<HttpStatusCode, String> httpStatusToOAuth2Error = new HashMap<>();
+			httpStatusToOAuth2Error.put(HttpStatus.UNAUTHORIZED, OAuth2ErrorCodes.INVALID_TOKEN);
+			httpStatusToOAuth2Error.put(HttpStatus.FORBIDDEN, OAuth2ErrorCodes.INSUFFICIENT_SCOPE);
 			this.httpStatusToOAuth2ErrorCodeMap = Collections.unmodifiableMap(httpStatusToOAuth2Error);
 		}
 
@@ -734,10 +520,10 @@ public final class ServerOAuth2AuthorizedClientExchangeFilterFunction implements
 							authParameters.get(OAuth2ParameterNames.ERROR_URI));
 				}
 			}
-			return resolveErrorIfPossible(response.rawStatusCode());
+			return resolveErrorIfPossible(response.statusCode());
 		}
 
-		private OAuth2Error resolveErrorIfPossible(int statusCode) {
+		private OAuth2Error resolveErrorIfPossible(HttpStatusCode statusCode) {
 			if (this.httpStatusToOAuth2ErrorCodeMap.containsKey(statusCode)) {
 				return new OAuth2Error(this.httpStatusToOAuth2ErrorCodeMap.get(statusCode), null,
 						"https://tools.ietf.org/html/rfc6750#section-3.1");
@@ -748,8 +534,8 @@ public final class ServerOAuth2AuthorizedClientExchangeFilterFunction implements
 		private Map<String, String> parseAuthParameters(String wwwAuthenticateHeader) {
 			// @formatter:off
 			return Stream.of(wwwAuthenticateHeader)
-					.filter((header) -> !StringUtils.isEmpty(header))
-					.filter((header) -> header.toLowerCase().startsWith("bearer"))
+					.filter((header) -> StringUtils.hasLength(header))
+					.filter((header) -> header.toLowerCase(Locale.ENGLISH).startsWith("bearer"))
 					.map((header) -> header.substring("bearer".length()))
 					.map((header) -> header.split(","))
 					.flatMap(Stream::of)
@@ -772,14 +558,14 @@ public final class ServerOAuth2AuthorizedClientExchangeFilterFunction implements
 		 */
 		private Mono<Void> handleWebClientResponseException(ClientRequest request,
 				WebClientResponseException exception) {
-			return Mono.justOrEmpty(resolveErrorIfPossible(exception.getRawStatusCode())).flatMap((oauth2Error) -> {
+			return Mono.justOrEmpty(resolveErrorIfPossible(exception.getStatusCode())).flatMap((oauth2Error) -> {
 				Mono<Optional<ServerWebExchange>> serverWebExchange = effectiveServerWebExchange(request);
 				Mono<String> clientRegistrationId = effectiveClientRegistrationId(request);
 				return Mono
-						.zip(ServerOAuth2AuthorizedClientExchangeFilterFunction.this.currentAuthenticationMono,
-								serverWebExchange, clientRegistrationId)
-						.flatMap((zipped) -> handleAuthorizationFailure(zipped.getT1(), zipped.getT2(),
-								new ClientAuthorizationException(oauth2Error, zipped.getT3(), exception)));
+					.zip(ServerOAuth2AuthorizedClientExchangeFilterFunction.this.currentAuthenticationMono,
+							serverWebExchange, clientRegistrationId)
+					.flatMap((zipped) -> handleAuthorizationFailure(zipped.getT1(), zipped.getT2(),
+							new ClientAuthorizationException(oauth2Error, zipped.getT3(), exception)));
 			});
 		}
 
@@ -794,9 +580,9 @@ public final class ServerOAuth2AuthorizedClientExchangeFilterFunction implements
 		private Mono<Void> handleAuthorizationException(ClientRequest request, OAuth2AuthorizationException exception) {
 			Mono<Optional<ServerWebExchange>> serverWebExchange = effectiveServerWebExchange(request);
 			return Mono
-					.zip(ServerOAuth2AuthorizedClientExchangeFilterFunction.this.currentAuthenticationMono,
-							serverWebExchange)
-					.flatMap((zipped) -> handleAuthorizationFailure(zipped.getT1(), zipped.getT2(), exception));
+				.zip(ServerOAuth2AuthorizedClientExchangeFilterFunction.this.currentAuthenticationMono,
+						serverWebExchange)
+				.flatMap((zipped) -> handleAuthorizationFailure(zipped.getT1(), zipped.getT2(), exception));
 		}
 
 		/**

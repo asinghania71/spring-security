@@ -16,10 +16,14 @@
 
 package org.springframework.security.authentication.dao;
 
+import java.util.function.Supplier;
+
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.InternalAuthenticationServiceException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.authentication.password.CompromisedPasswordChecker;
+import org.springframework.security.authentication.password.CompromisedPasswordException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -29,6 +33,7 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.factory.PasswordEncoderFactories;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.util.Assert;
+import org.springframework.util.function.SingletonSupplier;
 
 /**
  * An {@link AuthenticationProvider} implementation that retrieves user details from a
@@ -46,7 +51,8 @@ public class DaoAuthenticationProvider extends AbstractUserDetailsAuthentication
 	 */
 	private static final String USER_NOT_FOUND_PASSWORD = "userNotFoundPassword";
 
-	private PasswordEncoder passwordEncoder;
+	private Supplier<PasswordEncoder> passwordEncoder = SingletonSupplier
+		.of(PasswordEncoderFactories::createDelegatingPasswordEncoder);
 
 	/**
 	 * The password used to perform {@link PasswordEncoder#matches(CharSequence, String)}
@@ -60,24 +66,25 @@ public class DaoAuthenticationProvider extends AbstractUserDetailsAuthentication
 
 	private UserDetailsPasswordService userDetailsPasswordService;
 
-	public DaoAuthenticationProvider() {
-		setPasswordEncoder(PasswordEncoderFactories.createDelegatingPasswordEncoder());
+	private CompromisedPasswordChecker compromisedPasswordChecker;
+
+	public DaoAuthenticationProvider(UserDetailsService userDetailsService) {
+		this.userDetailsService = userDetailsService;
 	}
 
 	@Override
-	@SuppressWarnings("deprecation")
 	protected void additionalAuthenticationChecks(UserDetails userDetails,
 			UsernamePasswordAuthenticationToken authentication) throws AuthenticationException {
 		if (authentication.getCredentials() == null) {
 			this.logger.debug("Failed to authenticate since no credentials provided");
 			throw new BadCredentialsException(this.messages
-					.getMessage("AbstractUserDetailsAuthenticationProvider.badCredentials", "Bad credentials"));
+				.getMessage("AbstractUserDetailsAuthenticationProvider.badCredentials", "Bad credentials"));
 		}
 		String presentedPassword = authentication.getCredentials().toString();
-		if (!this.passwordEncoder.matches(presentedPassword, userDetails.getPassword())) {
+		if (!this.passwordEncoder.get().matches(presentedPassword, userDetails.getPassword())) {
 			this.logger.debug("Failed to authenticate since password does not match stored value");
 			throw new BadCredentialsException(this.messages
-					.getMessage("AbstractUserDetailsAuthenticationProvider.badCredentials", "Bad credentials"));
+				.getMessage("AbstractUserDetailsAuthenticationProvider.badCredentials", "Bad credentials"));
 		}
 	}
 
@@ -113,11 +120,16 @@ public class DaoAuthenticationProvider extends AbstractUserDetailsAuthentication
 	@Override
 	protected Authentication createSuccessAuthentication(Object principal, Authentication authentication,
 			UserDetails user) {
+		String presentedPassword = authentication.getCredentials().toString();
+		boolean isPasswordCompromised = this.compromisedPasswordChecker != null
+				&& this.compromisedPasswordChecker.check(presentedPassword).isCompromised();
+		if (isPasswordCompromised) {
+			throw new CompromisedPasswordException("The provided password is compromised, please change your password");
+		}
 		boolean upgradeEncoding = this.userDetailsPasswordService != null
-				&& this.passwordEncoder.upgradeEncoding(user.getPassword());
+				&& this.passwordEncoder.get().upgradeEncoding(user.getPassword());
 		if (upgradeEncoding) {
-			String presentedPassword = authentication.getCredentials().toString();
-			String newPassword = this.passwordEncoder.encode(presentedPassword);
+			String newPassword = this.passwordEncoder.get().encode(presentedPassword);
 			user = this.userDetailsPasswordService.updatePassword(user, newPassword);
 		}
 		return super.createSuccessAuthentication(principal, authentication, user);
@@ -125,14 +137,14 @@ public class DaoAuthenticationProvider extends AbstractUserDetailsAuthentication
 
 	private void prepareTimingAttackProtection() {
 		if (this.userNotFoundEncodedPassword == null) {
-			this.userNotFoundEncodedPassword = this.passwordEncoder.encode(USER_NOT_FOUND_PASSWORD);
+			this.userNotFoundEncodedPassword = this.passwordEncoder.get().encode(USER_NOT_FOUND_PASSWORD);
 		}
 	}
 
 	private void mitigateAgainstTimingAttack(UsernamePasswordAuthenticationToken authentication) {
 		if (authentication.getCredentials() != null) {
 			String presentedPassword = authentication.getCredentials().toString();
-			this.passwordEncoder.matches(presentedPassword, this.userNotFoundEncodedPassword);
+			this.passwordEncoder.get().matches(presentedPassword, this.userNotFoundEncodedPassword);
 		}
 	}
 
@@ -145,16 +157,12 @@ public class DaoAuthenticationProvider extends AbstractUserDetailsAuthentication
 	 */
 	public void setPasswordEncoder(PasswordEncoder passwordEncoder) {
 		Assert.notNull(passwordEncoder, "passwordEncoder cannot be null");
-		this.passwordEncoder = passwordEncoder;
+		this.passwordEncoder = () -> passwordEncoder;
 		this.userNotFoundEncodedPassword = null;
 	}
 
 	protected PasswordEncoder getPasswordEncoder() {
-		return this.passwordEncoder;
-	}
-
-	public void setUserDetailsService(UserDetailsService userDetailsService) {
-		this.userDetailsService = userDetailsService;
+		return this.passwordEncoder.get();
 	}
 
 	protected UserDetailsService getUserDetailsService() {
@@ -163,6 +171,16 @@ public class DaoAuthenticationProvider extends AbstractUserDetailsAuthentication
 
 	public void setUserDetailsPasswordService(UserDetailsPasswordService userDetailsPasswordService) {
 		this.userDetailsPasswordService = userDetailsPasswordService;
+	}
+
+	/**
+	 * Sets the {@link CompromisedPasswordChecker} to be used before creating a successful
+	 * authentication. Defaults to {@code null}.
+	 * @param compromisedPasswordChecker the {@link CompromisedPasswordChecker} to use
+	 * @since 6.3
+	 */
+	public void setCompromisedPasswordChecker(CompromisedPasswordChecker compromisedPasswordChecker) {
+		this.compromisedPasswordChecker = compromisedPasswordChecker;
 	}
 
 }

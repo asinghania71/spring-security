@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ package org.springframework.security.provisioning;
 import java.util.Collection;
 import java.util.Enumeration;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 
@@ -30,7 +31,9 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.CredentialsContainer;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.context.SecurityContextHolderStrategy;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsPasswordService;
@@ -54,6 +57,9 @@ public class InMemoryUserDetailsManager implements UserDetailsManager, UserDetai
 	protected final Log logger = LogFactory.getLog(getClass());
 
 	private final Map<String, MutableUserDetails> users = new HashMap<>();
+
+	private SecurityContextHolderStrategy securityContextHolderStrategy = SecurityContextHolder
+		.getContextHolderStrategy();
 
 	private AuthenticationManager authenticationManager;
 
@@ -92,28 +98,38 @@ public class InMemoryUserDetailsManager implements UserDetailsManager, UserDetai
 	@Override
 	public void createUser(UserDetails user) {
 		Assert.isTrue(!userExists(user.getUsername()), "user should not exist");
-		this.users.put(user.getUsername().toLowerCase(), new MutableUser(user));
+		if (user instanceof MutableUserDetails mutable) {
+			this.users.put(user.getUsername().toLowerCase(Locale.ROOT), mutable);
+		}
+		else {
+			this.users.put(user.getUsername().toLowerCase(Locale.ROOT), new MutableUser(user));
+		}
 	}
 
 	@Override
 	public void deleteUser(String username) {
-		this.users.remove(username.toLowerCase());
+		this.users.remove(username.toLowerCase(Locale.ROOT));
 	}
 
 	@Override
 	public void updateUser(UserDetails user) {
 		Assert.isTrue(userExists(user.getUsername()), "user should exist");
-		this.users.put(user.getUsername().toLowerCase(), new MutableUser(user));
+		if (user instanceof MutableUserDetails mutable) {
+			this.users.put(user.getUsername().toLowerCase(Locale.ROOT), mutable);
+		}
+		else {
+			this.users.put(user.getUsername().toLowerCase(Locale.ROOT), new MutableUser(user));
+		}
 	}
 
 	@Override
 	public boolean userExists(String username) {
-		return this.users.containsKey(username.toLowerCase());
+		return this.users.containsKey(username.toLowerCase(Locale.ROOT));
 	}
 
 	@Override
 	public void changePassword(String oldPassword, String newPassword) {
-		Authentication currentUser = SecurityContextHolder.getContext().getAuthentication();
+		Authentication currentUser = this.securityContextHolderStrategy.getContext().getAuthentication();
 		if (currentUser == null) {
 			// This would indicate bad coding somewhere
 			throw new AccessDeniedException(
@@ -125,7 +141,8 @@ public class InMemoryUserDetailsManager implements UserDetailsManager, UserDetai
 		// supplied password.
 		if (this.authenticationManager != null) {
 			this.logger.debug(LogMessage.format("Reauthenticating user '%s' for password change request.", username));
-			this.authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(username, oldPassword));
+			this.authenticationManager
+				.authenticate(UsernamePasswordAuthenticationToken.unauthenticated(username, oldPassword));
 		}
 		else {
 			this.logger.debug("No authentication manager set. Password won't be re-checked.");
@@ -138,19 +155,33 @@ public class InMemoryUserDetailsManager implements UserDetailsManager, UserDetai
 	@Override
 	public UserDetails updatePassword(UserDetails user, String newPassword) {
 		String username = user.getUsername();
-		MutableUserDetails mutableUser = this.users.get(username.toLowerCase());
+		MutableUserDetails mutableUser = this.users.get(username.toLowerCase(Locale.ROOT));
 		mutableUser.setPassword(newPassword);
 		return mutableUser;
 	}
 
 	@Override
 	public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
-		UserDetails user = this.users.get(username.toLowerCase());
+		UserDetails user = this.users.get(username.toLowerCase(Locale.ROOT));
 		if (user == null) {
-			throw new UsernameNotFoundException(username);
+			throw UsernameNotFoundException.fromUsername(username);
+		}
+		if (user instanceof CredentialsContainer) {
+			return user;
 		}
 		return new User(user.getUsername(), user.getPassword(), user.isEnabled(), user.isAccountNonExpired(),
 				user.isCredentialsNonExpired(), user.isAccountNonLocked(), user.getAuthorities());
+	}
+
+	/**
+	 * Sets the {@link SecurityContextHolderStrategy} to use. The default action is to use
+	 * the {@link SecurityContextHolderStrategy} stored in {@link SecurityContextHolder}.
+	 *
+	 * @since 5.8
+	 */
+	public void setSecurityContextHolderStrategy(SecurityContextHolderStrategy securityContextHolderStrategy) {
+		Assert.notNull(securityContextHolderStrategy, "securityContextHolderStrategy cannot be null");
+		this.securityContextHolderStrategy = securityContextHolderStrategy;
 	}
 
 	public void setAuthenticationManager(AuthenticationManager authenticationManager) {

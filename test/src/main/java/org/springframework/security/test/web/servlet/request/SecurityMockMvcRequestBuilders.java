@@ -16,7 +16,7 @@
 
 package org.springframework.security.test.web.servlet.request;
 
-import javax.servlet.ServletContext;
+import jakarta.servlet.ServletContext;
 
 import org.springframework.beans.Mergeable;
 import org.springframework.http.MediaType;
@@ -178,7 +178,8 @@ public final class SecurityMockMvcRequestBuilders {
 		@Override
 		public MockHttpServletRequest buildRequest(ServletContext servletContext) {
 			MockHttpServletRequestBuilder loginRequest = post(this.loginProcessingUrl).accept(this.acceptMediaType)
-					.param(this.usernameParam, this.username).param(this.passwordParam, this.password);
+				.param(this.usernameParam, this.username)
+				.param(this.passwordParam, this.password);
 			if (this.parent != null) {
 				loginRequest = (MockHttpServletRequestBuilder) loginRequest.merge(this.parent);
 			}
@@ -204,8 +205,10 @@ public final class SecurityMockMvcRequestBuilders {
 		 * @return the {@link FormLoginRequestBuilder} for additional customizations
 		 */
 		public FormLoginRequestBuilder loginProcessingUrl(String loginProcessingUrl, Object... uriVars) {
-			this.loginProcessingUrl = UriComponentsBuilder.fromPath(loginProcessingUrl).buildAndExpand(uriVars).encode()
-					.toString();
+			this.loginProcessingUrl = UriComponentsBuilder.fromPath(loginProcessingUrl)
+				.buildAndExpand(uriVars)
+				.encode()
+				.toString();
 			return this;
 		}
 

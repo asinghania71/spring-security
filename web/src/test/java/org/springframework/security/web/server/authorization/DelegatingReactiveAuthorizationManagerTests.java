@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2017 the original author or authors.
+ * Copyright 2002-2025 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,7 +35,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.verifyZeroInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 /**
  * @author Rob Winch
@@ -69,8 +69,9 @@ public class DelegatingReactiveAuthorizationManagerTests {
 	public void setup() {
 		MockitoAnnotations.initMocks(this);
 		this.manager = DelegatingReactiveAuthorizationManager.builder()
-				.add(new ServerWebExchangeMatcherEntry<>(this.match1, this.delegate1))
-				.add(new ServerWebExchangeMatcherEntry<>(this.match2, this.delegate2)).build();
+			.add(new ServerWebExchangeMatcherEntry<>(this.match1, this.delegate1))
+			.add(new ServerWebExchangeMatcherEntry<>(this.match2, this.delegate2))
+			.build();
 		MockServerHttpRequest request = MockServerHttpRequest.get("/test").build();
 		this.exchange = MockServerWebExchange.from(request);
 	}
@@ -78,20 +79,20 @@ public class DelegatingReactiveAuthorizationManagerTests {
 	@Test
 	public void checkWhenFirstMatchesThenNoMoreMatchersAndNoMoreDelegatesInvoked() {
 		given(this.match1.matches(any())).willReturn(ServerWebExchangeMatcher.MatchResult.match());
-		given(this.delegate1.check(eq(this.authentication), any(AuthorizationContext.class)))
-				.willReturn(Mono.just(this.decision));
-		assertThat(this.manager.check(this.authentication, this.exchange).block()).isEqualTo(this.decision);
-		verifyZeroInteractions(this.match2, this.delegate2);
+		given(this.delegate1.authorize(eq(this.authentication), any(AuthorizationContext.class)))
+			.willReturn(Mono.just(this.decision));
+		assertThat(this.manager.authorize(this.authentication, this.exchange).block()).isEqualTo(this.decision);
+		verifyNoMoreInteractions(this.match2, this.delegate2);
 	}
 
 	@Test
 	public void checkWhenSecondMatchesThenNoMoreMatchersAndNoMoreDelegatesInvoked() {
 		given(this.match1.matches(any())).willReturn(ServerWebExchangeMatcher.MatchResult.notMatch());
 		given(this.match2.matches(any())).willReturn(ServerWebExchangeMatcher.MatchResult.match());
-		given(this.delegate2.check(eq(this.authentication), any(AuthorizationContext.class)))
-				.willReturn(Mono.just(this.decision));
-		assertThat(this.manager.check(this.authentication, this.exchange).block()).isEqualTo(this.decision);
-		verifyZeroInteractions(this.delegate1);
+		given(this.delegate2.authorize(eq(this.authentication), any(AuthorizationContext.class)))
+			.willReturn(Mono.just(this.decision));
+		assertThat(this.manager.authorize(this.authentication, this.exchange).block()).isEqualTo(this.decision);
+		verifyNoMoreInteractions(this.delegate1);
 	}
 
 }

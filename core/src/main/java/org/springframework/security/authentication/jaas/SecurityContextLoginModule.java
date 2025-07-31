@@ -28,6 +28,8 @@ import org.apache.commons.logging.LogFactory;
 
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.context.SecurityContextHolderStrategy;
+import org.springframework.util.Assert;
 
 /**
  * An implementation of {@link LoginModule} that uses a Spring Security
@@ -55,6 +57,9 @@ public class SecurityContextLoginModule implements LoginModule {
 
 	private static final Log log = LogFactory.getLog(SecurityContextLoginModule.class);
 
+	private SecurityContextHolderStrategy securityContextHolderStrategy = SecurityContextHolder
+		.getContextHolderStrategy();
+
 	private Authentication authen;
 
 	private Subject subject;
@@ -66,7 +71,6 @@ public class SecurityContextLoginModule implements LoginModule {
 	 * <code>Authentication</code>.
 	 * @return true if this method succeeded, or false if this <code>LoginModule</code>
 	 * should be ignored.
-	 * @exception LoginException if the abort fails
 	 */
 	@Override
 	public boolean abort() {
@@ -82,7 +86,6 @@ public class SecurityContextLoginModule implements LoginModule {
 	 * <code>Authentication</code> to the <code>Subject</code>'s principals.
 	 * @return true if this method succeeded, or false if this <code>LoginModule</code>
 	 * should be ignored.
-	 * @exception LoginException if the commit fails
 	 */
 	@Override
 	public boolean commit() {
@@ -91,6 +94,17 @@ public class SecurityContextLoginModule implements LoginModule {
 		}
 		this.subject.getPrincipals().add(this.authen);
 		return true;
+	}
+
+	/**
+	 * Sets the {@link SecurityContextHolderStrategy} to use. The default action is to use
+	 * the {@link SecurityContextHolderStrategy} stored in {@link SecurityContextHolder}.
+	 *
+	 * @since 5.8
+	 */
+	public void setSecurityContextHolderStrategy(SecurityContextHolderStrategy securityContextHolderStrategy) {
+		Assert.notNull(securityContextHolderStrategy, "securityContextHolderStrategy cannot be null");
+		this.securityContextHolderStrategy = securityContextHolderStrategy;
 	}
 
 	Authentication getAuthentication() {
@@ -129,7 +143,7 @@ public class SecurityContextLoginModule implements LoginModule {
 	 */
 	@Override
 	public boolean login() throws LoginException {
-		this.authen = SecurityContextHolder.getContext().getAuthentication();
+		this.authen = this.securityContextHolderStrategy.getContext().getAuthentication();
 		if (this.authen != null) {
 			return true;
 		}
@@ -145,7 +159,6 @@ public class SecurityContextLoginModule implements LoginModule {
 	 * Log out the <code>Subject</code>.
 	 * @return true if this method succeeded, or false if this <code>LoginModule</code>
 	 * should be ignored.
-	 * @exception LoginException if the logout fails
 	 */
 	@Override
 	public boolean logout() {

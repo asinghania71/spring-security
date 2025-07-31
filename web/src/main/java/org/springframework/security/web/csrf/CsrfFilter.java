@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2025 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,12 +21,11 @@ import java.security.MessageDigest;
 import java.util.Arrays;
 import java.util.HashSet;
 
-import javax.servlet.FilterChain;
-import javax.servlet.ServletException;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-import javax.servlet.http.HttpSession;
-
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpSession;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -52,12 +51,13 @@ import org.springframework.web.filter.OncePerRequestFilter;
  *
  * <p>
  * Typically the {@link CsrfTokenRepository} implementation chooses to store the
- * {@link CsrfToken} in {@link HttpSession} with {@link HttpSessionCsrfTokenRepository}
- * wrapped by a {@link LazyCsrfTokenRepository}. This is preferred to storing the token in
- * a cookie which can be modified by a client application.
+ * {@link CsrfToken} in {@link HttpSession} with {@link HttpSessionCsrfTokenRepository}.
+ * This is preferred to storing the token in a cookie which can be modified by a client
+ * application.
  * </p>
  *
  * @author Rob Winch
+ * @author Steve Riesenberg
  * @since 3.2
  */
 public final class CsrfFilter extends OncePerRequestFilter {
@@ -72,7 +72,7 @@ public final class CsrfFilter extends OncePerRequestFilter {
 	/**
 	 * The attribute name to use when marking a given request as one that should not be
 	 * filtered.
-	 *
+	 * <p>
 	 * To use, set the attribute on your {@link HttpServletRequest}: <pre>
 	 * 	CsrfFilter.skipRequest(request);
 	 * </pre>
@@ -87,9 +87,15 @@ public final class CsrfFilter extends OncePerRequestFilter {
 
 	private AccessDeniedHandler accessDeniedHandler = new AccessDeniedHandlerImpl();
 
-	public CsrfFilter(CsrfTokenRepository csrfTokenRepository) {
-		Assert.notNull(csrfTokenRepository, "csrfTokenRepository cannot be null");
-		this.tokenRepository = csrfTokenRepository;
+	private CsrfTokenRequestHandler requestHandler = new XorCsrfTokenRequestAttributeHandler();
+
+	/**
+	 * Creates a new instance.
+	 * @param tokenRepository the {@link CsrfTokenRepository} to use
+	 */
+	public CsrfFilter(CsrfTokenRepository tokenRepository) {
+		Assert.notNull(tokenRepository, "tokenRepository cannot be null");
+		this.tokenRepository = tokenRepository;
 	}
 
 	@Override
@@ -100,15 +106,9 @@ public final class CsrfFilter extends OncePerRequestFilter {
 	@Override
 	protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
 			throws ServletException, IOException {
-		request.setAttribute(HttpServletResponse.class.getName(), response);
-		CsrfToken csrfToken = this.tokenRepository.loadToken(request);
-		boolean missingToken = (csrfToken == null);
-		if (missingToken) {
-			csrfToken = this.tokenRepository.generateToken(request);
-			this.tokenRepository.saveToken(csrfToken, request, response);
-		}
-		request.setAttribute(CsrfToken.class.getName(), csrfToken);
-		request.setAttribute(csrfToken.getParameterName(), csrfToken);
+		DeferredCsrfToken deferredCsrfToken = this.tokenRepository.loadDeferredToken(request, response);
+		request.setAttribute(DeferredCsrfToken.class.getName(), deferredCsrfToken);
+		this.requestHandler.handle(request, response, deferredCsrfToken);
 		if (!this.requireCsrfProtectionMatcher.matches(request)) {
 			if (this.logger.isTraceEnabled()) {
 				this.logger.trace("Did not protect against CSRF since request did not match "
@@ -117,13 +117,15 @@ public final class CsrfFilter extends OncePerRequestFilter {
 			filterChain.doFilter(request, response);
 			return;
 		}
-		String actualToken = request.getHeader(csrfToken.getHeaderName());
-		if (actualToken == null) {
-			actualToken = request.getParameter(csrfToken.getParameterName());
+		CsrfToken csrfToken = deferredCsrfToken.get();
+		String actualToken = this.requestHandler.resolveCsrfTokenValue(request, csrfToken);
+		if (actualToken != null && this.logger.isTraceEnabled()) {
+			this.logger.trace(LogMessage.format("Found a CSRF token in the request"));
 		}
 		if (!equalsConstantTime(csrfToken.getToken(), actualToken)) {
-			this.logger.debug(
-					LogMessage.of(() -> "Invalid CSRF token found for " + UrlUtils.buildFullRequestUrl(request)));
+			boolean missingToken = deferredCsrfToken.isGenerated();
+			this.logger
+				.debug(LogMessage.of(() -> "Invalid CSRF token found for " + UrlUtils.buildFullRequestUrl(request)));
 			AccessDeniedException exception = (!missingToken) ? new InvalidCsrfTokenException(csrfToken, actualToken)
 					: new MissingCsrfTokenException(actualToken);
 			this.accessDeniedHandler.handle(request, response, exception);
@@ -168,6 +170,21 @@ public final class CsrfFilter extends OncePerRequestFilter {
 	}
 
 	/**
+	 * Specifies a {@link CsrfTokenRequestHandler} that is used to make the
+	 * {@link CsrfToken} available as a request attribute.
+	 *
+	 * <p>
+	 * The default is {@link XorCsrfTokenRequestAttributeHandler}.
+	 * </p>
+	 * @param requestHandler the {@link CsrfTokenRequestHandler} to use
+	 * @since 5.8
+	 */
+	public void setRequestHandler(CsrfTokenRequestHandler requestHandler) {
+		Assert.notNull(requestHandler, "requestHandler cannot be null");
+		this.requestHandler = requestHandler;
+	}
+
+	/**
 	 * Constant time comparison to prevent against timing attacks.
 	 * @param expected
 	 * @param actual
@@ -197,7 +214,7 @@ public final class CsrfFilter extends OncePerRequestFilter {
 
 		@Override
 		public String toString() {
-			return "CsrfNotRequired " + this.allowedMethods;
+			return "IsNotHttpMethod " + this.allowedMethods;
 		}
 
 	}

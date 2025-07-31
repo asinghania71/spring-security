@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2013 the original author or authors.
+ * Copyright 2002-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,11 +20,11 @@ import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.Set;
 
-import javax.servlet.DispatcherType;
-import javax.servlet.Filter;
-import javax.servlet.FilterRegistration.Dynamic;
-import javax.servlet.ServletContext;
-import javax.servlet.SessionTrackingMode;
+import jakarta.servlet.DispatcherType;
+import jakarta.servlet.Filter;
+import jakarta.servlet.FilterRegistration.Dynamic;
+import jakarta.servlet.ServletContext;
+import jakarta.servlet.SessionTrackingMode;
 
 import org.springframework.context.ApplicationContext;
 import org.springframework.core.Conventions;
@@ -280,13 +280,14 @@ public abstract class AbstractSecurityWebApplicationInitializer implements WebAp
 	 * @return
 	 */
 	protected EnumSet<DispatcherType> getSecurityDispatcherTypes() {
-		return EnumSet.of(DispatcherType.REQUEST, DispatcherType.ERROR, DispatcherType.ASYNC);
+		return EnumSet.of(DispatcherType.REQUEST, DispatcherType.ERROR, DispatcherType.ASYNC, DispatcherType.FORWARD,
+				DispatcherType.INCLUDE);
 	}
 
 	/**
-	 * Determine if the springSecurityFilterChain should be marked as supporting asynch.
+	 * Determine if the springSecurityFilterChain should be marked as supporting async.
 	 * Default is true.
-	 * @return true if springSecurityFilterChain should be marked as supporting asynch
+	 * @return true if springSecurityFilterChain should be marked as supporting async
 	 */
 	protected boolean isAsyncSecuritySupported() {
 		return true;

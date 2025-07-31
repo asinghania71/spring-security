@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2025 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -67,8 +67,12 @@ public final class DefaultMapOAuth2AccessTokenResponseConverter
 
 	private static OAuth2AccessToken.TokenType getAccessTokenType(Map<String, Object> tokenResponseParameters) {
 		if (OAuth2AccessToken.TokenType.BEARER.getValue()
-				.equalsIgnoreCase(getParameterValue(tokenResponseParameters, OAuth2ParameterNames.TOKEN_TYPE))) {
+			.equalsIgnoreCase(getParameterValue(tokenResponseParameters, OAuth2ParameterNames.TOKEN_TYPE))) {
 			return OAuth2AccessToken.TokenType.BEARER;
+		}
+		else if (OAuth2AccessToken.TokenType.DPOP.getValue()
+			.equalsIgnoreCase(getParameterValue(tokenResponseParameters, OAuth2ParameterNames.TOKEN_TYPE))) {
+			return OAuth2AccessToken.TokenType.DPOP;
 		}
 		return null;
 	}

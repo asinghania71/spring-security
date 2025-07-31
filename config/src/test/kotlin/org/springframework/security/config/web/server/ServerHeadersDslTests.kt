@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ import org.junit.jupiter.api.extension.ExtendWith
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.context.ApplicationContext
 import org.springframework.context.annotation.Bean
+import org.springframework.context.annotation.Configuration
 import org.springframework.http.HttpHeaders
 import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity
 import org.springframework.security.config.test.SpringTestContext
@@ -28,11 +29,15 @@ import org.springframework.security.config.test.SpringTestContextExtension
 import org.springframework.security.web.header.writers.frameoptions.XFrameOptionsHeaderWriter
 import org.springframework.security.web.server.SecurityWebFilterChain
 import org.springframework.security.web.server.header.ContentTypeOptionsServerHttpHeadersWriter
+import org.springframework.security.web.server.header.CrossOriginEmbedderPolicyServerHttpHeadersWriter
+import org.springframework.security.web.server.header.CrossOriginOpenerPolicyServerHttpHeadersWriter
+import org.springframework.security.web.server.header.CrossOriginResourcePolicyServerHttpHeadersWriter
 import org.springframework.security.web.server.header.StrictTransportSecurityServerHttpHeadersWriter
 import org.springframework.security.web.server.header.XFrameOptionsServerHttpHeadersWriter
 import org.springframework.security.web.server.header.XXssProtectionServerHttpHeadersWriter
 import org.springframework.test.web.reactive.server.WebTestClient
 import org.springframework.web.reactive.config.EnableWebFlux
+import reactor.core.publisher.Mono
 
 /**
  * Tests for [ServerHeadersDsl]
@@ -67,9 +72,10 @@ class ServerHeadersDslTests {
                 .expectHeader().valueEquals(HttpHeaders.CACHE_CONTROL, "no-cache, no-store, max-age=0, must-revalidate")
                 .expectHeader().valueEquals(HttpHeaders.EXPIRES, "0")
                 .expectHeader().valueEquals(HttpHeaders.PRAGMA, "no-cache")
-                .expectHeader().valueEquals(XXssProtectionServerHttpHeadersWriter.X_XSS_PROTECTION, "1 ; mode=block")
+                .expectHeader().valueEquals(XXssProtectionServerHttpHeadersWriter.X_XSS_PROTECTION, "0")
     }
 
+    @Configuration
     @EnableWebFluxSecurity
     @EnableWebFlux
     open class DefaultHeadersConfig {
@@ -97,6 +103,7 @@ class ServerHeadersDslTests {
                 .expectHeader().doesNotExist(XXssProtectionServerHttpHeadersWriter.X_XSS_PROTECTION)
     }
 
+    @Configuration
     @EnableWebFluxSecurity
     @EnableWebFlux
     open class HeadersDisabledConfig {
@@ -120,6 +127,7 @@ class ServerHeadersDslTests {
                 .expectHeader().valueEquals("Feature-Policy", "geolocation 'self'")
     }
 
+    @Configuration
     @EnableWebFluxSecurity
     @EnableWebFlux
     @Suppress("DEPRECATION")
@@ -129,6 +137,108 @@ class ServerHeadersDslTests {
             return http {
                 headers {
                     featurePolicy("geolocation 'self'")
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `request when no cross-origin policies configured then does not write cross-origin policies headers in response`() {
+        this.spring.register(CrossOriginPoliciesConfig::class.java).autowire()
+
+        this.client.get()
+                .uri("/")
+                .exchange()
+                .expectHeader().doesNotExist("Cross-Origin-Opener-Policy")
+                .expectHeader().doesNotExist("Cross-Origin-Embedder-Policy")
+                .expectHeader().doesNotExist("Cross-Origin-Resource-Policy")
+    }
+
+    @Configuration
+    @EnableWebFluxSecurity
+    @EnableWebFlux
+    open class CrossOriginPoliciesConfig {
+        @Bean
+        open fun springWebFilterChain(http: ServerHttpSecurity): SecurityWebFilterChain {
+            return http {
+                headers { }
+            }
+        }
+    }
+
+    @Test
+    fun `request when cross-origin custom policies configured then cross-origin custom policies headers in response`() {
+        this.spring.register(CrossOriginPoliciesCustomConfig::class.java).autowire()
+
+        this.client.get()
+                .uri("/")
+                .exchange()
+                .expectHeader().valueEquals("Cross-Origin-Opener-Policy", "same-origin")
+                .expectHeader().valueEquals("Cross-Origin-Embedder-Policy", "require-corp")
+                .expectHeader().valueEquals("Cross-Origin-Resource-Policy", "same-origin")
+    }
+
+    @Configuration
+    @EnableWebFluxSecurity
+    @EnableWebFlux
+    open class CrossOriginPoliciesCustomConfig {
+        @Bean
+        open fun springWebFilterChain(http: ServerHttpSecurity): SecurityWebFilterChain {
+            return http {
+                headers {
+                    crossOriginOpenerPolicy {
+                        policy = CrossOriginOpenerPolicyServerHttpHeadersWriter.CrossOriginOpenerPolicy.SAME_ORIGIN
+                    }
+                    crossOriginEmbedderPolicy {
+                        policy = CrossOriginEmbedderPolicyServerHttpHeadersWriter.CrossOriginEmbedderPolicy.REQUIRE_CORP
+                    }
+                    crossOriginResourcePolicy {
+                        policy = CrossOriginResourcePolicyServerHttpHeadersWriter.CrossOriginResourcePolicy.SAME_ORIGIN
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `request when custom server http headers writer configured then custom http headers added`() {
+        this.spring.register(ServerHttpHeadersWriterCustomConfig::class.java).autowire()
+
+        this.client.get()
+            .uri("/")
+            .exchange()
+            .expectHeader().valueEquals("CUSTOM-HEADER-1", "CUSTOM-VALUE-1")
+            .expectHeader().valueEquals("CUSTOM-HEADER-2", "CUSTOM-VALUE-2")
+    }
+
+    @Configuration
+    @EnableWebFluxSecurity
+    @EnableWebFlux
+    open class ServerHttpHeadersWriterCustomConfig {
+        @Bean
+        open fun springWebFilterChain(http: ServerHttpSecurity): SecurityWebFilterChain {
+            return http {
+                headers {
+                    writer { exchange ->
+                        Mono.just(exchange)
+                            .doOnNext {
+                                it.response.headers.add(
+                                    "CUSTOM-HEADER-1",
+                                    "CUSTOM-VALUE-1"
+                                )
+                            }
+                            .then()
+                    }
+                    writer { exchange ->
+                        Mono.just(exchange)
+                            .doOnNext {
+                                it.response.headers.add(
+                                    "CUSTOM-HEADER-2",
+                                    "CUSTOM-VALUE-2"
+                                )
+                            }
+                            .then()
+                    }
                 }
             }
         }

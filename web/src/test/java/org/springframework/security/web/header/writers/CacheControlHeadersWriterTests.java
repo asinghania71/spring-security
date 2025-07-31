@@ -47,9 +47,9 @@ public class CacheControlHeadersWriterTests {
 	@Test
 	public void writeHeaders() {
 		this.writer.writeHeaders(this.request, this.response);
-		assertThat(this.response.getHeaderNames().size()).isEqualTo(3);
+		assertThat(this.response.getHeaderNames()).hasSize(3);
 		assertThat(this.response.getHeaderValues("Cache-Control"))
-				.containsOnly("no-cache, no-store, max-age=0, must-revalidate");
+			.containsOnly("no-cache, no-store, max-age=0, must-revalidate");
 		assertThat(this.response.getHeaderValues("Pragma")).containsOnly("no-cache");
 		assertThat(this.response.getHeaderValues("Expires")).containsOnly("0");
 	}

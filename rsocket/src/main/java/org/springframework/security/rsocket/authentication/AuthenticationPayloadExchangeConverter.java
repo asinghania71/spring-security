@@ -1,5 +1,5 @@
 /*
- * Copyright 2019-2021 the original author or authors.
+ * Copyright 2019-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,7 +31,7 @@ import org.springframework.messaging.rsocket.DefaultMetadataExtractor;
 import org.springframework.messaging.rsocket.MetadataExtractor;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.oauth2.server.resource.BearerTokenAuthenticationToken;
+import org.springframework.security.oauth2.server.resource.authentication.BearerTokenAuthenticationToken;
 import org.springframework.security.rsocket.api.PayloadExchange;
 import org.springframework.util.MimeType;
 import org.springframework.util.MimeTypeUtils;
@@ -51,19 +51,19 @@ import org.springframework.util.MimeTypeUtils;
 public class AuthenticationPayloadExchangeConverter implements PayloadExchangeAuthenticationConverter {
 
 	private static final MimeType COMPOSITE_METADATA_MIME_TYPE = MimeTypeUtils
-			.parseMimeType(WellKnownMimeType.MESSAGE_RSOCKET_COMPOSITE_METADATA.getString());
+		.parseMimeType(WellKnownMimeType.MESSAGE_RSOCKET_COMPOSITE_METADATA.getString());
 
 	private static final MimeType AUTHENTICATION_MIME_TYPE = MimeTypeUtils
-			.parseMimeType(WellKnownMimeType.MESSAGE_RSOCKET_AUTHENTICATION.getString());
+		.parseMimeType(WellKnownMimeType.MESSAGE_RSOCKET_AUTHENTICATION.getString());
 
 	private final MetadataExtractor metadataExtractor = createDefaultExtractor();
 
 	@Override
 	public Mono<Authentication> convert(PayloadExchange exchange) {
 		return Mono
-				.fromCallable(() -> this.metadataExtractor.extract(exchange.getPayload(),
-						AuthenticationPayloadExchangeConverter.COMPOSITE_METADATA_MIME_TYPE))
-				.flatMap((metadata) -> Mono.justOrEmpty(authentication(metadata)));
+			.fromCallable(() -> this.metadataExtractor.extract(exchange.getPayload(),
+					AuthenticationPayloadExchangeConverter.COMPOSITE_METADATA_MIME_TYPE))
+			.flatMap((metadata) -> Mono.justOrEmpty(authentication(metadata)));
 	}
 
 	private Authentication authentication(Map<String, Object> metadata) {
@@ -96,7 +96,7 @@ public class AuthenticationPayloadExchangeConverter implements PayloadExchangeAu
 		String username = rawUsername.toString(StandardCharsets.UTF_8);
 		ByteBuf rawPassword = AuthMetadataCodec.readPassword(rawAuthentication);
 		String password = rawPassword.toString(StandardCharsets.UTF_8);
-		return new UsernamePasswordAuthenticationToken(username, password);
+		return UsernamePasswordAuthenticationToken.unauthenticated(username, password);
 	}
 
 	private Authentication bearer(ByteBuf rawAuthentication) {

@@ -10,6 +10,9 @@ dependencies {
 	optional 'io.projectreactor:reactor-core'
 	optional 'org.springframework:spring-webflux'
 
+	testImplementation "org.bouncycastle:bcpkix-jdk18on"
+	testImplementation "org.bouncycastle:bcprov-jdk18on"
+	testImplementation "jakarta.servlet:jakarta.servlet-api"
 	testImplementation 'com.squareup.okhttp3:mockwebserver'
 	testImplementation 'io.projectreactor.netty:reactor-netty'
 	testImplementation 'com.fasterxml.jackson.core:jackson-databind'
@@ -20,4 +23,6 @@ dependencies {
 	testImplementation "org.mockito:mockito-core"
 	testImplementation "org.mockito:mockito-junit-jupiter"
 	testImplementation "org.springframework:spring-test"
+
+	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }

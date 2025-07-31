@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2020 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,9 +27,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.authority.AuthorityUtils;
@@ -43,6 +43,7 @@ import org.springframework.security.oauth2.core.oidc.TestOidcIdTokens;
 import org.springframework.security.oauth2.core.oidc.user.DefaultOidcUser;
 import org.springframework.security.oauth2.core.oidc.user.OidcUser;
 import org.springframework.security.test.context.TestSecurityContextHolder;
+import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 import org.springframework.test.context.web.WebAppConfiguration;
@@ -55,6 +56,7 @@ import org.springframework.web.context.WebApplicationContext;
 import org.springframework.web.servlet.config.annotation.EnableWebMvc;
 
 import static org.mockito.Mockito.mock;
+import static org.springframework.security.config.Customizer.withDefaults;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.oidcLogin;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -106,19 +108,19 @@ public class SecurityMockMvcRequestPostProcessorsOidcLoginTests {
 	@Test
 	public void oidcLoginWhenAuthoritiesSpecifiedThenGrantsAccess() throws Exception {
 		this.mvc.perform(get("/admin/scopes").with(oidcLogin().authorities(new SimpleGrantedAuthority("SCOPE_admin"))))
-				.andExpect(content().string("[\"SCOPE_admin\"]"));
+			.andExpect(content().string("[\"SCOPE_admin\"]"));
 	}
 
 	@Test
 	public void oidcLoginWhenIdTokenSpecifiedThenUserHasClaims() throws Exception {
 		this.mvc.perform(get("/id-token/iss").with(oidcLogin().idToken((i) -> i.issuer("https://idp.example.org"))))
-				.andExpect(content().string("https://idp.example.org"));
+			.andExpect(content().string("https://idp.example.org"));
 	}
 
 	@Test
 	public void oidcLoginWhenUserInfoSpecifiedThenUserHasClaims() throws Exception {
 		this.mvc.perform(get("/user-info/email").with(oidcLogin().userInfoToken((u) -> u.email("email@email"))))
-				.andExpect(content().string("email@email"));
+			.andExpect(content().string("email@email"));
 	}
 
 	@Test
@@ -127,10 +129,10 @@ public class SecurityMockMvcRequestPostProcessorsOidcLoginTests {
 				OidcIdToken.withTokenValue("id-token").claim("custom-attribute", "test-subject").build(),
 				"custom-attribute");
 		this.mvc.perform(get("/id-token/custom-attribute").with(oidcLogin().oidcUser(oidcUser)))
-				.andExpect(content().string("test-subject"));
+			.andExpect(content().string("test-subject"));
 		this.mvc.perform(get("/name").with(oidcLogin().oidcUser(oidcUser))).andExpect(content().string("test-subject"));
 		this.mvc.perform(get("/client-name").with(oidcLogin().oidcUser(oidcUser)))
-				.andExpect(content().string("test-subject"));
+			.andExpect(content().string("test-subject"));
 	}
 
 	// gh-7794
@@ -139,24 +141,26 @@ public class SecurityMockMvcRequestPostProcessorsOidcLoginTests {
 		OidcUser oidcUser = new DefaultOidcUser(AuthorityUtils.createAuthorityList("SCOPE_read"),
 				TestOidcIdTokens.idToken().build());
 		this.mvc.perform(get("/id-token/sub").with(oidcLogin().idToken((i) -> i.subject("foo")).oidcUser(oidcUser)))
-				.andExpect(status().isOk()).andExpect(content().string("subject"));
+			.andExpect(status().isOk())
+			.andExpect(content().string("subject"));
 		this.mvc.perform(get("/id-token/sub").with(oidcLogin().oidcUser(oidcUser).idToken((i) -> i.subject("bar"))))
-				.andExpect(content().string("bar"));
+			.andExpect(content().string("bar"));
 	}
 
+	@Configuration
 	@EnableWebSecurity
 	@EnableWebMvc
-	static class OAuth2LoginConfig extends WebSecurityConfigurerAdapter {
+	static class OAuth2LoginConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.authorizeRequests()
-					.mvcMatchers("/admin/**").hasAuthority("SCOPE_admin")
-					.anyRequest().hasAuthority("SCOPE_read")
-					.and()
-				.oauth2Login();
+				.authorizeHttpRequests((requests) -> requests
+					.requestMatchers("/admin/**").hasAuthority("SCOPE_admin")
+					.anyRequest().hasAuthority("SCOPE_read"))
+				.oauth2Login(withDefaults());
+			return http.build();
 			// @formatter:on
 		}
 

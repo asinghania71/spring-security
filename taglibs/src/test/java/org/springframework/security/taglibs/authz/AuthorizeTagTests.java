@@ -16,9 +16,8 @@
 
 package org.springframework.security.taglibs.authz;
 
-import javax.servlet.jsp.JspException;
-import javax.servlet.jsp.tagext.Tag;
-
+import jakarta.servlet.jsp.JspException;
+import jakarta.servlet.jsp.tagext.Tag;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -67,7 +66,7 @@ public class AuthorizeTagTests {
 		SecurityContextHolder.getContext().setAuthentication(this.currentUser);
 		StaticWebApplicationContext ctx = new StaticWebApplicationContext();
 		BeanDefinitionBuilder webExpressionHandler = BeanDefinitionBuilder
-				.rootBeanDefinition(DefaultWebSecurityExpressionHandler.class);
+			.rootBeanDefinition(DefaultWebSecurityExpressionHandler.class);
 		webExpressionHandler.addPropertyValue("permissionEvaluator", this.permissionEvaluator);
 		ctx.registerBeanDefinition("expressionHandler", webExpressionHandler.getBeanDefinition());
 		ctx.registerSingleton("wipe", MockWebInvocationPrivilegeEvaluator.class);

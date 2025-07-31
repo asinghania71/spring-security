@@ -24,6 +24,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.PermissionEvaluator;
 import org.springframework.security.access.expression.method.DefaultMethodSecurityExpressionHandler;
@@ -55,7 +56,7 @@ public class SampleEnableGlobalMethodSecurityTests {
 	@BeforeEach
 	public void setup() {
 		SecurityContextHolder.getContext()
-				.setAuthentication(new TestingAuthenticationToken("user", "password", "ROLE_USER"));
+			.setAuthentication(new TestingAuthenticationToken("user", "password", "ROLE_USER"));
 	}
 
 	@Test
@@ -64,7 +65,7 @@ public class SampleEnableGlobalMethodSecurityTests {
 		assertThat(this.methodSecurityService.secured()).isNull();
 		assertThat(this.methodSecurityService.jsr250()).isNull();
 		assertThatExceptionOfType(AccessDeniedException.class)
-				.isThrownBy(() -> this.methodSecurityService.preAuthorize());
+			.isThrownBy(() -> this.methodSecurityService.preAuthorize());
 	}
 
 	@Test
@@ -72,9 +73,10 @@ public class SampleEnableGlobalMethodSecurityTests {
 		this.spring.register(CustomPermissionEvaluatorWebSecurityConfig.class).autowire();
 		assertThat(this.methodSecurityService.hasPermission("allowed")).isNull();
 		assertThatExceptionOfType(AccessDeniedException.class)
-				.isThrownBy(() -> this.methodSecurityService.hasPermission("denied"));
+			.isThrownBy(() -> this.methodSecurityService.hasPermission("denied"));
 	}
 
+	@Configuration
 	@EnableGlobalMethodSecurity(prePostEnabled = true)
 	static class SampleWebSecurityConfig {
 
@@ -95,6 +97,7 @@ public class SampleEnableGlobalMethodSecurityTests {
 
 	}
 
+	@Configuration
 	@EnableGlobalMethodSecurity(prePostEnabled = true)
 	public static class CustomPermissionEvaluatorWebSecurityConfig extends GlobalMethodSecurityConfiguration {
 

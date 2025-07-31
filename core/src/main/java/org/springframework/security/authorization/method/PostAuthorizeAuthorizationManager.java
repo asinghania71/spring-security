@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2025 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,23 +16,19 @@
 
 package org.springframework.security.authorization.method;
 
-import java.lang.reflect.Method;
 import java.util.function.Supplier;
 
 import org.aopalliance.intercept.MethodInvocation;
-import reactor.util.annotation.NonNull;
 
-import org.springframework.aop.support.AopUtils;
+import org.springframework.context.ApplicationContext;
 import org.springframework.expression.EvaluationContext;
-import org.springframework.expression.Expression;
-import org.springframework.security.access.expression.ExpressionUtils;
-import org.springframework.security.access.expression.method.DefaultMethodSecurityExpressionHandler;
 import org.springframework.security.access.expression.method.MethodSecurityExpressionHandler;
 import org.springframework.security.access.prepost.PostAuthorize;
 import org.springframework.security.authorization.AuthorizationDecision;
 import org.springframework.security.authorization.AuthorizationManager;
+import org.springframework.security.authorization.AuthorizationResult;
 import org.springframework.security.core.Authentication;
-import org.springframework.util.Assert;
+import org.springframework.security.core.annotation.AnnotationTemplateExpressionDefaults;
 
 /**
  * An {@link AuthorizationManager} which can determine if an {@link Authentication} may
@@ -42,19 +38,41 @@ import org.springframework.util.Assert;
  * @author Evgeniy Cheban
  * @since 5.6
  */
-public final class PostAuthorizeAuthorizationManager implements AuthorizationManager<MethodInvocationResult> {
+public final class PostAuthorizeAuthorizationManager
+		implements AuthorizationManager<MethodInvocationResult>, MethodAuthorizationDeniedHandler {
 
-	private final PostAuthorizeExpressionAttributeRegistry registry = new PostAuthorizeExpressionAttributeRegistry();
-
-	private MethodSecurityExpressionHandler expressionHandler = new DefaultMethodSecurityExpressionHandler();
+	private PostAuthorizeExpressionAttributeRegistry registry = new PostAuthorizeExpressionAttributeRegistry();
 
 	/**
 	 * Use this the {@link MethodSecurityExpressionHandler}.
 	 * @param expressionHandler the {@link MethodSecurityExpressionHandler} to use
 	 */
 	public void setExpressionHandler(MethodSecurityExpressionHandler expressionHandler) {
-		Assert.notNull(expressionHandler, "expressionHandler cannot be null");
-		this.expressionHandler = expressionHandler;
+		this.registry.setExpressionHandler(expressionHandler);
+	}
+
+	/**
+	 * Configure pre/post-authorization template resolution
+	 * <p>
+	 * By default, this value is <code>null</code>, which indicates that templates should
+	 * not be resolved.
+	 * @param defaults - whether to resolve pre/post-authorization templates parameters
+	 * @since 6.4
+	 */
+	public void setTemplateDefaults(AnnotationTemplateExpressionDefaults defaults) {
+		this.registry.setTemplateDefaults(defaults);
+	}
+
+	/**
+	 * Invokes
+	 * {@link PostAuthorizeExpressionAttributeRegistry#setApplicationContext(ApplicationContext)}
+	 * with the provided {@link ApplicationContext}.
+	 * @param context the {@link ApplicationContext}
+	 * @since 6.3
+	 * @see PreAuthorizeExpressionAttributeRegistry#setApplicationContext(ApplicationContext)
+	 */
+	public void setApplicationContext(ApplicationContext context) {
+		this.registry.setApplicationContext(context);
 	}
 
 	/**
@@ -67,41 +85,31 @@ public final class PostAuthorizeAuthorizationManager implements AuthorizationMan
 	 * {@link PostAuthorize} annotation is not present
 	 */
 	@Override
-	public AuthorizationDecision check(Supplier<Authentication> authentication, MethodInvocationResult mi) {
+	public AuthorizationResult authorize(Supplier<Authentication> authentication, MethodInvocationResult mi) {
 		ExpressionAttribute attribute = this.registry.getAttribute(mi.getMethodInvocation());
 		if (attribute == ExpressionAttribute.NULL_ATTRIBUTE) {
 			return null;
 		}
-		EvaluationContext ctx = this.expressionHandler.createEvaluationContext(authentication.get(),
-				mi.getMethodInvocation());
-		this.expressionHandler.setReturnObject(mi.getResult(), ctx);
-		boolean granted = ExpressionUtils.evaluateAsBoolean(attribute.getExpression(), ctx);
-		return new ExpressionAttributeAuthorizationDecision(granted, attribute);
+		MethodSecurityExpressionHandler expressionHandler = this.registry.getExpressionHandler();
+		EvaluationContext ctx = expressionHandler.createEvaluationContext(authentication, mi.getMethodInvocation());
+		expressionHandler.setReturnObject(mi.getResult(), ctx);
+		return ExpressionUtils.evaluate(attribute.getExpression(), ctx);
 	}
 
-	private final class PostAuthorizeExpressionAttributeRegistry
-			extends AbstractExpressionAttributeRegistry<ExpressionAttribute> {
+	@Override
+	public Object handleDeniedInvocation(MethodInvocation methodInvocation, AuthorizationResult authorizationResult) {
+		ExpressionAttribute attribute = this.registry.getAttribute(methodInvocation);
+		PostAuthorizeExpressionAttribute postAuthorizeAttribute = (PostAuthorizeExpressionAttribute) attribute;
+		return postAuthorizeAttribute.getHandler().handleDeniedInvocation(methodInvocation, authorizationResult);
+	}
 
-		@NonNull
-		@Override
-		ExpressionAttribute resolveAttribute(Method method, Class<?> targetClass) {
-			Method specificMethod = AopUtils.getMostSpecificMethod(method, targetClass);
-			PostAuthorize postAuthorize = findPostAuthorizeAnnotation(specificMethod);
-			if (postAuthorize == null) {
-				return ExpressionAttribute.NULL_ATTRIBUTE;
-			}
-			Expression postAuthorizeExpression = PostAuthorizeAuthorizationManager.this.expressionHandler
-					.getExpressionParser().parseExpression(postAuthorize.value());
-			return new ExpressionAttribute(postAuthorizeExpression);
-		}
-
-		private PostAuthorize findPostAuthorizeAnnotation(Method method) {
-			PostAuthorize postAuthorize = AuthorizationAnnotationUtils.findUniqueAnnotation(method,
-					PostAuthorize.class);
-			return (postAuthorize != null) ? postAuthorize : AuthorizationAnnotationUtils
-					.findUniqueAnnotation(method.getDeclaringClass(), PostAuthorize.class);
-		}
-
+	@Override
+	public Object handleDeniedInvocationResult(MethodInvocationResult methodInvocationResult,
+			AuthorizationResult authorizationResult) {
+		ExpressionAttribute attribute = this.registry.getAttribute(methodInvocationResult.getMethodInvocation());
+		PostAuthorizeExpressionAttribute postAuthorizeAttribute = (PostAuthorizeExpressionAttribute) attribute;
+		return postAuthorizeAttribute.getHandler()
+			.handleDeniedInvocationResult(methodInvocationResult, authorizationResult);
 	}
 
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2018 the original author or authors.
+ * Copyright 2002-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,7 +40,7 @@ import org.springframework.web.server.WebSession;
 public final class WebSessionServerOAuth2AuthorizedClientRepository implements ServerOAuth2AuthorizedClientRepository {
 
 	private static final String DEFAULT_AUTHORIZED_CLIENTS_ATTR_NAME = WebSessionServerOAuth2AuthorizedClientRepository.class
-			.getName() + ".AUTHORIZED_CLIENTS";
+		.getName() + ".AUTHORIZED_CLIENTS";
 
 	private final String sessionAttributeName = DEFAULT_AUTHORIZED_CLIENTS_ATTR_NAME;
 
@@ -94,14 +94,10 @@ public final class WebSessionServerOAuth2AuthorizedClientRepository implements S
 		// @formatter:on
 	}
 
-	@SuppressWarnings("unchecked")
 	private Map<String, OAuth2AuthorizedClient> getAuthorizedClients(WebSession session) {
-		Map<String, OAuth2AuthorizedClient> authorizedClients = (session != null)
-				? (Map<String, OAuth2AuthorizedClient>) session.getAttribute(this.sessionAttributeName) : null;
-		if (authorizedClients == null) {
-			authorizedClients = new HashMap<>();
-		}
-		return authorizedClients;
+		Assert.notNull(session, "session cannot be null");
+		Map<String, OAuth2AuthorizedClient> authorizedClients = session.getAttribute(this.sessionAttributeName);
+		return (authorizedClients != null) ? authorizedClients : new HashMap<>();
 	}
 
 }

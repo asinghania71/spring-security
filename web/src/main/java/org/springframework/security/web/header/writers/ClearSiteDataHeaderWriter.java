@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2019 the original author or authors.
+ * Copyright 2002-2025 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,9 +16,8 @@
 
 package org.springframework.security.web.header.writers;
 
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -76,6 +75,7 @@ public final class ClearSiteDataHeaderWriter implements HeaderWriter {
 			if (!response.containsHeader(CLEAR_SITE_DATA_HEADER)) {
 				response.setHeader(CLEAR_SITE_DATA_HEADER, this.headerValue);
 			}
+			return;
 		}
 		this.logger.debug(
 				LogMessage.format("Not injecting Clear-Site-Data header since it did not match the requestMatcher %s",

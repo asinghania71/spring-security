@@ -19,11 +19,13 @@ package org.springframework.security.config.web.server
 import org.springframework.security.authentication.ReactiveAuthenticationManager
 import org.springframework.security.core.Authentication
 import org.springframework.security.oauth2.client.ReactiveOAuth2AuthorizedClientService
+import org.springframework.security.oauth2.client.oidc.server.session.ReactiveOidcSessionRegistry
 import org.springframework.security.oauth2.client.registration.ReactiveClientRegistrationRepository
 import org.springframework.security.oauth2.client.web.server.ServerAuthorizationRequestRepository
 import org.springframework.security.oauth2.client.web.server.ServerOAuth2AuthorizationRequestResolver
 import org.springframework.security.oauth2.client.web.server.ServerOAuth2AuthorizedClientRepository
 import org.springframework.security.oauth2.core.endpoint.OAuth2AuthorizationRequest
+import org.springframework.security.web.server.ServerRedirectStrategy
 import org.springframework.security.web.server.authentication.ServerAuthenticationConverter
 import org.springframework.security.web.server.authentication.ServerAuthenticationFailureHandler
 import org.springframework.security.web.server.authentication.ServerAuthenticationSuccessHandler
@@ -49,8 +51,10 @@ import org.springframework.web.server.ServerWebExchange
  * @property authorizedClientRepository the repository for authorized client(s).
  * @property authorizationRequestRepository the repository to use for storing [OAuth2AuthorizationRequest]s.
  * @property authorizationRequestResolver the resolver used for resolving [OAuth2AuthorizationRequest]s.
+ * @property authorizationRedirectStrategy the redirect strategy for Authorization Endpoint redirect URI.
  * @property authenticationMatcher the [ServerWebExchangeMatcher] used for determining if the request is an
  * authentication request.
+ * @property loginPage the URL to send users to if login is required.
  */
 @ServerSecurityMarker
 class ServerOAuth2LoginDsl {
@@ -64,7 +68,10 @@ class ServerOAuth2LoginDsl {
     var authorizedClientRepository: ServerOAuth2AuthorizedClientRepository? = null
     var authorizationRequestRepository: ServerAuthorizationRequestRepository<OAuth2AuthorizationRequest>? = null
     var authorizationRequestResolver: ServerOAuth2AuthorizationRequestResolver? = null
+    var authorizationRedirectStrategy: ServerRedirectStrategy? = null
     var authenticationMatcher: ServerWebExchangeMatcher? = null
+    var loginPage: String? = null
+    var oidcSessionRegistry: ReactiveOidcSessionRegistry? = null
 
     internal fun get(): (ServerHttpSecurity.OAuth2LoginSpec) -> Unit {
         return { oauth2Login ->
@@ -78,7 +85,10 @@ class ServerOAuth2LoginDsl {
             authorizedClientRepository?.also { oauth2Login.authorizedClientRepository(authorizedClientRepository) }
             authorizationRequestRepository?.also { oauth2Login.authorizationRequestRepository(authorizationRequestRepository) }
             authorizationRequestResolver?.also { oauth2Login.authorizationRequestResolver(authorizationRequestResolver) }
+            authorizationRedirectStrategy?.also { oauth2Login.authorizationRedirectStrategy(authorizationRedirectStrategy) }
             authenticationMatcher?.also { oauth2Login.authenticationMatcher(authenticationMatcher) }
+            loginPage?.also { oauth2Login.loginPage(loginPage) }
+            oidcSessionRegistry?.also { oauth2Login.oidcSessionRegistry(oidcSessionRegistry) }
         }
     }
 }

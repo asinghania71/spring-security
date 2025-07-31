@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2013 the original author or authors.
+ * Copyright 2002-2025 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,21 +16,30 @@
 
 package org.springframework.security.config.annotation.web.configurers;
 
-import org.springframework.security.config.annotation.ObjectPostProcessor;
+import org.springframework.context.ApplicationContext;
+import org.springframework.security.config.ObjectPostProcessor;
 import org.springframework.security.config.annotation.SecurityConfigurer;
 import org.springframework.security.config.annotation.SecurityConfigurerAdapter;
 import org.springframework.security.config.annotation.web.HttpSecurityBuilder;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.context.SecurityContextHolderStrategy;
 import org.springframework.security.web.DefaultSecurityFilterChain;
+import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
 
 /**
  * Adds a convenient base class for {@link SecurityConfigurer} instances that operate on
  * {@link HttpSecurity}.
  *
  * @author Rob Winch
+ * @author Ding Hao
  */
 public abstract class AbstractHttpConfigurer<T extends AbstractHttpConfigurer<T, B>, B extends HttpSecurityBuilder<B>>
 		extends SecurityConfigurerAdapter<DefaultSecurityFilterChain, B> {
+
+	private SecurityContextHolderStrategy securityContextHolderStrategy;
+
+	private PathPatternRequestMatcher.Builder requestMatcherBuilder;
 
 	/**
 	 * Disables the {@link AbstractHttpConfigurer} by removing it. After doing so a fresh
@@ -47,6 +56,25 @@ public abstract class AbstractHttpConfigurer<T extends AbstractHttpConfigurer<T,
 	public T withObjectPostProcessor(ObjectPostProcessor<?> objectPostProcessor) {
 		addObjectPostProcessor(objectPostProcessor);
 		return (T) this;
+	}
+
+	protected SecurityContextHolderStrategy getSecurityContextHolderStrategy() {
+		if (this.securityContextHolderStrategy != null) {
+			return this.securityContextHolderStrategy;
+		}
+		ApplicationContext context = getBuilder().getSharedObject(ApplicationContext.class);
+		this.securityContextHolderStrategy = context.getBeanProvider(SecurityContextHolderStrategy.class)
+			.getIfUnique(SecurityContextHolder::getContextHolderStrategy);
+		return this.securityContextHolderStrategy;
+	}
+
+	protected PathPatternRequestMatcher.Builder getRequestMatcherBuilder() {
+		if (this.requestMatcherBuilder != null) {
+			return this.requestMatcherBuilder;
+		}
+		ApplicationContext context = getBuilder().getSharedObject(ApplicationContext.class);
+		this.requestMatcherBuilder = context.getBean(PathPatternRequestMatcher.Builder.class);
+		return this.requestMatcherBuilder;
 	}
 
 }

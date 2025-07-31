@@ -1,5 +1,5 @@
 /*
- * Copyright 2004, 2005, 2006 Acegi Technology Pty Limited
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,11 +18,10 @@ package org.springframework.security.config;
 
 import java.util.List;
 
-import javax.servlet.Filter;
-import javax.servlet.FilterChain;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-
+import jakarta.servlet.Filter;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -37,13 +36,16 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.security.web.context.SecurityContextPersistenceFilter;
 import org.springframework.security.web.firewall.DefaultHttpFirewall;
 import org.springframework.security.web.servletapi.SecurityContextHolderAwareRequestFilter;
-import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 import org.springframework.security.web.util.matcher.AnyRequestMatcher;
+import org.springframework.security.web.util.matcher.RequestMatcher;
+import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.web.util.pattern.PathPattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.springframework.security.web.servlet.TestMockHttpServletRequests.get;
 
 /**
  * Tests {@link FilterChainProxy}.
@@ -114,12 +116,13 @@ public class FilterChainProxyConfigTests {
 		List<SecurityFilterChain> chains = fcp.getFilterChains();
 		assertThat(getPattern(chains.get(0))).isEqualTo("/login*");
 		assertThat(getPattern(chains.get(1))).isEqualTo("/logout");
-		assertThat(((DefaultSecurityFilterChain) chains.get(2)).getRequestMatcher() instanceof AnyRequestMatcher)
-				.isTrue();
+		assertThat(((DefaultSecurityFilterChain) chains.get(2)).getRequestMatcher())
+			.isInstanceOf(AnyRequestMatcher.class);
 	}
 
 	private String getPattern(SecurityFilterChain chain) {
-		return ((AntPathRequestMatcher) ((DefaultSecurityFilterChain) chain).getRequestMatcher()).getPattern();
+		RequestMatcher requestMatcher = ((DefaultSecurityFilterChain) chain).getRequestMatcher();
+		return ((PathPattern) ReflectionTestUtils.getField(requestMatcher, "pattern")).getPatternString();
 	}
 
 	private void checkPathAndFilterOrder(FilterChainProxy filterChainProxy) {
@@ -142,13 +145,12 @@ public class FilterChainProxyConfigTests {
 	}
 
 	private void doNormalOperation(FilterChainProxy filterChainProxy) throws Exception {
-		MockHttpServletRequest request = new MockHttpServletRequest("GET", "");
-		request.setServletPath("/foo/secure/super/somefile.html");
+		MockHttpServletRequest request = get("/foo/secure/super/somefile.html").build();
 		MockHttpServletResponse response = new MockHttpServletResponse();
 		FilterChain chain = mock(FilterChain.class);
 		filterChainProxy.doFilter(request, response, chain);
 		verify(chain).doFilter(any(HttpServletRequest.class), any(HttpServletResponse.class));
-		request.setServletPath("/a/path/which/doesnt/match/any/filter.html");
+		request = get("/a/path/which/doesnt/match/any/filter.html").build();
 		chain = mock(FilterChain.class);
 		filterChainProxy.doFilter(request, response, chain);
 		verify(chain).doFilter(any(HttpServletRequest.class), any(HttpServletResponse.class));

@@ -79,8 +79,7 @@ public class SimpleAuthenticationITests {
 		// @formatter:off
 		this.server = RSocketServer.create()
 				.payloadDecoder(PayloadDecoder.ZERO_COPY)
-				.interceptors((registry) ->
-					registry.forSocketAcceptor(this.interceptor)
+				.interceptors((registry) -> registry.forSocketAcceptor(this.interceptor)
 				)
 				.acceptor(this.handler.responder())
 				.bind(TcpServerTransport.create("localhost", 0))
@@ -117,7 +116,7 @@ public class SimpleAuthenticationITests {
 	@Test
 	public void retrieveMonoWhenAuthorizedThenGranted() {
 		MimeType authenticationMimeType = MimeTypeUtils
-				.parseMimeType(WellKnownMimeType.MESSAGE_RSOCKET_AUTHENTICATION.getString());
+			.parseMimeType(WellKnownMimeType.MESSAGE_RSOCKET_AUTHENTICATION.getString());
 		UsernamePasswordMetadata credentials = new UsernamePasswordMetadata("rob", "password");
 		// @formatter:off
 		this.requester = RSocketRequester.builder()
@@ -161,7 +160,7 @@ public class SimpleAuthenticationITests {
 		@Bean
 		PayloadSocketAcceptorInterceptor rsocketInterceptor(RSocketSecurity rsocket) {
 			rsocket.authorizePayload((authorize) -> authorize.anyRequest().authenticated().anyExchange().permitAll())
-					.simpleAuthentication(Customizer.withDefaults());
+				.simpleAuthentication(Customizer.withDefaults());
 			return rsocket.build();
 		}
 

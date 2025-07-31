@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,14 +16,15 @@
 
 package org.springframework.security.web.context;
 
-import javax.servlet.AsyncContext;
-import javax.servlet.ServletRequest;
-import javax.servlet.ServletResponse;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletRequestWrapper;
-import javax.servlet.http.HttpServletResponse;
-import javax.servlet.http.HttpSession;
+import java.util.function.Supplier;
 
+import jakarta.servlet.AsyncContext;
+import jakarta.servlet.ServletRequest;
+import jakarta.servlet.ServletResponse;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletRequestWrapper;
+import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpSession;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -33,6 +34,7 @@ import org.springframework.security.authentication.AuthenticationTrustResolver;
 import org.springframework.security.authentication.AuthenticationTrustResolverImpl;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.Transient;
+import org.springframework.security.core.context.DeferredSecurityContext;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.context.SecurityContextHolderStrategy;
@@ -90,11 +92,14 @@ public class HttpSessionSecurityContextRepository implements SecurityContextRepo
 
 	protected final Log logger = LogFactory.getLog(this.getClass());
 
+	private SecurityContextHolderStrategy securityContextHolderStrategy = SecurityContextHolder
+		.getContextHolderStrategy();
+
 	/**
 	 * SecurityContext instance used to check for equality with default (unauthenticated)
 	 * content
 	 */
-	private final Object contextObject = SecurityContextHolder.createEmptyContext();
+	private Object contextObject = this.securityContextHolderStrategy.createEmptyContext();
 
 	private boolean allowSessionCreation = true;
 
@@ -110,7 +115,9 @@ public class HttpSessionSecurityContextRepository implements SecurityContextRepo
 	 * If the session is null, the context object is null or the context object stored in
 	 * the session is not an instance of {@code SecurityContext}, a new context object
 	 * will be generated and returned.
+	 * @deprecated please see {@link SecurityContextRepository#loadContext}
 	 */
+	@Deprecated
 	@Override
 	public SecurityContext loadContext(HttpRequestResponseHolder requestResponseHolder) {
 		HttpServletRequest request = requestResponseHolder.getRequest();
@@ -123,20 +130,65 @@ public class HttpSessionSecurityContextRepository implements SecurityContextRepo
 				this.logger.trace(LogMessage.format("Created %s", context));
 			}
 		}
-		SaveToSessionResponseWrapper wrappedResponse = new SaveToSessionResponseWrapper(response, request,
-				httpSession != null, context);
-		requestResponseHolder.setResponse(wrappedResponse);
-		requestResponseHolder.setRequest(new SaveToSessionRequestWrapper(request, wrappedResponse));
+		if (response != null) {
+			SaveToSessionResponseWrapper wrappedResponse = new SaveToSessionResponseWrapper(response, request,
+					httpSession != null, context);
+			wrappedResponse.setSecurityContextHolderStrategy(this.securityContextHolderStrategy);
+			requestResponseHolder.setResponse(wrappedResponse);
+			requestResponseHolder.setRequest(new SaveToSessionRequestWrapper(request, wrappedResponse));
+		}
 		return context;
+	}
+
+	@Override
+	public DeferredSecurityContext loadDeferredContext(HttpServletRequest request) {
+		Supplier<SecurityContext> supplier = () -> readSecurityContextFromSession(request.getSession(false));
+		return new SupplierDeferredSecurityContext(supplier, this.securityContextHolderStrategy);
 	}
 
 	@Override
 	public void saveContext(SecurityContext context, HttpServletRequest request, HttpServletResponse response) {
 		SaveContextOnUpdateOrErrorResponseWrapper responseWrapper = WebUtils.getNativeResponse(response,
 				SaveContextOnUpdateOrErrorResponseWrapper.class);
-		Assert.state(responseWrapper != null, () -> "Cannot invoke saveContext on response " + response
-				+ ". You must use the HttpRequestResponseHolder.response after invoking loadContext");
+		if (responseWrapper == null) {
+			saveContextInHttpSession(context, request);
+			return;
+		}
 		responseWrapper.saveContext(context);
+	}
+
+	private void saveContextInHttpSession(SecurityContext context, HttpServletRequest request) {
+		if (isTransient(context) || isTransient(context.getAuthentication())) {
+			return;
+		}
+		SecurityContext emptyContext = generateNewContext();
+		if (emptyContext.equals(context)) {
+			HttpSession session = request.getSession(false);
+			removeContextFromSession(context, session);
+		}
+		else {
+			boolean createSession = this.allowSessionCreation;
+			HttpSession session = request.getSession(createSession);
+			setContextInSession(context, session);
+		}
+	}
+
+	private void setContextInSession(SecurityContext context, HttpSession session) {
+		if (session != null) {
+			session.setAttribute(this.springSecurityContextKey, context);
+			if (this.logger.isDebugEnabled()) {
+				this.logger.debug(LogMessage.format("Stored %s to HttpSession [%s]", context, session));
+			}
+		}
+	}
+
+	private void removeContextFromSession(SecurityContext context, HttpSession session) {
+		if (session != null) {
+			session.removeAttribute(this.springSecurityContextKey);
+			if (this.logger.isDebugEnabled()) {
+				this.logger.debug(LogMessage.format("Removed %s from HttpSession [%s]", context, session));
+			}
+		}
 	}
 
 	@Override
@@ -177,8 +229,8 @@ public class HttpSessionSecurityContextRepository implements SecurityContextRepo
 		}
 
 		if (this.logger.isTraceEnabled()) {
-			this.logger.trace(
-					LogMessage.format("Retrieved %s from %s", contextFromSession, this.springSecurityContextKey));
+			this.logger
+				.trace(LogMessage.format("Retrieved %s from %s", contextFromSession, this.springSecurityContextKey));
 		}
 		else if (this.logger.isDebugEnabled()) {
 			this.logger.debug(LogMessage.format("Retrieved %s", contextFromSession));
@@ -196,7 +248,7 @@ public class HttpSessionSecurityContextRepository implements SecurityContextRepo
 	 * @return a new SecurityContext instance. Never null.
 	 */
 	protected SecurityContext generateNewContext() {
-		return SecurityContextHolder.createEmptyContext();
+		return this.securityContextHolderStrategy.createEmptyContext();
 	}
 
 	/**
@@ -232,8 +284,22 @@ public class HttpSessionSecurityContextRepository implements SecurityContextRepo
 		this.springSecurityContextKey = springSecurityContextKey;
 	}
 
-	private boolean isTransientAuthentication(Authentication authentication) {
-		return AnnotationUtils.getAnnotation(authentication.getClass(), Transient.class) != null;
+	/**
+	 * Sets the {@link SecurityContextHolderStrategy} to use. The default action is to use
+	 * the {@link SecurityContextHolderStrategy} stored in {@link SecurityContextHolder}.
+	 *
+	 * @since 5.8
+	 */
+	public void setSecurityContextHolderStrategy(SecurityContextHolderStrategy strategy) {
+		this.securityContextHolderStrategy = strategy;
+		this.contextObject = this.securityContextHolderStrategy.createEmptyContext();
+	}
+
+	private boolean isTransient(Object object) {
+		if (object == null) {
+			return false;
+		}
+		return AnnotationUtils.getAnnotation(object.getClass(), Transient.class) != null;
 	}
 
 	/**
@@ -326,7 +392,13 @@ public class HttpSessionSecurityContextRepository implements SecurityContextRepo
 		 */
 		@Override
 		protected void saveContext(SecurityContext context) {
+			if (isTransient(context)) {
+				return;
+			}
 			final Authentication authentication = context.getAuthentication();
+			if (isTransient(authentication)) {
+				return;
+			}
 			HttpSession httpSession = this.request.getSession(false);
 			String springSecurityContextKey = HttpSessionSecurityContextRepository.this.springSecurityContextKey;
 			// See SEC-776
@@ -348,18 +420,15 @@ public class HttpSessionSecurityContextRepository implements SecurityContextRepo
 				}
 				return;
 			}
-			httpSession = (httpSession != null) ? httpSession : createNewSessionIfAllowed(context, authentication);
+			httpSession = (httpSession != null) ? httpSession : createNewSessionIfAllowed(context);
 			// If HttpSession exists, store current SecurityContext but only if it has
 			// actually changed in this thread (see SEC-37, SEC-1307, SEC-1528)
 			if (httpSession != null) {
 				// We may have a new session, so check also whether the context attribute
 				// is set SEC-1561
 				if (contextChanged(context) || httpSession.getAttribute(springSecurityContextKey) == null) {
-					httpSession.setAttribute(springSecurityContextKey, context);
+					HttpSessionSecurityContextRepository.this.saveContextInHttpSession(context, this.request);
 					this.isSaveContextInvoked = true;
-					if (this.logger.isDebugEnabled()) {
-						this.logger.debug(LogMessage.format("Stored %s to HttpSession [%s]", context, httpSession));
-					}
 				}
 			}
 		}
@@ -369,10 +438,7 @@ public class HttpSessionSecurityContextRepository implements SecurityContextRepo
 					|| context.getAuthentication() != this.authBeforeExecution;
 		}
 
-		private HttpSession createNewSessionIfAllowed(SecurityContext context, Authentication authentication) {
-			if (isTransientAuthentication(authentication)) {
-				return null;
-			}
+		private HttpSession createNewSessionIfAllowed(SecurityContext context) {
 			if (this.httpSessionExistedAtStartOfRequest) {
 				this.logger.debug("HttpSession is now null, but was not null at start of request; "
 						+ "session was invalidated, so do not create a new session");

@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2020 the original author or authors.
+ * Copyright 2002-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,9 +16,12 @@
 
 package org.springframework.security.saml2.provider.service.authentication;
 
+import java.io.Serial;
 import java.io.Serializable;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import org.springframework.util.Assert;
 
@@ -27,21 +30,40 @@ import org.springframework.util.Assert;
  *
  * @author Clement Stoquart
  * @since 5.4
+ * @deprecated Please use {@link Saml2ResponseAssertionAccessor}
  */
+@Deprecated
 public class DefaultSaml2AuthenticatedPrincipal implements Saml2AuthenticatedPrincipal, Serializable {
+
+	@Serial
+	private static final long serialVersionUID = -7601324133433139825L;
 
 	private final String name;
 
 	private final Map<String, List<Object>> attributes;
 
+	private final List<String> sessionIndexes;
+
 	private String registrationId;
 
 	public DefaultSaml2AuthenticatedPrincipal(String name, Map<String, List<Object>> attributes) {
+		this(name, attributes, Collections.emptyList());
+	}
+
+	public DefaultSaml2AuthenticatedPrincipal(String name, Map<String, List<Object>> attributes,
+			List<String> sessionIndexes) {
 		Assert.notNull(name, "name cannot be null");
 		Assert.notNull(attributes, "attributes cannot be null");
+		Assert.notNull(sessionIndexes, "sessionIndexes cannot be null");
 		this.name = name;
 		this.attributes = attributes;
-		this.registrationId = null;
+		this.sessionIndexes = sessionIndexes;
+	}
+
+	public DefaultSaml2AuthenticatedPrincipal(String name, Saml2ResponseAssertionAccessor assertion) {
+		this.name = name;
+		this.attributes = assertion.getAttributes();
+		this.sessionIndexes = assertion.getSessionIndexes();
 	}
 
 	@Override
@@ -55,6 +77,11 @@ public class DefaultSaml2AuthenticatedPrincipal implements Saml2AuthenticatedPri
 	}
 
 	@Override
+	public List<String> getSessionIndexes() {
+		return this.sessionIndexes;
+	}
+
+	@Override
 	public String getRelyingPartyRegistrationId() {
 		return this.registrationId;
 	}
@@ -62,6 +89,22 @@ public class DefaultSaml2AuthenticatedPrincipal implements Saml2AuthenticatedPri
 	public void setRelyingPartyRegistrationId(String registrationId) {
 		Assert.notNull(registrationId, "relyingPartyRegistrationId cannot be null");
 		this.registrationId = registrationId;
+	}
+
+	@Override
+	public boolean equals(Object object) {
+		if (this == object) {
+			return true;
+		}
+		if (!(object instanceof DefaultSaml2AuthenticatedPrincipal that)) {
+			return false;
+		}
+		return Objects.equals(this.name, that.name) && Objects.equals(this.registrationId, that.registrationId);
+	}
+
+	@Override
+	public int hashCode() {
+		return Objects.hash(this.name, this.registrationId);
 	}
 
 }

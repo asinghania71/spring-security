@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2016 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,7 +35,9 @@ import org.springframework.util.Assert;
  *
  * @author Luke Taylor
  * @since 3.0
+ * @deprecated Use {@link WebExpressionAuthorizationManager} instead
  */
+@Deprecated
 public class WebExpressionVoter implements AccessDecisionVoter<FilterInvocation> {
 
 	private final Log logger = LogFactory.getLog(getClass());
@@ -51,7 +53,7 @@ public class WebExpressionVoter implements AccessDecisionVoter<FilterInvocation>
 		WebExpressionConfigAttribute webExpressionConfigAttribute = findConfigAttribute(attributes);
 		if (webExpressionConfigAttribute == null) {
 			this.logger
-					.trace("Abstained since did not find a config attribute of instance WebExpressionConfigAttribute");
+				.trace("Abstained since did not find a config attribute of instance WebExpressionConfigAttribute");
 			return ACCESS_ABSTAIN;
 		}
 		EvaluationContext ctx = webExpressionConfigAttribute.postProcess(

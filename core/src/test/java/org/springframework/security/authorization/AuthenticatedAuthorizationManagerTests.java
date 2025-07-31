@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2020 the original author or authors.
+ * Copyright 2002-2025 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,11 +16,13 @@
 
 package org.springframework.security.authorization;
 
+import java.util.Collections;
 import java.util.function.Supplier;
 
 import org.junit.jupiter.api.Test;
 
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
+import org.springframework.security.authentication.RememberMeAuthenticationToken;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.AuthorityUtils;
@@ -41,7 +43,7 @@ public class AuthenticatedAuthorizationManagerTests {
 				"ROLE_USER");
 		Object object = new Object();
 
-		assertThat(manager.check(authentication, object).isGranted()).isTrue();
+		assertThat(manager.authorize(authentication, object).isGranted()).isTrue();
 	}
 
 	@Test
@@ -50,7 +52,7 @@ public class AuthenticatedAuthorizationManagerTests {
 		Supplier<Authentication> authentication = () -> null;
 		Object object = new Object();
 
-		assertThat(manager.check(authentication, object).isGranted()).isFalse();
+		assertThat(manager.authorize(authentication, object).isGranted()).isFalse();
 	}
 
 	@Test
@@ -60,7 +62,7 @@ public class AuthenticatedAuthorizationManagerTests {
 				AuthorityUtils.createAuthorityList("ROLE_ANONYMOUS"));
 		Object object = new Object();
 
-		assertThat(manager.check(authentication, object).isGranted()).isFalse();
+		assertThat(manager.authorize(authentication, object).isGranted()).isFalse();
 	}
 
 	@Test
@@ -71,7 +73,87 @@ public class AuthenticatedAuthorizationManagerTests {
 		authentication.setAuthenticated(false);
 		Object object = new Object();
 
-		assertThat(manager.check(() -> authentication, object).isGranted()).isFalse();
+		assertThat(manager.authorize(() -> authentication, object).isGranted()).isFalse();
+	}
+
+	@Test
+	public void authenticatedWhenUserRememberMeThenGrantedDecision() {
+		AuthenticatedAuthorizationManager<Object> manager = AuthenticatedAuthorizationManager.authenticated();
+		Supplier<Authentication> authentication = () -> new RememberMeAuthenticationToken("user", "password",
+				Collections.emptyList());
+		Object object = new Object();
+		assertThat(manager.authorize(authentication, object).isGranted()).isTrue();
+	}
+
+	@Test
+	public void fullyAuthenticatedWhenUserNotAnonymousAndNotRememberMeThenGrantedDecision() {
+		AuthenticatedAuthorizationManager<Object> manager = AuthenticatedAuthorizationManager.fullyAuthenticated();
+		Supplier<Authentication> authentication = () -> new TestingAuthenticationToken("user", "password", "ROLE_ADMIN",
+				"ROLE_USER");
+		Object object = new Object();
+		assertThat(manager.authorize(authentication, object).isGranted()).isTrue();
+	}
+
+	@Test
+	public void fullyAuthenticatedWhenUserNullThenDeniedDecision() {
+		AuthenticatedAuthorizationManager<Object> manager = AuthenticatedAuthorizationManager.fullyAuthenticated();
+		Supplier<Authentication> authentication = () -> null;
+		Object object = new Object();
+		assertThat(manager.authorize(authentication, object).isGranted()).isFalse();
+	}
+
+	@Test
+	public void fullyAuthenticatedWhenUserRememberMeThenDeniedDecision() {
+		AuthenticatedAuthorizationManager<Object> manager = AuthenticatedAuthorizationManager.fullyAuthenticated();
+		Supplier<Authentication> authentication = () -> new RememberMeAuthenticationToken("user", "password",
+				Collections.emptyList());
+		Object object = new Object();
+		assertThat(manager.authorize(authentication, object).isGranted()).isFalse();
+	}
+
+	@Test
+	public void fullyAuthenticatedWhenUserAnonymousThenDeniedDecision() {
+		AuthenticatedAuthorizationManager<Object> manager = AuthenticatedAuthorizationManager.fullyAuthenticated();
+		Supplier<Authentication> authentication = () -> new AnonymousAuthenticationToken("key", "principal",
+				AuthorityUtils.createAuthorityList("ROLE_ANONYMOUS"));
+		Object object = new Object();
+		assertThat(manager.authorize(authentication, object).isGranted()).isFalse();
+	}
+
+	@Test
+	public void anonymousWhenUserAnonymousThenGrantedDecision() {
+		AuthenticatedAuthorizationManager<Object> manager = AuthenticatedAuthorizationManager.anonymous();
+		Supplier<Authentication> authentication = () -> new AnonymousAuthenticationToken("key", "principal",
+				AuthorityUtils.createAuthorityList("ROLE_ANONYMOUS"));
+		Object object = new Object();
+		assertThat(manager.authorize(authentication, object).isGranted()).isTrue();
+	}
+
+	@Test
+	public void anonymousWhenUserNotAnonymousThenDeniedDecision() {
+		AuthenticatedAuthorizationManager<Object> manager = AuthenticatedAuthorizationManager.anonymous();
+		Supplier<Authentication> authentication = () -> new TestingAuthenticationToken("user", "password", "ROLE_ADMIN",
+				"ROLE_USER");
+		Object object = new Object();
+		assertThat(manager.authorize(authentication, object).isGranted()).isFalse();
+	}
+
+	@Test
+	public void rememberMeWhenUserRememberMeThenGrantedDecision() {
+		AuthenticatedAuthorizationManager<Object> manager = AuthenticatedAuthorizationManager.rememberMe();
+		Supplier<Authentication> authentication = () -> new RememberMeAuthenticationToken("user", "password",
+				Collections.emptyList());
+		Object object = new Object();
+		assertThat(manager.authorize(authentication, object).isGranted()).isTrue();
+	}
+
+	@Test
+	public void rememberMeWhenUserNotRememberMeThenDeniedDecision() {
+		AuthenticatedAuthorizationManager<Object> manager = AuthenticatedAuthorizationManager.rememberMe();
+		Supplier<Authentication> authentication = () -> new TestingAuthenticationToken("user", "password", "ROLE_ADMIN",
+				"ROLE_USER");
+		Object object = new Object();
+		assertThat(manager.authorize(authentication, object).isGranted()).isFalse();
 	}
 
 }

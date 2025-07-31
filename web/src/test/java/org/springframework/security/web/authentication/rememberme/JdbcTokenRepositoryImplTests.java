@@ -95,10 +95,10 @@ public class JdbcTokenRepositoryImplTests {
 		PersistentRememberMeToken token = new PersistentRememberMeToken("joeuser", "joesseries", "atoken", currentDate);
 		this.repo.createNewToken(token);
 		Map<String, Object> results = this.template.queryForMap("select * from persistent_logins");
-		assertThat(results.get("last_used")).isEqualTo(currentDate);
-		assertThat(results.get("username")).isEqualTo("joeuser");
-		assertThat(results.get("series")).isEqualTo("joesseries");
-		assertThat(results.get("token")).isEqualTo("atoken");
+		assertThat(results).containsEntry("last_used", currentDate);
+		assertThat(results).containsEntry("username", "joeuser");
+		assertThat(results).containsEntry("series", "joesseries");
+		assertThat(results).containsEntry("token", "atoken");
 	}
 
 	@Test
@@ -145,7 +145,7 @@ public class JdbcTokenRepositoryImplTests {
 		// 'joesseries'");
 		this.repo.removeUserTokens("joeuser");
 		List<Map<String, Object>> results = this.template
-				.queryForList("select * from persistent_logins where username = 'joeuser'");
+			.queryForList("select * from persistent_logins where username = 'joeuser'");
 		assertThat(results).isEmpty();
 	}
 
@@ -156,10 +156,10 @@ public class JdbcTokenRepositoryImplTests {
 				+ "('joesseries', 'joeuser', 'atoken', '" + ts.toString() + "')");
 		this.repo.updateToken("joesseries", "newtoken", new Date());
 		Map<String, Object> results = this.template
-				.queryForMap("select * from persistent_logins where series = 'joesseries'");
-		assertThat(results.get("username")).isEqualTo("joeuser");
-		assertThat(results.get("series")).isEqualTo("joesseries");
-		assertThat(results.get("token")).isEqualTo("newtoken");
+			.queryForMap("select * from persistent_logins where series = 'joesseries'");
+		assertThat(results).containsEntry("username", "joeuser");
+		assertThat(results).containsEntry("series", "joesseries");
+		assertThat(results).containsEntry("token", "newtoken");
 		Date lastUsed = (Date) results.get("last_used");
 		assertThat(lastUsed.getTime() > ts.getTime()).isTrue();
 	}

@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2020 the original author or authors.
+ * Copyright 2002-2025 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,8 +21,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Function;
 
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 
 import org.springframework.lang.Nullable;
 import org.springframework.security.core.Authentication;
@@ -92,7 +92,6 @@ public final class DefaultOAuth2AuthorizedClientManager implements OAuth2Authori
 			.authorizationCode()
 			.refreshToken()
 			.clientCredentials()
-			.password()
 			.build();
 	// @formatter:on
 
@@ -123,9 +122,9 @@ public final class DefaultOAuth2AuthorizedClientManager implements OAuth2Authori
 		this.authorizedClientProvider = DEFAULT_AUTHORIZED_CLIENT_PROVIDER;
 		this.contextAttributesMapper = new DefaultContextAttributesMapper();
 		this.authorizationSuccessHandler = (authorizedClient, principal, attributes) -> authorizedClientRepository
-				.saveAuthorizedClient(authorizedClient, principal,
-						(HttpServletRequest) attributes.get(HttpServletRequest.class.getName()),
-						(HttpServletResponse) attributes.get(HttpServletResponse.class.getName()));
+			.saveAuthorizedClient(authorizedClient, principal,
+					(HttpServletRequest) attributes.get(HttpServletRequest.class.getName()),
+					(HttpServletResponse) attributes.get(HttpServletResponse.class.getName()));
 		this.authorizationFailureHandler = new RemoveAuthorizedClientOAuth2AuthorizationFailureHandler(
 				(clientRegistrationId, principal, attributes) -> authorizedClientRepository.removeAuthorizedClient(
 						clientRegistrationId, principal,
@@ -156,7 +155,7 @@ public final class DefaultOAuth2AuthorizedClientManager implements OAuth2Authori
 			}
 			else {
 				ClientRegistration clientRegistration = this.clientRegistrationRepository
-						.findByRegistrationId(clientRegistrationId);
+					.findByRegistrationId(clientRegistrationId);
 				Assert.notNull(clientRegistration,
 						"Could not find ClientRegistration with id '" + clientRegistrationId + "'");
 				contextBuilder = OAuth2AuthorizationContext.withClientRegistration(clientRegistration);

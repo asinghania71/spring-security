@@ -25,6 +25,8 @@ import org.springframework.security.config.annotation.web.HttpSecurityBuilder;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.oauth2.client.InMemoryOAuth2AuthorizedClientService;
 import org.springframework.security.oauth2.client.OAuth2AuthorizedClientService;
+import org.springframework.security.oauth2.client.oidc.session.InMemoryOidcSessionRegistry;
+import org.springframework.security.oauth2.client.oidc.session.OidcSessionRegistry;
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
 import org.springframework.security.oauth2.client.web.AuthenticatedPrincipalOAuth2AuthorizedClientRepository;
 import org.springframework.security.oauth2.client.web.OAuth2AuthorizedClientRepository;
@@ -43,7 +45,7 @@ final class OAuth2ClientConfigurerUtils {
 
 	static <B extends HttpSecurityBuilder<B>> ClientRegistrationRepository getClientRegistrationRepository(B builder) {
 		ClientRegistrationRepository clientRegistrationRepository = builder
-				.getSharedObject(ClientRegistrationRepository.class);
+			.getSharedObject(ClientRegistrationRepository.class);
 		if (clientRegistrationRepository == null) {
 			clientRegistrationRepository = getClientRegistrationRepositoryBean(builder);
 			builder.setSharedObject(ClientRegistrationRepository.class, clientRegistrationRepository);
@@ -59,7 +61,7 @@ final class OAuth2ClientConfigurerUtils {
 	static <B extends HttpSecurityBuilder<B>> OAuth2AuthorizedClientRepository getAuthorizedClientRepository(
 			B builder) {
 		OAuth2AuthorizedClientRepository authorizedClientRepository = builder
-				.getSharedObject(OAuth2AuthorizedClientRepository.class);
+			.getSharedObject(OAuth2AuthorizedClientRepository.class);
 		if (authorizedClientRepository == null) {
 			authorizedClientRepository = getAuthorizedClientRepositoryBean(builder);
 			if (authorizedClientRepository == null) {
@@ -74,8 +76,8 @@ final class OAuth2ClientConfigurerUtils {
 	private static <B extends HttpSecurityBuilder<B>> OAuth2AuthorizedClientRepository getAuthorizedClientRepositoryBean(
 			B builder) {
 		Map<String, OAuth2AuthorizedClientRepository> authorizedClientRepositoryMap = BeanFactoryUtils
-				.beansOfTypeIncludingAncestors(builder.getSharedObject(ApplicationContext.class),
-						OAuth2AuthorizedClientRepository.class);
+			.beansOfTypeIncludingAncestors(builder.getSharedObject(ApplicationContext.class),
+					OAuth2AuthorizedClientRepository.class);
 		if (authorizedClientRepositoryMap.size() > 1) {
 			throw new NoUniqueBeanDefinitionException(OAuth2AuthorizedClientRepository.class,
 					authorizedClientRepositoryMap.size(),
@@ -100,8 +102,8 @@ final class OAuth2ClientConfigurerUtils {
 	private static <B extends HttpSecurityBuilder<B>> OAuth2AuthorizedClientService getAuthorizedClientServiceBean(
 			B builder) {
 		Map<String, OAuth2AuthorizedClientService> authorizedClientServiceMap = BeanFactoryUtils
-				.beansOfTypeIncludingAncestors(builder.getSharedObject(ApplicationContext.class),
-						OAuth2AuthorizedClientService.class);
+			.beansOfTypeIncludingAncestors(builder.getSharedObject(ApplicationContext.class),
+					OAuth2AuthorizedClientService.class);
 		if (authorizedClientServiceMap.size() > 1) {
 			throw new NoUniqueBeanDefinitionException(OAuth2AuthorizedClientService.class,
 					authorizedClientServiceMap.size(),
@@ -110,6 +112,22 @@ final class OAuth2ClientConfigurerUtils {
 							+ StringUtils.collectionToCommaDelimitedString(authorizedClientServiceMap.keySet()));
 		}
 		return (!authorizedClientServiceMap.isEmpty() ? authorizedClientServiceMap.values().iterator().next() : null);
+	}
+
+	static <B extends HttpSecurityBuilder<B>> OidcSessionRegistry getOidcSessionRegistry(B builder) {
+		OidcSessionRegistry sessionRegistry = builder.getSharedObject(OidcSessionRegistry.class);
+		if (sessionRegistry != null) {
+			return sessionRegistry;
+		}
+		ApplicationContext context = builder.getSharedObject(ApplicationContext.class);
+		if (context.getBeanNamesForType(OidcSessionRegistry.class).length == 1) {
+			sessionRegistry = context.getBean(OidcSessionRegistry.class);
+		}
+		else {
+			sessionRegistry = new InMemoryOidcSessionRegistry();
+		}
+		builder.setSharedObject(OidcSessionRegistry.class, sessionRegistry);
+		return sessionRegistry;
 	}
 
 }

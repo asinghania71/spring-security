@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2019 the original author or authors.
+ * Copyright 2002-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,20 +19,28 @@ package org.springframework.security.config.annotation.web.reactive;
 import java.util.Arrays;
 import java.util.List;
 
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.config.BeanFactoryPostProcessor;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
+import org.springframework.security.config.ObjectPostProcessor;
 import org.springframework.security.config.crypto.RsaKeyConversionServicePostProcessor;
 import org.springframework.security.config.web.server.ServerHttpSecurity;
 import org.springframework.security.web.reactive.result.view.CsrfRequestDataValueProcessor;
 import org.springframework.security.web.server.SecurityWebFilterChain;
 import org.springframework.security.web.server.WebFilterChainProxy;
+import org.springframework.security.web.server.WebFilterChainProxy.DefaultWebFilterChainDecorator;
+import org.springframework.security.web.server.WebFilterChainProxy.WebFilterChainDecorator;
+import org.springframework.security.web.server.firewall.ServerExchangeRejectedHandler;
+import org.springframework.security.web.server.firewall.ServerWebExchangeFirewall;
 import org.springframework.util.ClassUtils;
 import org.springframework.util.ObjectUtils;
 import org.springframework.web.reactive.result.view.AbstractView;
+
+import static org.springframework.security.config.Customizer.withDefaults;
 
 /**
  * @author Rob Winch
@@ -50,10 +58,16 @@ class WebFluxSecurityConfiguration {
 
 	public static final String REACTIVE_CLIENT_REGISTRATION_REPOSITORY_CLASSNAME = "org.springframework.security.oauth2.client.registration.ReactiveClientRegistrationRepository";
 
-	private static final boolean isOAuth2Present = ClassUtils.isPresent(
-			REACTIVE_CLIENT_REGISTRATION_REPOSITORY_CLASSNAME, WebFluxSecurityConfiguration.class.getClassLoader());
+	private static final boolean isOAuth2Present;
 
 	private List<SecurityWebFilterChain> securityWebFilterChains;
+
+	private ObjectPostProcessor<WebFilterChainDecorator> postProcessor = ObjectPostProcessor.identity();
+
+	static {
+		isOAuth2Present = ClassUtils.isPresent(REACTIVE_CLIENT_REGISTRATION_REPOSITORY_CLASSNAME,
+				WebFluxSecurityConfiguration.class.getClassLoader());
+	}
 
 	@Autowired
 	ApplicationContext context;
@@ -63,10 +77,21 @@ class WebFluxSecurityConfiguration {
 		this.securityWebFilterChains = securityWebFilterChains;
 	}
 
+	@Autowired(required = false)
+	void setFilterChainPostProcessor(ObjectPostProcessor<WebFilterChainDecorator> postProcessor) {
+		this.postProcessor = postProcessor;
+	}
+
 	@Bean(SPRING_SECURITY_WEBFILTERCHAINFILTER_BEAN_NAME)
 	@Order(WEB_FILTER_CHAIN_FILTER_ORDER)
-	WebFilterChainProxy springSecurityWebFilterChainFilter() {
-		return new WebFilterChainProxy(getSecurityWebFilterChains());
+	WebFilterChainProxy springSecurityWebFilterChainFilter(ObjectProvider<ServerWebExchangeFirewall> firewall,
+			ObjectProvider<ServerExchangeRejectedHandler> rejectedHandler) {
+		WebFilterChainProxy proxy = new WebFilterChainProxy(getSecurityWebFilterChains());
+		WebFilterChainDecorator decorator = this.postProcessor.postProcess(new DefaultWebFilterChainDecorator());
+		proxy.setFilterChainDecorator(decorator);
+		firewall.ifUnique(proxy::setFirewall);
+		rejectedHandler.ifUnique(proxy::setExchangeRejectedHandler);
+		return proxy;
 	}
 
 	@Bean(name = AbstractView.REQUEST_DATA_VALUE_PROCESSOR_BEAN_NAME)
@@ -98,13 +123,13 @@ class WebFluxSecurityConfiguration {
 	 * @return
 	 */
 	private SecurityWebFilterChain springSecurityFilterChain(ServerHttpSecurity http) {
-		http.authorizeExchange().anyExchange().authenticated();
+		http.authorizeExchange((authorize) -> authorize.anyExchange().authenticated());
 		if (isOAuth2Present && OAuth2ClasspathGuard.shouldConfigure(this.context)) {
 			OAuth2ClasspathGuard.configure(this.context, http);
 		}
 		else {
-			http.httpBasic();
-			http.formLogin();
+			http.httpBasic(withDefaults());
+			http.formLogin(withDefaults());
 		}
 		SecurityWebFilterChain result = http.build();
 		return result;
@@ -113,14 +138,14 @@ class WebFluxSecurityConfiguration {
 	private static class OAuth2ClasspathGuard {
 
 		static void configure(ApplicationContext context, ServerHttpSecurity http) {
-			http.oauth2Login();
-			http.oauth2Client();
+			http.oauth2Login(withDefaults());
+			http.oauth2Client(withDefaults());
 		}
 
 		static boolean shouldConfigure(ApplicationContext context) {
 			ClassLoader loader = context.getClassLoader();
 			Class<?> reactiveClientRegistrationRepositoryClass = ClassUtils
-					.resolveClassName(REACTIVE_CLIENT_REGISTRATION_REPOSITORY_CLASSNAME, loader);
+				.resolveClassName(REACTIVE_CLIENT_REGISTRATION_REPOSITORY_CLASSNAME, loader);
 			return context.getBeanNamesForType(reactiveClientRegistrationRepositoryClass).length == 1;
 		}
 

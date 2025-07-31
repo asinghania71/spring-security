@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2025 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,7 +29,14 @@ enum SecurityFilters {
 
 	FIRST(Integer.MIN_VALUE),
 
+	DISABLE_ENCODE_URL_FILTER,
+
+	FORCE_EAGER_SESSION_FILTER,
+
+	@Deprecated
 	CHANNEL_FILTER,
+
+	HTTPS_REDIRECT_FILTER,
 
 	SECURITY_CONTEXT_FILTER,
 
@@ -41,11 +48,19 @@ enum SecurityFilters {
 
 	CORS_FILTER,
 
+	SAML2_LOGOUT_REQUEST_FILTER,
+
+	SAML2_LOGOUT_RESPONSE_FILTER,
+
 	CSRF_FILTER,
+
+	SAML2_LOGOUT_FILTER,
 
 	LOGOUT_FILTER,
 
 	OAUTH2_AUTHORIZATION_REQUEST_FILTER,
+
+	SAML2_AUTHENTICATION_REQUEST_FILTER,
 
 	X509_FILTER,
 
@@ -55,9 +70,11 @@ enum SecurityFilters {
 
 	OAUTH2_LOGIN_FILTER,
 
+	SAML2_AUTHENTICATION_FILTER,
+
 	FORM_LOGIN_FILTER,
 
-	OPENID_FILTER,
+	DEFAULT_RESOURCES_FILTER,
 
 	LOGIN_PAGE_FILTER,
 

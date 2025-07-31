@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2019 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,8 +18,6 @@ package org.springframework.security.config.web.server;
 
 import java.time.Duration;
 import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -27,9 +25,13 @@ import org.junit.jupiter.api.Test;
 import reactor.core.publisher.Mono;
 
 import org.springframework.http.HttpHeaders;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.test.web.reactive.server.WebTestClientBuilder;
 import org.springframework.security.web.server.header.ContentSecurityPolicyServerHttpHeadersWriter;
 import org.springframework.security.web.server.header.ContentTypeOptionsServerHttpHeadersWriter;
+import org.springframework.security.web.server.header.CrossOriginEmbedderPolicyServerHttpHeadersWriter;
+import org.springframework.security.web.server.header.CrossOriginOpenerPolicyServerHttpHeadersWriter;
+import org.springframework.security.web.server.header.CrossOriginResourcePolicyServerHttpHeadersWriter;
 import org.springframework.security.web.server.header.FeaturePolicyServerHttpHeadersWriter;
 import org.springframework.security.web.server.header.ReferrerPolicyServerHttpHeadersWriter;
 import org.springframework.security.web.server.header.ReferrerPolicyServerHttpHeadersWriter.ReferrerPolicy;
@@ -48,6 +50,7 @@ import static org.springframework.security.config.Customizer.withDefaults;
  * @author Rob Winch
  * @author Vedran Pavic
  * @author Ankur Pathak
+ * @author Marcus Da Coregio
  * @since 5.0
  */
 public class HeaderSpecTests {
@@ -71,32 +74,32 @@ public class HeaderSpecTests {
 		this.expectedHeaders.add(HttpHeaders.EXPIRES, "0");
 		this.expectedHeaders.add(ContentTypeOptionsServerHttpHeadersWriter.X_CONTENT_OPTIONS, "nosniff");
 		this.expectedHeaders.add(XFrameOptionsServerHttpHeadersWriter.X_FRAME_OPTIONS, "DENY");
-		this.expectedHeaders.add(XXssProtectionServerHttpHeadersWriter.X_XSS_PROTECTION, "1 ; mode=block");
+		this.expectedHeaders.add(XXssProtectionServerHttpHeadersWriter.X_XSS_PROTECTION, "0");
 	}
 
 	@Test
 	public void headersWhenDisableThenNoSecurityHeaders() {
-		new HashSet<>(this.expectedHeaders.keySet()).forEach(this::expectHeaderNamesNotPresent);
-		this.http.headers().disable();
+		new HashSet<>(this.expectedHeaders.headerNames()).forEach(this::expectHeaderNamesNotPresent);
+		this.http.headers((headers) -> headers.disable());
 		assertHeaders();
 	}
 
 	@Test
 	public void headersWhenDisableInLambdaThenNoSecurityHeaders() {
-		new HashSet<>(this.expectedHeaders.keySet()).forEach(this::expectHeaderNamesNotPresent);
+		new HashSet<>(this.expectedHeaders.headerNames()).forEach(this::expectHeaderNamesNotPresent);
 		this.http.headers((headers) -> headers.disable());
 		assertHeaders();
 	}
 
 	@Test
 	public void headersWhenDisableAndInvokedExplicitlyThenDefautsUsed() {
-		this.http.headers().disable().headers();
+		this.http.headers((headers) -> headers.disable().headers(Customizer.withDefaults()));
 		assertHeaders();
 	}
 
 	@Test
 	public void headersWhenDefaultsThenAllDefaultsWritten() {
-		this.http.headers();
+		this.http.headers(withDefaults());
 		assertHeaders();
 	}
 
@@ -109,7 +112,7 @@ public class HeaderSpecTests {
 	@Test
 	public void headersWhenCacheDisableThenCacheNotWritten() {
 		expectHeaderNamesNotPresent(HttpHeaders.CACHE_CONTROL, HttpHeaders.PRAGMA, HttpHeaders.EXPIRES);
-		this.http.headers().cache().disable();
+		this.http.headers((headers) -> headers.cache((cache) -> cache.disable()));
 		assertHeaders();
 	}
 
@@ -127,7 +130,7 @@ public class HeaderSpecTests {
 	@Test
 	public void headersWhenContentOptionsDisableThenContentTypeOptionsNotWritten() {
 		expectHeaderNamesNotPresent(ContentTypeOptionsServerHttpHeadersWriter.X_CONTENT_OPTIONS);
-		this.http.headers().contentTypeOptions().disable();
+		this.http.headers((headers) -> headers.contentTypeOptions((options) -> options.disable()));
 		assertHeaders();
 	}
 
@@ -146,7 +149,7 @@ public class HeaderSpecTests {
 	@Test
 	public void headersWhenHstsDisableThenHstsNotWritten() {
 		expectHeaderNamesNotPresent(StrictTransportSecurityServerHttpHeadersWriter.STRICT_TRANSPORT_SECURITY);
-		this.http.headers().hsts().disable();
+		this.http.headers((headers) -> headers.hsts((hsts) -> hsts.disable()));
 		assertHeaders();
 	}
 
@@ -167,10 +170,10 @@ public class HeaderSpecTests {
 		this.expectedHeaders.add(StrictTransportSecurityServerHttpHeadersWriter.STRICT_TRANSPORT_SECURITY,
 				"max-age=60");
 		// @formatter:off
-		this.http.headers()
-				.hsts()
-					.maxAge(Duration.ofSeconds(60))
-					.includeSubdomains(false);
+		this.http.headers((headers) -> headers
+			.hsts((hsts) -> hsts
+				.maxAge(Duration.ofSeconds(60))
+				.includeSubdomains(false)));
 		// @formatter:on
 		assertHeaders();
 	}
@@ -198,10 +201,10 @@ public class HeaderSpecTests {
 		this.expectedHeaders.add(StrictTransportSecurityServerHttpHeadersWriter.STRICT_TRANSPORT_SECURITY,
 				"max-age=60 ; includeSubDomains ; preload");
 		// @formatter:off
-		this.http.headers()
-				.hsts()
-					.maxAge(Duration.ofSeconds(60))
-					.preload(true);
+		this.http.headers((headers) -> headers
+			.hsts((hsts) -> hsts
+				.maxAge(Duration.ofSeconds(60))
+				.preload(true)));
 		// @formatter:on
 		assertHeaders();
 	}
@@ -226,8 +229,8 @@ public class HeaderSpecTests {
 	public void headersWhenFrameOptionsDisableThenFrameOptionsNotWritten() {
 		expectHeaderNamesNotPresent(XFrameOptionsServerHttpHeadersWriter.X_FRAME_OPTIONS);
 		// @formatter:off
-		this.http.headers()
-				.frameOptions().disable();
+		this.http.headers((headers) -> headers
+			.frameOptions((options) -> options.disable()));
 		// @formatter:on
 		assertHeaders();
 	}
@@ -249,9 +252,9 @@ public class HeaderSpecTests {
 	public void headersWhenFrameOptionsModeThenFrameOptionsCustomMode() {
 		this.expectedHeaders.set(XFrameOptionsServerHttpHeadersWriter.X_FRAME_OPTIONS, "SAMEORIGIN");
 		// @formatter:off
-		this.http.headers()
-				.frameOptions()
-					.mode(XFrameOptionsServerHttpHeadersWriter.Mode.SAMEORIGIN);
+		this.http.headers((headers) -> headers
+			.frameOptions((frameOptions) -> frameOptions
+				.mode(XFrameOptionsServerHttpHeadersWriter.Mode.SAMEORIGIN)));
 		// @formatter:on
 		assertHeaders();
 	}
@@ -273,8 +276,8 @@ public class HeaderSpecTests {
 	public void headersWhenXssProtectionDisableThenXssProtectionNotWritten() {
 		expectHeaderNamesNotPresent("X-Xss-Protection");
 		// @formatter:off
-		this.http.headers()
-				.xssProtection().disable();
+		this.http.headers((headers) -> headers
+			.xssProtection((xss) -> xss.disable()));
 		// @formatter:on
 		assertHeaders();
 	}
@@ -293,12 +296,56 @@ public class HeaderSpecTests {
 	}
 
 	@Test
+	public void headersWhenXssProtectionValueDisabledThenXssProtectionWritten() {
+		this.expectedHeaders.set(XXssProtectionServerHttpHeadersWriter.X_XSS_PROTECTION, "0");
+		// @formatter:off
+		this.http.headers((headers) -> headers
+			.xssProtection((xss) -> xss
+				.headerValue(XXssProtectionServerHttpHeadersWriter.HeaderValue.DISABLED)));
+		// @formatter:on
+		assertHeaders();
+	}
+
+	@Test
+	public void headersWhenXssProtectionValueEnabledThenXssProtectionWritten() {
+		this.expectedHeaders.set(XXssProtectionServerHttpHeadersWriter.X_XSS_PROTECTION, "1");
+		// @formatter:off
+		this.http.headers((headers) -> headers
+			.xssProtection((xss) -> xss
+				.headerValue(XXssProtectionServerHttpHeadersWriter.HeaderValue.ENABLED)));
+		// @formatter:on
+		assertHeaders();
+	}
+
+	@Test
+	public void headersWhenXssProtectionValueEnabledModeBlockThenXssProtectionWritten() {
+		this.expectedHeaders.set(XXssProtectionServerHttpHeadersWriter.X_XSS_PROTECTION, "1; mode=block");
+		// @formatter:off
+		this.http.headers((headers) -> headers
+			.xssProtection((xss) -> xss
+				.headerValue(XXssProtectionServerHttpHeadersWriter.HeaderValue.ENABLED_MODE_BLOCK)));
+		// @formatter:on
+		assertHeaders();
+	}
+
+	@Test
+	public void headersWhenXssProtectionValueDisabledInLambdaThenXssProtectionWritten() {
+		this.expectedHeaders.set(XXssProtectionServerHttpHeadersWriter.X_XSS_PROTECTION, "0");
+		// @formatter:off
+		this.http.headers((headers) -> headers
+			.xssProtection((xssProtection) -> xssProtection.headerValue(XXssProtectionServerHttpHeadersWriter.HeaderValue.DISABLED)
+			));
+		// @formatter:on
+		assertHeaders();
+	}
+
+	@Test
 	public void headersWhenFeaturePolicyEnabledThenFeaturePolicyWritten() {
 		String policyDirectives = "Feature-Policy";
 		this.expectedHeaders.add(FeaturePolicyServerHttpHeadersWriter.FEATURE_POLICY, policyDirectives);
 		// @formatter:off
-		this.http.headers()
-				.featurePolicy(policyDirectives);
+		this.http.headers((headers) -> headers
+			.featurePolicy(policyDirectives));
 		// @formatter:on
 		assertHeaders();
 	}
@@ -309,8 +356,8 @@ public class HeaderSpecTests {
 		this.expectedHeaders.add(ContentSecurityPolicyServerHttpHeadersWriter.CONTENT_SECURITY_POLICY,
 				policyDirectives);
 		// @formatter:off
-		this.http.headers()
-				.contentSecurityPolicy(policyDirectives);
+		this.http.headers((headers) -> headers
+			.contentSecurityPolicy((csp) -> csp.policyDirectives(policyDirectives)));
 		// @formatter:on
 		assertHeaders();
 	}
@@ -348,8 +395,8 @@ public class HeaderSpecTests {
 		this.expectedHeaders.add(ReferrerPolicyServerHttpHeadersWriter.REFERRER_POLICY,
 				ReferrerPolicy.NO_REFERRER.getPolicy());
 		// @formatter:off
-		this.http.headers()
-				.referrerPolicy();
+		this.http.headers((headers) -> headers
+			.referrerPolicy(Customizer.withDefaults()));
 		// @formatter:on
 		assertHeaders();
 	}
@@ -372,8 +419,8 @@ public class HeaderSpecTests {
 		this.expectedHeaders.add(ReferrerPolicyServerHttpHeadersWriter.REFERRER_POLICY,
 				ReferrerPolicy.NO_REFERRER_WHEN_DOWNGRADE.getPolicy());
 		// @formatter:off
-		this.http.headers()
-				.referrerPolicy(ReferrerPolicy.NO_REFERRER_WHEN_DOWNGRADE);
+		this.http.headers((headers) -> headers
+			.referrerPolicy((referrer) -> referrer.policy(ReferrerPolicy.NO_REFERRER_WHEN_DOWNGRADE)));
 		// @formatter:on
 		assertHeaders();
 	}
@@ -406,6 +453,51 @@ public class HeaderSpecTests {
 		assertHeaders();
 	}
 
+	@Test
+	public void headersWhenCrossOriginPoliciesCustomEnabledThenCustomCrossOriginPoliciesWritten() {
+		this.expectedHeaders.add(CrossOriginOpenerPolicyServerHttpHeadersWriter.OPENER_POLICY,
+				CrossOriginOpenerPolicyServerHttpHeadersWriter.CrossOriginOpenerPolicy.SAME_ORIGIN_ALLOW_POPUPS
+					.getPolicy());
+		this.expectedHeaders.add(CrossOriginEmbedderPolicyServerHttpHeadersWriter.EMBEDDER_POLICY,
+				CrossOriginEmbedderPolicyServerHttpHeadersWriter.CrossOriginEmbedderPolicy.REQUIRE_CORP.getPolicy());
+		this.expectedHeaders.add(CrossOriginResourcePolicyServerHttpHeadersWriter.RESOURCE_POLICY,
+				CrossOriginResourcePolicyServerHttpHeadersWriter.CrossOriginResourcePolicy.SAME_ORIGIN.getPolicy());
+		// @formatter:off
+		this.http.headers((headers) -> headers
+			.crossOriginOpenerPolicy((opener) -> opener
+				.policy(CrossOriginOpenerPolicyServerHttpHeadersWriter.CrossOriginOpenerPolicy.SAME_ORIGIN_ALLOW_POPUPS))
+			.crossOriginEmbedderPolicy((embedder) -> embedder
+				.policy(CrossOriginEmbedderPolicyServerHttpHeadersWriter.CrossOriginEmbedderPolicy.REQUIRE_CORP))
+			.crossOriginResourcePolicy((resource) -> resource
+				.policy(CrossOriginResourcePolicyServerHttpHeadersWriter.CrossOriginResourcePolicy.SAME_ORIGIN)));
+		// @formatter:on
+		assertHeaders();
+	}
+
+	@Test
+	public void headersWhenCrossOriginPoliciesCustomEnabledInLambdaThenCustomCrossOriginPoliciesWritten() {
+		this.expectedHeaders.add(CrossOriginOpenerPolicyServerHttpHeadersWriter.OPENER_POLICY,
+				CrossOriginOpenerPolicyServerHttpHeadersWriter.CrossOriginOpenerPolicy.SAME_ORIGIN_ALLOW_POPUPS
+					.getPolicy());
+		this.expectedHeaders.add(CrossOriginEmbedderPolicyServerHttpHeadersWriter.EMBEDDER_POLICY,
+				CrossOriginEmbedderPolicyServerHttpHeadersWriter.CrossOriginEmbedderPolicy.REQUIRE_CORP.getPolicy());
+		this.expectedHeaders.add(CrossOriginResourcePolicyServerHttpHeadersWriter.RESOURCE_POLICY,
+				CrossOriginResourcePolicyServerHttpHeadersWriter.CrossOriginResourcePolicy.SAME_ORIGIN.getPolicy());
+		// @formatter:off
+		this.http.headers((headers) -> headers
+			.crossOriginOpenerPolicy((policy) -> policy
+					.policy(CrossOriginOpenerPolicyServerHttpHeadersWriter.CrossOriginOpenerPolicy.SAME_ORIGIN_ALLOW_POPUPS)
+			)
+			.crossOriginEmbedderPolicy((policy) -> policy
+					.policy(CrossOriginEmbedderPolicyServerHttpHeadersWriter.CrossOriginEmbedderPolicy.REQUIRE_CORP)
+			)
+			.crossOriginResourcePolicy((policy) -> policy
+					.policy(CrossOriginResourcePolicyServerHttpHeadersWriter.CrossOriginResourcePolicy.SAME_ORIGIN)
+			));
+		// @formatter:on
+		assertHeaders();
+	}
+
 	private void expectHeaderNamesNotPresent(String... headerNames) {
 		for (String headerName : headerNames) {
 			this.expectedHeaders.remove(headerName);
@@ -415,14 +507,17 @@ public class HeaderSpecTests {
 
 	private void assertHeaders() {
 		WebTestClient client = buildClient();
-		FluxExchangeResult<String> response = client.get().uri("https://example.com/").exchange()
-				.returnResult(String.class);
-		Map<String, List<String>> responseHeaders = response.getResponseHeaders();
+		FluxExchangeResult<String> response = client.get()
+			.uri("https://example.com/")
+			.exchange()
+			.returnResult(String.class);
+		HttpHeaders responseHeaders = response.getResponseHeaders();
 		if (!this.expectedHeaders.isEmpty()) {
-			assertThat(responseHeaders).describedAs(response.toString()).containsAllEntriesOf(this.expectedHeaders);
+			this.expectedHeaders.forEach(
+					(headerName, headerValues) -> assertThat(responseHeaders.get(headerName)).isEqualTo(headerValues));
 		}
 		if (!this.headerNamesNotPresent.isEmpty()) {
-			assertThat(responseHeaders.keySet()).doesNotContainAnyElementsOf(this.headerNamesNotPresent);
+			assertThat(responseHeaders.headerNames()).doesNotContainAnyElementsOf(this.headerNamesNotPresent);
 		}
 	}
 

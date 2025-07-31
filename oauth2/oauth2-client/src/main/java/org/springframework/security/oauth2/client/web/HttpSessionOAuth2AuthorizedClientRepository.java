@@ -19,9 +19,9 @@ package org.springframework.security.oauth2.client.web;
 import java.util.HashMap;
 import java.util.Map;
 
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-import javax.servlet.http.HttpSession;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpSession;
 
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.client.OAuth2AuthorizedClient;
@@ -39,7 +39,7 @@ import org.springframework.util.Assert;
 public final class HttpSessionOAuth2AuthorizedClientRepository implements OAuth2AuthorizedClientRepository {
 
 	private static final String DEFAULT_AUTHORIZED_CLIENTS_ATTR_NAME = HttpSessionOAuth2AuthorizedClientRepository.class
-			.getName() + ".AUTHORIZED_CLIENTS";
+		.getName() + ".AUTHORIZED_CLIENTS";
 
 	private final String sessionAttributeName = DEFAULT_AUTHORIZED_CLIENTS_ATTR_NAME;
 

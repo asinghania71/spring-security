@@ -4,20 +4,17 @@ dependencies {
 	management platform(project(":spring-security-dependencies"))
 	api project(':spring-security-core')
 	api project(':spring-security-web')
-	api('org.jasig.cas.client:cas-client-core') {
-		exclude group: 'org.glassfish.jaxb', module: 'jaxb-core'
-		exclude group: 'javax.xml.bind', module: 'jaxb-api'
-	}
+	api 'org.apereo.cas.client:cas-client-core'
 	api 'org.springframework:spring-beans'
 	api 'org.springframework:spring-context'
 	api 'org.springframework:spring-core'
 	api 'org.springframework:spring-web'
 
 	optional 'com.fasterxml.jackson.core:jackson-databind'
-	optional 'net.sf.ehcache:ehcache'
 
 	provided 'jakarta.servlet:jakarta.servlet-api'
 
+	testImplementation project(path : ':spring-security-web', configuration : 'tests')
 	testImplementation "org.assertj:assertj-core"
 	testImplementation "org.junit.jupiter:junit-jupiter-api"
 	testImplementation "org.junit.jupiter:junit-jupiter-params"
@@ -26,4 +23,6 @@ dependencies {
 	testImplementation "org.mockito:mockito-junit-jupiter"
 	testImplementation "org.springframework:spring-test"
 	testImplementation 'org.skyscreamer:jsonassert'
+
+	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }

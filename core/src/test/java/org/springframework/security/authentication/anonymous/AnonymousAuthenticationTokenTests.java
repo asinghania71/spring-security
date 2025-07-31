@@ -45,7 +45,7 @@ public class AnonymousAuthenticationTokenTests {
 		assertThatIllegalArgumentException().isThrownBy(() -> new AnonymousAuthenticationToken("key", null, ROLES_12));
 		assertThatIllegalArgumentException().isThrownBy(() -> new AnonymousAuthenticationToken("key", "Test", null));
 		assertThatIllegalArgumentException()
-				.isThrownBy(() -> new AnonymousAuthenticationToken("key", "Test", AuthorityUtils.NO_AUTHORITIES));
+			.isThrownBy(() -> new AnonymousAuthenticationToken("key", "Test", AuthorityUtils.NO_AUTHORITIES));
 	}
 
 	@Test
@@ -68,7 +68,7 @@ public class AnonymousAuthenticationTokenTests {
 	@Test
 	public void testNoArgConstructorDoesntExist() {
 		assertThatExceptionOfType(NoSuchMethodException.class)
-				.isThrownBy(() -> AnonymousAuthenticationToken.class.getDeclaredConstructor((Class[]) null));
+			.isThrownBy(() -> AnonymousAuthenticationToken.class.getDeclaredConstructor((Class[]) null));
 	}
 
 	@Test
@@ -81,8 +81,8 @@ public class AnonymousAuthenticationTokenTests {
 	@Test
 	public void testNotEqualsDueToDifferentAuthenticationClass() {
 		AnonymousAuthenticationToken token1 = new AnonymousAuthenticationToken("key", "Test", ROLES_12);
-		UsernamePasswordAuthenticationToken token2 = new UsernamePasswordAuthenticationToken("Test", "Password",
-				ROLES_12);
+		UsernamePasswordAuthenticationToken token2 = UsernamePasswordAuthenticationToken.authenticated("Test",
+				"Password", ROLES_12);
 		assertThat(token1.equals(token2)).isFalse();
 	}
 
@@ -104,7 +104,7 @@ public class AnonymousAuthenticationTokenTests {
 	@Test
 	public void constructorWhenNullAuthoritiesThenThrowIllegalArgumentException() {
 		assertThatIllegalArgumentException()
-				.isThrownBy(() -> new AnonymousAuthenticationToken("key", "principal", null));
+			.isThrownBy(() -> new AnonymousAuthenticationToken("key", "principal", null));
 	}
 
 	@Test

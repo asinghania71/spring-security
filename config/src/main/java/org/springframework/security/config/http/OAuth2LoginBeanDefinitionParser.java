@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2020 the original author or authors.
+ * Copyright 2002-2025 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@ package org.springframework.security.config.http;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -27,11 +26,13 @@ import org.w3c.dom.Element;
 
 import org.springframework.beans.BeanMetadataElement;
 import org.springframework.beans.BeansException;
+import org.springframework.beans.factory.FactoryBean;
 import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.beans.factory.config.BeanReference;
 import org.springframework.beans.factory.config.RuntimeBeanReference;
 import org.springframework.beans.factory.parsing.BeanComponentDefinition;
 import org.springframework.beans.factory.support.BeanDefinitionBuilder;
+import org.springframework.beans.factory.support.ManagedMap;
 import org.springframework.beans.factory.xml.BeanDefinitionParser;
 import org.springframework.beans.factory.xml.ParserContext;
 import org.springframework.context.ApplicationContext;
@@ -57,7 +58,6 @@ import org.springframework.security.web.authentication.DelegatingAuthenticationE
 import org.springframework.security.web.authentication.LoginUrlAuthenticationEntryPoint;
 import org.springframework.security.web.authentication.ui.DefaultLoginPageGeneratingFilter;
 import org.springframework.security.web.util.matcher.AndRequestMatcher;
-import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 import org.springframework.security.web.util.matcher.MediaTypeRequestMatcher;
 import org.springframework.security.web.util.matcher.NegatedRequestMatcher;
 import org.springframework.security.web.util.matcher.OrRequestMatcher;
@@ -87,6 +87,8 @@ final class OAuth2LoginBeanDefinitionParser implements BeanDefinitionParser {
 
 	private static final String ATT_AUTHORIZATION_REQUEST_RESOLVER_REF = "authorization-request-resolver-ref";
 
+	private static final String ATT_AUTHORIZATION_REDIRECT_STRATEGY_REF = "authorization-redirect-strategy-ref";
+
 	private static final String ATT_ACCESS_TOKEN_RESPONSE_CLIENT_REF = "access-token-response-client-ref";
 
 	private static final String ATT_USER_AUTHORITIES_MAPPER_REF = "user-authorities-mapper-ref";
@@ -115,6 +117,8 @@ final class OAuth2LoginBeanDefinitionParser implements BeanDefinitionParser {
 
 	private final boolean allowSessionCreation;
 
+	private final BeanMetadataElement authenticationFilterSecurityContextHolderStrategy;
+
 	private BeanDefinition defaultAuthorizedClientRepository;
 
 	private BeanDefinition oauth2AuthorizationRequestRedirectFilter;
@@ -128,60 +132,64 @@ final class OAuth2LoginBeanDefinitionParser implements BeanDefinitionParser {
 	private BeanDefinition oauth2LoginLinks;
 
 	OAuth2LoginBeanDefinitionParser(BeanReference requestCache, BeanReference portMapper, BeanReference portResolver,
-			BeanReference sessionStrategy, boolean allowSessionCreation) {
+			BeanReference sessionStrategy, boolean allowSessionCreation,
+			BeanMetadataElement authenticationFilterSecurityContextHolderStrategy) {
 		this.requestCache = requestCache;
 		this.portMapper = portMapper;
 		this.portResolver = portResolver;
 		this.sessionStrategy = sessionStrategy;
 		this.allowSessionCreation = allowSessionCreation;
+		this.authenticationFilterSecurityContextHolderStrategy = authenticationFilterSecurityContextHolderStrategy;
 	}
 
 	@Override
 	public BeanDefinition parse(Element element, ParserContext parserContext) {
 		// register magic bean
 		BeanDefinition oauth2LoginBeanConfig = BeanDefinitionBuilder.rootBeanDefinition(OAuth2LoginBeanConfig.class)
-				.getBeanDefinition();
+			.getBeanDefinition();
 		String oauth2LoginBeanConfigId = parserContext.getReaderContext().generateBeanName(oauth2LoginBeanConfig);
 		parserContext
-				.registerBeanComponent(new BeanComponentDefinition(oauth2LoginBeanConfig, oauth2LoginBeanConfigId));
+			.registerBeanComponent(new BeanComponentDefinition(oauth2LoginBeanConfig, oauth2LoginBeanConfigId));
 		// configure filter
 		BeanMetadataElement clientRegistrationRepository = OAuth2ClientBeanDefinitionParserUtils
-				.getClientRegistrationRepository(element);
+			.getClientRegistrationRepository(element);
 		BeanMetadataElement authorizedClientRepository = OAuth2ClientBeanDefinitionParserUtils
-				.getAuthorizedClientRepository(element);
+			.getAuthorizedClientRepository(element);
 		if (authorizedClientRepository == null) {
 			BeanMetadataElement authorizedClientService = OAuth2ClientBeanDefinitionParserUtils
-					.getAuthorizedClientService(element);
+				.getAuthorizedClientService(element);
 			this.defaultAuthorizedClientRepository = OAuth2ClientBeanDefinitionParserUtils
-					.createDefaultAuthorizedClientRepository(clientRegistrationRepository, authorizedClientService);
+				.createDefaultAuthorizedClientRepository(clientRegistrationRepository, authorizedClientService);
 			authorizedClientRepository = new RuntimeBeanReference(OAuth2AuthorizedClientRepository.class);
 		}
 		BeanMetadataElement accessTokenResponseClient = getAccessTokenResponseClient(element);
 		BeanMetadataElement oauth2UserService = getOAuth2UserService(element);
 		BeanMetadataElement authorizationRequestRepository = getAuthorizationRequestRepository(element);
 		BeanDefinitionBuilder oauth2LoginAuthenticationFilterBuilder = BeanDefinitionBuilder
-				.rootBeanDefinition(OAuth2LoginAuthenticationFilter.class)
-				.addConstructorArgValue(clientRegistrationRepository).addConstructorArgValue(authorizedClientRepository)
-				.addPropertyValue("authorizationRequestRepository", authorizationRequestRepository);
+			.rootBeanDefinition(OAuth2LoginAuthenticationFilter.class)
+			.addConstructorArgValue(clientRegistrationRepository)
+			.addConstructorArgValue(authorizedClientRepository)
+			.addPropertyValue("authorizationRequestRepository", authorizationRequestRepository);
 		if (this.sessionStrategy != null) {
 			oauth2LoginAuthenticationFilterBuilder.addPropertyValue("sessionAuthenticationStrategy",
 					this.sessionStrategy);
 		}
 		Object source = parserContext.extractSource(element);
 		String loginProcessingUrl = element.getAttribute(ATT_LOGIN_PROCESSING_URL);
-		if (!StringUtils.isEmpty(loginProcessingUrl)) {
+		if (StringUtils.hasLength(loginProcessingUrl)) {
 			WebConfigUtils.validateHttpRedirect(loginProcessingUrl, parserContext, source);
 			oauth2LoginAuthenticationFilterBuilder.addConstructorArgValue(loginProcessingUrl);
 		}
 		else {
 			oauth2LoginAuthenticationFilterBuilder
-					.addConstructorArgValue(OAuth2LoginAuthenticationFilter.DEFAULT_FILTER_PROCESSES_URI);
+				.addConstructorArgValue(OAuth2LoginAuthenticationFilter.DEFAULT_FILTER_PROCESSES_URI);
 		}
 		BeanDefinitionBuilder oauth2LoginAuthenticationProviderBuilder = BeanDefinitionBuilder
-				.rootBeanDefinition(OAuth2LoginAuthenticationProvider.class)
-				.addConstructorArgValue(accessTokenResponseClient).addConstructorArgValue(oauth2UserService);
+			.rootBeanDefinition(OAuth2LoginAuthenticationProvider.class)
+			.addConstructorArgValue(accessTokenResponseClient)
+			.addConstructorArgValue(oauth2UserService);
 		String userAuthoritiesMapperRef = element.getAttribute(ATT_USER_AUTHORITIES_MAPPER_REF);
-		if (!StringUtils.isEmpty(userAuthoritiesMapperRef)) {
+		if (StringUtils.hasLength(userAuthoritiesMapperRef)) {
 			oauth2LoginAuthenticationProviderBuilder.addPropertyReference("authoritiesMapper",
 					userAuthoritiesMapperRef);
 		}
@@ -189,50 +197,55 @@ final class OAuth2LoginBeanDefinitionParser implements BeanDefinitionParser {
 		this.oauth2LoginOidcAuthenticationProvider = getOidcAuthProvider(element, accessTokenResponseClient,
 				userAuthoritiesMapperRef);
 		BeanDefinitionBuilder oauth2AuthorizationRequestRedirectFilterBuilder = BeanDefinitionBuilder
-				.rootBeanDefinition(OAuth2AuthorizationRequestRedirectFilter.class);
+			.rootBeanDefinition(OAuth2AuthorizationRequestRedirectFilter.class);
 		String authorizationRequestResolverRef = element.getAttribute(ATT_AUTHORIZATION_REQUEST_RESOLVER_REF);
-		if (!StringUtils.isEmpty(authorizationRequestResolverRef)) {
+		if (StringUtils.hasLength(authorizationRequestResolverRef)) {
 			oauth2AuthorizationRequestRedirectFilterBuilder.addConstructorArgReference(authorizationRequestResolverRef);
 		}
 		else {
 			oauth2AuthorizationRequestRedirectFilterBuilder.addConstructorArgValue(clientRegistrationRepository);
 		}
 		oauth2AuthorizationRequestRedirectFilterBuilder
-				.addPropertyValue("authorizationRequestRepository", authorizationRequestRepository)
-				.addPropertyValue("requestCache", this.requestCache);
+			.addPropertyValue("authorizationRequestRepository", authorizationRequestRepository)
+			.addPropertyValue("authorizationRedirectStrategy", getAuthorizationRedirectStrategy(element))
+			.addPropertyValue("requestCache", this.requestCache);
 		this.oauth2AuthorizationRequestRedirectFilter = oauth2AuthorizationRequestRedirectFilterBuilder
-				.getBeanDefinition();
+			.getBeanDefinition();
 		String authenticationSuccessHandlerRef = element.getAttribute(ATT_AUTHENTICATION_SUCCESS_HANDLER_REF);
-		if (!StringUtils.isEmpty(authenticationSuccessHandlerRef)) {
+		if (StringUtils.hasLength(authenticationSuccessHandlerRef)) {
 			oauth2LoginAuthenticationFilterBuilder.addPropertyReference("authenticationSuccessHandler",
 					authenticationSuccessHandlerRef);
 		}
 		else {
-			BeanDefinitionBuilder successHandlerBuilder = BeanDefinitionBuilder.rootBeanDefinition(
-					"org.springframework.security.web.authentication.SavedRequestAwareAuthenticationSuccessHandler")
-					.addPropertyValue("requestCache", this.requestCache);
+			BeanDefinitionBuilder successHandlerBuilder = BeanDefinitionBuilder
+				.rootBeanDefinition(
+						"org.springframework.security.web.authentication.SavedRequestAwareAuthenticationSuccessHandler")
+				.addPropertyValue("requestCache", this.requestCache);
 			oauth2LoginAuthenticationFilterBuilder.addPropertyValue("authenticationSuccessHandler",
 					successHandlerBuilder.getBeanDefinition());
 		}
 		String loginPage = element.getAttribute(ATT_LOGIN_PAGE);
-		if (!StringUtils.isEmpty(loginPage)) {
+		if (StringUtils.hasLength(loginPage)) {
 			WebConfigUtils.validateHttpRedirect(loginPage, parserContext, source);
 			this.oauth2LoginAuthenticationEntryPoint = BeanDefinitionBuilder
-					.rootBeanDefinition(LoginUrlAuthenticationEntryPoint.class).addConstructorArgValue(loginPage)
-					.addPropertyValue("portMapper", this.portMapper).addPropertyValue("portResolver", this.portResolver)
-					.getBeanDefinition();
+				.rootBeanDefinition(LoginUrlAuthenticationEntryPoint.class)
+				.addConstructorArgValue(loginPage)
+				.addPropertyValue("portMapper", this.portMapper)
+				.addPropertyValue("portResolver", this.portResolver)
+				.getBeanDefinition();
 		}
 		else {
-			Map<RequestMatcher, AuthenticationEntryPoint> entryPoint = getLoginEntryPoint(element);
+			Map<BeanDefinition, AuthenticationEntryPoint> entryPoint = getLoginEntryPoint(element);
 			if (entryPoint != null) {
 				this.oauth2LoginAuthenticationEntryPoint = BeanDefinitionBuilder
-						.rootBeanDefinition(DelegatingAuthenticationEntryPoint.class).addConstructorArgValue(entryPoint)
-						.addPropertyValue("defaultEntryPoint", new LoginUrlAuthenticationEntryPoint(DEFAULT_LOGIN_URI))
-						.getBeanDefinition();
+					.rootBeanDefinition(DelegatingAuthenticationEntryPoint.class)
+					.addConstructorArgValue(entryPoint)
+					.addPropertyValue("defaultEntryPoint", new LoginUrlAuthenticationEntryPoint(DEFAULT_LOGIN_URI))
+					.getBeanDefinition();
 			}
 		}
 		String authenticationFailureHandlerRef = element.getAttribute(ATT_AUTHENTICATION_FAILURE_HANDLER_REF);
-		if (!StringUtils.isEmpty(authenticationFailureHandlerRef)) {
+		if (StringUtils.hasLength(authenticationFailureHandlerRef)) {
 			oauth2LoginAuthenticationFilterBuilder.addPropertyReference("authenticationFailureHandler",
 					authenticationFailureHandlerRef);
 		}
@@ -245,38 +258,52 @@ final class OAuth2LoginBeanDefinitionParser implements BeanDefinitionParser {
 			oauth2LoginAuthenticationFilterBuilder.addPropertyValue("authenticationFailureHandler",
 					failureHandlerBuilder.getBeanDefinition());
 		}
+		oauth2LoginAuthenticationFilterBuilder.addPropertyValue("securityContextHolderStrategy",
+				this.authenticationFilterSecurityContextHolderStrategy);
 		// prepare loginlinks
 		this.oauth2LoginLinks = BeanDefinitionBuilder.rootBeanDefinition(Map.class)
-				.setFactoryMethodOnBean("getLoginLinks", oauth2LoginBeanConfigId).getBeanDefinition();
+			.setFactoryMethodOnBean("getLoginLinks", oauth2LoginBeanConfigId)
+			.getBeanDefinition();
 		return oauth2LoginAuthenticationFilterBuilder.getBeanDefinition();
 	}
 
 	private BeanMetadataElement getAuthorizationRequestRepository(Element element) {
 		String authorizationRequestRepositoryRef = element.getAttribute(ATT_AUTHORIZATION_REQUEST_REPOSITORY_REF);
-		if (!StringUtils.isEmpty(authorizationRequestRepositoryRef)) {
+		if (StringUtils.hasLength(authorizationRequestRepositoryRef)) {
 			return new RuntimeBeanReference(authorizationRequestRepositoryRef);
 		}
-		return BeanDefinitionBuilder.rootBeanDefinition(
-				"org.springframework.security.oauth2.client.web.HttpSessionOAuth2AuthorizationRequestRepository")
-				.getBeanDefinition();
+		return BeanDefinitionBuilder
+			.rootBeanDefinition(
+					"org.springframework.security.oauth2.client.web.HttpSessionOAuth2AuthorizationRequestRepository")
+			.getBeanDefinition();
+	}
+
+	private BeanMetadataElement getAuthorizationRedirectStrategy(Element element) {
+		String authorizationRedirectStrategyRef = element.getAttribute(ATT_AUTHORIZATION_REDIRECT_STRATEGY_REF);
+		if (StringUtils.hasText(authorizationRedirectStrategyRef)) {
+			return new RuntimeBeanReference(authorizationRedirectStrategyRef);
+		}
+		return BeanDefinitionBuilder.rootBeanDefinition("org.springframework.security.web.DefaultRedirectStrategy")
+			.getBeanDefinition();
 	}
 
 	private BeanDefinition getOidcAuthProvider(Element element, BeanMetadataElement accessTokenResponseClient,
 			String userAuthoritiesMapperRef) {
 		boolean oidcAuthenticationProviderEnabled = ClassUtils
-				.isPresent("org.springframework.security.oauth2.jwt.JwtDecoder", this.getClass().getClassLoader());
+			.isPresent("org.springframework.security.oauth2.jwt.JwtDecoder", this.getClass().getClassLoader());
 		if (!oidcAuthenticationProviderEnabled) {
 			return BeanDefinitionBuilder.rootBeanDefinition(OidcAuthenticationRequestChecker.class).getBeanDefinition();
 		}
 		BeanMetadataElement oidcUserService = getOidcUserService(element);
 		BeanDefinitionBuilder oidcAuthProviderBuilder = BeanDefinitionBuilder.rootBeanDefinition(
 				"org.springframework.security.oauth2.client.oidc.authentication.OidcAuthorizationCodeAuthenticationProvider")
-				.addConstructorArgValue(accessTokenResponseClient).addConstructorArgValue(oidcUserService);
-		if (!StringUtils.isEmpty(userAuthoritiesMapperRef)) {
+			.addConstructorArgValue(accessTokenResponseClient)
+			.addConstructorArgValue(oidcUserService);
+		if (StringUtils.hasLength(userAuthoritiesMapperRef)) {
 			oidcAuthProviderBuilder.addPropertyReference("authoritiesMapper", userAuthoritiesMapperRef);
 		}
 		String jwtDecoderFactoryRef = element.getAttribute(ATT_JWT_DECODER_FACTORY_REF);
-		if (!StringUtils.isEmpty(jwtDecoderFactoryRef)) {
+		if (StringUtils.hasLength(jwtDecoderFactoryRef)) {
 			oidcAuthProviderBuilder.addPropertyReference("jwtDecoderFactory", jwtDecoderFactoryRef);
 		}
 		return oidcAuthProviderBuilder.getBeanDefinition();
@@ -284,32 +311,32 @@ final class OAuth2LoginBeanDefinitionParser implements BeanDefinitionParser {
 
 	private BeanMetadataElement getOidcUserService(Element element) {
 		String oidcUserServiceRef = element.getAttribute(ATT_OIDC_USER_SERVICE_REF);
-		if (!StringUtils.isEmpty(oidcUserServiceRef)) {
+		if (StringUtils.hasLength(oidcUserServiceRef)) {
 			return new RuntimeBeanReference(oidcUserServiceRef);
 		}
 		return BeanDefinitionBuilder
-				.rootBeanDefinition("org.springframework.security.oauth2.client.oidc.userinfo.OidcUserService")
-				.getBeanDefinition();
+			.rootBeanDefinition("org.springframework.security.oauth2.client.oidc.userinfo.OidcUserService")
+			.getBeanDefinition();
 	}
 
 	private BeanMetadataElement getOAuth2UserService(Element element) {
 		String oauth2UserServiceRef = element.getAttribute(ATT_USER_SERVICE_REF);
-		if (!StringUtils.isEmpty(oauth2UserServiceRef)) {
+		if (StringUtils.hasLength(oauth2UserServiceRef)) {
 			return new RuntimeBeanReference(oauth2UserServiceRef);
 		}
 		return BeanDefinitionBuilder
-				.rootBeanDefinition("org.springframework.security.oauth2.client.userinfo.DefaultOAuth2UserService")
-				.getBeanDefinition();
+			.rootBeanDefinition("org.springframework.security.oauth2.client.userinfo.DefaultOAuth2UserService")
+			.getBeanDefinition();
 	}
 
 	private BeanMetadataElement getAccessTokenResponseClient(Element element) {
 		String accessTokenResponseClientRef = element.getAttribute(ATT_ACCESS_TOKEN_RESPONSE_CLIENT_REF);
-		if (!StringUtils.isEmpty(accessTokenResponseClientRef)) {
+		if (StringUtils.hasLength(accessTokenResponseClientRef)) {
 			return new RuntimeBeanReference(accessTokenResponseClientRef);
 		}
 		return BeanDefinitionBuilder.rootBeanDefinition(
-				"org.springframework.security.oauth2.client.endpoint.DefaultAuthorizationCodeTokenResponseClient")
-				.getBeanDefinition();
+				"org.springframework.security.oauth2.client.endpoint.RestClientAuthorizationCodeTokenResponseClient")
+			.getBeanDefinition();
 	}
 
 	BeanDefinition getDefaultAuthorizedClientRepository() {
@@ -336,40 +363,33 @@ final class OAuth2LoginBeanDefinitionParser implements BeanDefinitionParser {
 		return this.oauth2LoginLinks;
 	}
 
-	private Map<RequestMatcher, AuthenticationEntryPoint> getLoginEntryPoint(Element element) {
-		Map<RequestMatcher, AuthenticationEntryPoint> entryPoints = null;
+	private Map<BeanDefinition, AuthenticationEntryPoint> getLoginEntryPoint(Element element) {
+		Map<BeanDefinition, AuthenticationEntryPoint> entryPoints = null;
 		Element clientRegsElt = DomUtils.getChildElementByTagName(element.getOwnerDocument().getDocumentElement(),
 				Elements.CLIENT_REGISTRATIONS);
 		if (clientRegsElt != null) {
 			List<Element> clientRegList = DomUtils.getChildElementsByTagName(clientRegsElt, ELT_CLIENT_REGISTRATION);
 			if (clientRegList.size() == 1) {
-				RequestMatcher loginPageMatcher = new AntPathRequestMatcher(DEFAULT_LOGIN_URI);
-				RequestMatcher faviconMatcher = new AntPathRequestMatcher("/favicon.ico");
-				RequestMatcher defaultEntryPointMatcher = this.getAuthenticationEntryPointMatcher();
-				RequestMatcher defaultLoginPageMatcher = new AndRequestMatcher(
-						new OrRequestMatcher(loginPageMatcher, faviconMatcher), defaultEntryPointMatcher);
-				RequestMatcher notXRequestedWith = new NegatedRequestMatcher(
-						new RequestHeaderRequestMatcher("X-Requested-With", "XMLHttpRequest"));
+				BeanDefinition loginPageMatcher = BeanDefinitionBuilder
+					.rootBeanDefinition(RequestMatcherFactoryBean.class)
+					.addConstructorArgValue(DEFAULT_LOGIN_URI)
+					.getBeanDefinition();
+				BeanDefinition faviconMatcher = BeanDefinitionBuilder
+					.rootBeanDefinition(RequestMatcherFactoryBean.class)
+					.addConstructorArgValue("/favicon.ico")
+					.getBeanDefinition();
+				BeanDefinition entryPointMatcher = BeanDefinitionBuilder
+					.rootBeanDefinition(EntryPointMatcherFactoryBean.class)
+					.addConstructorArgValue(loginPageMatcher)
+					.addConstructorArgValue(faviconMatcher)
+					.getBeanDefinition();
 				Element clientRegElt = clientRegList.get(0);
-				entryPoints = new LinkedHashMap<>();
-				entryPoints.put(
-						new AndRequestMatcher(notXRequestedWith, new NegatedRequestMatcher(defaultLoginPageMatcher)),
-						new LoginUrlAuthenticationEntryPoint(DEFAULT_AUTHORIZATION_REQUEST_BASE_URI + "/"
-								+ clientRegElt.getAttribute(ATT_REGISTRATION_ID)));
+				entryPoints = new ManagedMap<>();
+				entryPoints.put(entryPointMatcher, new LoginUrlAuthenticationEntryPoint(
+						DEFAULT_AUTHORIZATION_REQUEST_BASE_URI + "/" + clientRegElt.getAttribute(ATT_REGISTRATION_ID)));
 			}
 		}
 		return entryPoints;
-	}
-
-	private RequestMatcher getAuthenticationEntryPointMatcher() {
-		ContentNegotiationStrategy contentNegotiationStrategy = new HeaderContentNegotiationStrategy();
-		MediaTypeRequestMatcher mediaMatcher = new MediaTypeRequestMatcher(contentNegotiationStrategy,
-				MediaType.APPLICATION_XHTML_XML, new MediaType("image", "*"), MediaType.TEXT_HTML,
-				MediaType.TEXT_PLAIN);
-		mediaMatcher.setIgnoredMediaTypes(Collections.singleton(MediaType.ALL));
-		RequestMatcher notXRequestedWith = new NegatedRequestMatcher(
-				new RequestHeaderRequestMatcher("X-Requested-With", "XMLHttpRequest"));
-		return new AndRequestMatcher(Arrays.asList(notXRequestedWith, mediaMatcher));
 	}
 
 	private static class OidcAuthenticationRequestChecker implements AuthenticationProvider {
@@ -377,8 +397,10 @@ final class OAuth2LoginBeanDefinitionParser implements BeanDefinitionParser {
 		@Override
 		public Authentication authenticate(Authentication authentication) throws AuthenticationException {
 			OAuth2LoginAuthenticationToken authorizationCodeAuthentication = (OAuth2LoginAuthenticationToken) authentication;
-			if (!authorizationCodeAuthentication.getAuthorizationExchange().getAuthorizationRequest().getScopes()
-					.contains(OidcScopes.OPENID)) {
+			if (!authorizationCodeAuthentication.getAuthorizationExchange()
+				.getAuthorizationRequest()
+				.getScopes()
+				.contains(OidcScopes.OPENID)) {
 				return null;
 			}
 			// Section 3.1.2.1 Authentication Request -
@@ -415,7 +437,7 @@ final class OAuth2LoginBeanDefinitionParser implements BeanDefinitionParser {
 		Map<String, String> getLoginLinks() {
 			Iterable<ClientRegistration> clientRegistrations = null;
 			ClientRegistrationRepository clientRegistrationRepository = this.context
-					.getBean(ClientRegistrationRepository.class);
+				.getBean(ClientRegistrationRepository.class);
 			ResolvableType type = ResolvableType.forInstance(clientRegistrationRepository).as(Iterable.class);
 			if (type != ResolvableType.NONE && ClientRegistration.class.isAssignableFrom(type.resolveGenerics()[0])) {
 				clientRegistrations = (Iterable<ClientRegistration>) clientRegistrationRepository;
@@ -429,6 +451,44 @@ final class OAuth2LoginBeanDefinitionParser implements BeanDefinitionParser {
 					authorizationRequestBaseUri + "/" + registration.getRegistrationId(),
 					registration.getClientName()));
 			return loginUrlToClientName;
+		}
+
+	}
+
+	@Deprecated
+	static class EntryPointMatcherFactoryBean implements FactoryBean<RequestMatcher> {
+
+		private final RequestMatcher entryPointMatcher;
+
+		EntryPointMatcherFactoryBean(RequestMatcher loginPageMatcher, RequestMatcher faviconMatcher) {
+			RequestMatcher defaultEntryPointMatcher = getAuthenticationEntryPointMatcher();
+			RequestMatcher defaultLoginPageMatcher = new AndRequestMatcher(
+					new OrRequestMatcher(loginPageMatcher, faviconMatcher), defaultEntryPointMatcher);
+			RequestMatcher notXRequestedWith = new NegatedRequestMatcher(
+					new RequestHeaderRequestMatcher("X-Requested-With", "XMLHttpRequest"));
+			this.entryPointMatcher = new AndRequestMatcher(notXRequestedWith,
+					new NegatedRequestMatcher(defaultLoginPageMatcher));
+		}
+
+		private RequestMatcher getAuthenticationEntryPointMatcher() {
+			ContentNegotiationStrategy contentNegotiationStrategy = new HeaderContentNegotiationStrategy();
+			MediaTypeRequestMatcher mediaMatcher = new MediaTypeRequestMatcher(contentNegotiationStrategy,
+					MediaType.APPLICATION_XHTML_XML, new MediaType("image", "*"), MediaType.TEXT_HTML,
+					MediaType.TEXT_PLAIN);
+			mediaMatcher.setIgnoredMediaTypes(Collections.singleton(MediaType.ALL));
+			RequestMatcher notXRequestedWith = new NegatedRequestMatcher(
+					new RequestHeaderRequestMatcher("X-Requested-With", "XMLHttpRequest"));
+			return new AndRequestMatcher(Arrays.asList(notXRequestedWith, mediaMatcher));
+		}
+
+		@Override
+		public RequestMatcher getObject() {
+			return this.entryPointMatcher;
+		}
+
+		@Override
+		public Class<?> getObjectType() {
+			return RequestMatcher.class;
 		}
 
 	}

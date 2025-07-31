@@ -35,7 +35,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.verifyZeroInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 /**
  * @author Rob Winch
@@ -69,13 +69,13 @@ public class PathMatcherServerWebExchangeMatcherTests {
 	@Test
 	public void constructorPatternWhenPatternNullThenThrowsException() {
 		assertThatIllegalArgumentException()
-				.isThrownBy(() -> new PathPatternParserServerWebExchangeMatcher((PathPattern) null));
+			.isThrownBy(() -> new PathPatternParserServerWebExchangeMatcher((PathPattern) null));
 	}
 
 	@Test
 	public void constructorPatternAndMethodWhenPatternNullThenThrowsException() {
 		assertThatIllegalArgumentException()
-				.isThrownBy(() -> new PathPatternParserServerWebExchangeMatcher((PathPattern) null, HttpMethod.GET));
+			.isThrownBy(() -> new PathPatternParserServerWebExchangeMatcher((PathPattern) null, HttpMethod.GET));
 	}
 
 	@Test
@@ -108,7 +108,7 @@ public class PathMatcherServerWebExchangeMatcherTests {
 		assertThat(this.exchange.getRequest().getMethod()).isNotEqualTo(method);
 		this.matcher = new PathPatternParserServerWebExchangeMatcher(this.pattern, method);
 		assertThat(this.matcher.matches(this.exchange).block().isMatch()).isFalse();
-		verifyZeroInteractions(this.pattern);
+		verifyNoMoreInteractions(this.pattern);
 	}
 
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2019 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -135,11 +135,13 @@ public class RsaKeyConversionServicePostProcessorTests {
 
 	@Test
 	public void valueWhenOverridingConversionServiceThenUsed() {
-		assertThatExceptionOfType(Exception.class).isThrownBy(
-				() -> this.spring.register(OverrideConversionServiceConfig.class, DefaultConfig.class).autowire())
-				.withRootCauseInstanceOf(IllegalArgumentException.class);
+		assertThatExceptionOfType(Exception.class)
+			.isThrownBy(
+					() -> this.spring.register(OverrideConversionServiceConfig.class, DefaultConfig.class).autowire())
+			.withRootCauseInstanceOf(IllegalArgumentException.class);
 	}
 
+	@Configuration
 	@EnableWebSecurity
 	static class DefaultConfig {
 
@@ -151,7 +153,7 @@ public class RsaKeyConversionServicePostProcessorTests {
 		@Bean
 		BeanFactoryPostProcessor conversionServiceCustomizer() {
 			return (beanFactory) -> beanFactory.getBean(RsaKeyConversionServicePostProcessor.class)
-					.setResourceLoader(new CustomResourceLoader());
+				.setResourceLoader(new CustomResourceLoader());
 		}
 
 	}

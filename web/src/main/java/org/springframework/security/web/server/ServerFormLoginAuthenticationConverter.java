@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2017 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -46,13 +46,13 @@ public class ServerFormLoginAuthenticationConverter implements Function<ServerWe
 	@Override
 	@Deprecated
 	public Mono<Authentication> apply(ServerWebExchange exchange) {
-		return exchange.getFormData().map((data) -> createAuthentication(data));
+		return exchange.getFormData().map(this::createAuthentication);
 	}
 
 	private UsernamePasswordAuthenticationToken createAuthentication(MultiValueMap<String, String> data) {
 		String username = data.getFirst(this.usernameParameter);
 		String password = data.getFirst(this.passwordParameter);
-		return new UsernamePasswordAuthenticationToken(username, password);
+		return UsernamePasswordAuthenticationToken.unauthenticated(username, password);
 	}
 
 	/**

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  ~ Copyright 2002-2018 the original author or authors.
+  ~ Copyright 2002-2022 the original author or authors.
   ~
   ~ Licensed under the Apache License, Version 2.0 (the "License");
   ~ you may not use this file except in compliance with the License.
@@ -27,11 +27,12 @@
 	<http-firewall ref="firewall"/>
 
 	<http>
+		<intercept-url pattern="/**" access="authenticated"/>
 		<http-basic/>
 	</http>
 
 	<b:bean name="firewall" class="org.mockito.Mockito" factory-method="mock">
-		<b:constructor-arg value="org.springframework.security.web.firewall.HttpFirewall"/>
+		<b:constructor-arg value="org.springframework.security.web.firewall.HttpFirewall" type="java.lang.Class"/>
 	</b:bean>
 
 	<b:import resource="userservice.xml"/>

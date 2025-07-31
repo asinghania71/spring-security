@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2020 the original author or authors.
+ * Copyright 2002-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@ import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 import org.aopalliance.intercept.MethodInvocation;
@@ -50,6 +51,8 @@ import org.springframework.util.Assert;
  * support.
  *
  * @author Luke Taylor
+ * @author Evgeniy Cheban
+ * @author Blagoja Stamatovski
  * @since 3.0
  */
 public class DefaultMethodSecurityExpressionHandler extends AbstractSecurityExpressionHandler<MethodInvocation>
@@ -77,11 +80,25 @@ public class DefaultMethodSecurityExpressionHandler extends AbstractSecurityExpr
 		return new MethodSecurityEvaluationContext(auth, mi, getParameterNameDiscoverer());
 	}
 
+	@Override
+	public EvaluationContext createEvaluationContext(Supplier<Authentication> authentication, MethodInvocation mi) {
+		MethodSecurityExpressionOperations root = createSecurityExpressionRoot(authentication, mi);
+		MethodSecurityEvaluationContext ctx = new MethodSecurityEvaluationContext(root, mi,
+				getParameterNameDiscoverer());
+		ctx.setBeanResolver(getBeanResolver());
+		return ctx;
+	}
+
 	/**
 	 * Creates the root object for expression evaluation.
 	 */
 	@Override
 	protected MethodSecurityExpressionOperations createSecurityExpressionRoot(Authentication authentication,
+			MethodInvocation invocation) {
+		return createSecurityExpressionRoot(() -> authentication, invocation);
+	}
+
+	private MethodSecurityExpressionOperations createSecurityExpressionRoot(Supplier<Authentication> authentication,
 			MethodInvocation invocation) {
 		MethodSecurityExpressionRoot root = new MethodSecurityExpressionRoot(authentication);
 		root.setThis(invocation.getThis());
@@ -93,17 +110,18 @@ public class DefaultMethodSecurityExpressionHandler extends AbstractSecurityExpr
 	}
 
 	/**
-	 * Filters the {@code filterTarget} object (which must be either a collection, array,
-	 * map or stream), by evaluating the supplied expression.
+	 * Filters the {@code filterTarget} object (which must be either a {@link Collection},
+	 * {@code Array}, {@link Map} or {@link Stream}), by evaluating the supplied
+	 * expression.
 	 * <p>
-	 * If a {@code Collection} or {@code Map} is used, the original instance will be
-	 * modified to contain the elements for which the permission expression evaluates to
-	 * {@code true}. For an array, a new array instance will be returned.
+	 * Returns new instances of the same type as the supplied {@code filterTarget} object
+	 * @return The filtered {@link Collection}, {@code Array}, {@link Map} or
+	 * {@link Stream}
 	 */
 	@Override
 	public Object filter(Object filterTarget, Expression filterExpression, EvaluationContext ctx) {
 		MethodSecurityExpressionOperations rootObject = (MethodSecurityExpressionOperations) ctx.getRootObject()
-				.getValue();
+			.getValue();
 		this.logger.debug(LogMessage.format("Filtering with expression: %s", filterExpression.getExpressionString()));
 		if (filterTarget instanceof Collection) {
 			return filterCollection((Collection<?>) filterTarget, filterExpression, ctx, rootObject);
@@ -135,9 +153,17 @@ public class DefaultMethodSecurityExpressionHandler extends AbstractSecurityExpr
 			}
 		}
 		this.logger.debug(LogMessage.format("Retaining elements: %s", retain));
-		filterTarget.clear();
-		filterTarget.addAll(retain);
-		return filterTarget;
+		try {
+			filterTarget.clear();
+			filterTarget.addAll(retain);
+			return filterTarget;
+		}
+		catch (UnsupportedOperationException readonly) {
+			this.logger.trace(LogMessage.format(
+					"Collection threw exception: %s. Will return a new instance instead of mutating its state.",
+					readonly.getMessage()));
+			return retain;
+		}
 	}
 
 	private Object filterArray(Object[] filterTarget, Expression filterExpression, EvaluationContext ctx,
@@ -162,7 +188,7 @@ public class DefaultMethodSecurityExpressionHandler extends AbstractSecurityExpr
 		return filtered;
 	}
 
-	private <K, V> Object filterMap(final Map<K, V> filterTarget, Expression filterExpression, EvaluationContext ctx,
+	private <K, V> Object filterMap(Map<K, V> filterTarget, Expression filterExpression, EvaluationContext ctx,
 			MethodSecurityExpressionOperations rootObject) {
 		Map<K, V> retain = new LinkedHashMap<>(filterTarget.size());
 		this.logger.debug(LogMessage.format("Filtering map with %s elements", filterTarget.size()));
@@ -173,9 +199,17 @@ public class DefaultMethodSecurityExpressionHandler extends AbstractSecurityExpr
 			}
 		}
 		this.logger.debug(LogMessage.format("Retaining elements: %s", retain));
-		filterTarget.clear();
-		filterTarget.putAll(retain);
-		return filterTarget;
+		try {
+			filterTarget.clear();
+			filterTarget.putAll(retain);
+			return filterTarget;
+		}
+		catch (UnsupportedOperationException readonly) {
+			this.logger.trace(LogMessage.format(
+					"Map threw exception: %s. Will return a new instance instead of mutating its state.",
+					readonly.getMessage()));
+			return retain;
+		}
 	}
 
 	private Object filterStream(final Stream<?> filterTarget, Expression filterExpression, EvaluationContext ctx,

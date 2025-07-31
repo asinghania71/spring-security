@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2016 the original author or authors.
+ * Copyright 2002-2025 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ import org.w3c.dom.Element;
 
 import org.springframework.beans.factory.BeanDefinitionStoreException;
 import org.springframework.beans.factory.config.BeanDefinition;
+import org.springframework.beans.factory.config.ConstructorArgumentValues.ValueHolder;
 import org.springframework.beans.factory.config.RuntimeBeanReference;
 import org.springframework.beans.factory.parsing.BeanComponentDefinition;
 import org.springframework.beans.factory.support.AbstractBeanDefinition;
@@ -55,12 +56,12 @@ public abstract class AbstractUserDetailsServiceBeanDefinitionParser implements 
 		// Register a caching version of the user service if there's a cache-ref
 		if (StringUtils.hasText(cacheRef)) {
 			BeanDefinitionBuilder cachingUSBuilder = BeanDefinitionBuilder
-					.rootBeanDefinition(CachingUserDetailsService.class);
+				.rootBeanDefinition(CachingUserDetailsService.class);
 			cachingUSBuilder.addConstructorArgReference(beanId);
 			cachingUSBuilder.addPropertyValue("userCache", new RuntimeBeanReference(cacheRef));
 			BeanDefinition cachingUserService = cachingUSBuilder.getBeanDefinition();
 			parserContext
-					.registerBeanComponent(new BeanComponentDefinition(cachingUserService, beanId + CACHING_SUFFIX));
+				.registerBeanComponent(new BeanComponentDefinition(cachingUserService, beanId + CACHING_SUFFIX));
 		}
 		return null;
 	}
@@ -73,8 +74,10 @@ public abstract class AbstractUserDetailsServiceBeanDefinitionParser implements 
 			if (!StringUtils.hasText(id)) {
 				id = pc.getReaderContext().generateBeanName(definition);
 			}
+			ValueHolder userDetailsServiceValueHolder = new ValueHolder(new RuntimeBeanReference(id));
+			userDetailsServiceValueHolder.setName("userDetailsService");
 			BeanDefinition container = pc.getContainingBeanDefinition();
-			container.getPropertyValues().add("userDetailsService", new RuntimeBeanReference(id));
+			container.getConstructorArgumentValues().addGenericArgumentValue(userDetailsServiceValueHolder);
 		}
 		if (StringUtils.hasText(id)) {
 			return id;

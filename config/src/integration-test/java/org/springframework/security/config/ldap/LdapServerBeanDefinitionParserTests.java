@@ -26,7 +26,7 @@ import org.springframework.ldap.core.LdapTemplate;
 import org.springframework.security.config.BeanIds;
 import org.springframework.security.config.util.InMemoryXmlApplicationContext;
 import org.springframework.security.ldap.DefaultSpringSecurityContextSource;
-import org.springframework.security.ldap.server.ApacheDSContainer;
+import org.springframework.security.ldap.server.UnboundIdContainer;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -52,7 +52,7 @@ public class LdapServerBeanDefinitionParserTests {
 		this.appCtx = new InMemoryXmlApplicationContext("<ldap-server ldif='classpath:test-server.ldif' port='0'/>");
 
 		DefaultSpringSecurityContextSource contextSource = (DefaultSpringSecurityContextSource) this.appCtx
-				.getBean(BeanIds.CONTEXT_SOURCE);
+			.getBean(BeanIds.CONTEXT_SOURCE);
 
 		// Check data is loaded
 		LdapTemplate template = new LdapTemplate(contextSource);
@@ -71,7 +71,7 @@ public class LdapServerBeanDefinitionParserTests {
 		this.appCtx.getBean(BeanIds.CONTEXT_SOURCE);
 
 		DefaultSpringSecurityContextSource contextSource = (DefaultSpringSecurityContextSource) this.appCtx
-				.getBean("blah");
+			.getBean("blah");
 
 		// Check data is loaded as before
 		LdapTemplate template = new LdapTemplate(contextSource);
@@ -83,7 +83,7 @@ public class LdapServerBeanDefinitionParserTests {
 		this.appCtx = new InMemoryXmlApplicationContext(
 				"<ldap-server ldif='classpath*:test-server2.xldif' root='dc=monkeymachine,dc=co,dc=uk' port='0'/>");
 		DefaultSpringSecurityContextSource contextSource = (DefaultSpringSecurityContextSource) this.appCtx
-				.getBean(BeanIds.CONTEXT_SOURCE);
+			.getBean(BeanIds.CONTEXT_SOURCE);
 
 		LdapTemplate template = new LdapTemplate(contextSource);
 		template.lookup("uid=pg,ou=gorillas");
@@ -92,9 +92,9 @@ public class LdapServerBeanDefinitionParserTests {
 	@Test
 	public void defaultLdifFileIsSuccessful() {
 		this.appCtx = new InMemoryXmlApplicationContext("<ldap-server/>");
-		ApacheDSContainer dsContainer = this.appCtx.getBean(ApacheDSContainer.class);
+		UnboundIdContainer dsContainer = this.appCtx.getBean(UnboundIdContainer.class);
 
-		assertThat(ReflectionTestUtils.getField(dsContainer, "ldifResources")).isEqualTo("classpath*:*.ldif");
+		assertThat(ReflectionTestUtils.getField(dsContainer, "ldif")).isEqualTo("classpath*:*.ldif");
 	}
 
 	private int getDefaultPort() throws IOException {

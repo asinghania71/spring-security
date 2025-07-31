@@ -18,9 +18,9 @@ package org.springframework.security.cas.authentication;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.jasig.cas.client.validation.Assertion;
-import org.jasig.cas.client.validation.TicketValidationException;
-import org.jasig.cas.client.validation.TicketValidator;
+import org.apereo.cas.client.validation.Assertion;
+import org.apereo.cas.client.validation.TicketValidationException;
+import org.apereo.cas.client.validation.TicketValidator;
 
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.context.MessageSource;
@@ -30,10 +30,7 @@ import org.springframework.core.log.LogMessage;
 import org.springframework.security.authentication.AccountStatusUserDetailsChecker;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.authentication.BadCredentialsException;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.cas.ServiceProperties;
-import org.springframework.security.cas.web.CasAuthenticationFilter;
-import org.springframework.security.cas.web.authentication.ServiceAuthenticationDetails;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.SpringSecurityMessageSource;
@@ -51,14 +48,15 @@ import org.springframework.util.Assert;
  * Authentication Service (CAS).
  * <p>
  * This <code>AuthenticationProvider</code> is capable of validating
- * {@link UsernamePasswordAuthenticationToken} requests which contain a
+ * {@link CasServiceTicketAuthenticationToken} requests which contain a
  * <code>principal</code> name equal to either
- * {@link CasAuthenticationFilter#CAS_STATEFUL_IDENTIFIER} or
- * {@link CasAuthenticationFilter#CAS_STATELESS_IDENTIFIER}. It can also validate a
- * previously created {@link CasAuthenticationToken}.
+ * {@link CasServiceTicketAuthenticationToken#CAS_STATEFUL_IDENTIFIER} or
+ * {@link CasServiceTicketAuthenticationToken#CAS_STATELESS_IDENTIFIER}. It can also
+ * validate a previously created {@link CasAuthenticationToken}.
  *
  * @author Ben Alex
  * @author Scott Battaglia
+ * @author Kim Youngwoong
  */
 public class CasAuthenticationProvider implements AuthenticationProvider, InitializingBean, MessageSourceAware {
 
@@ -66,7 +64,7 @@ public class CasAuthenticationProvider implements AuthenticationProvider, Initia
 
 	private AuthenticationUserDetailsService<CasAssertionAuthenticationToken> authenticationUserDetailsService;
 
-	private final UserDetailsChecker userDetailsChecker = new AccountStatusUserDetailsChecker();
+	private UserDetailsChecker userDetailsChecker = new AccountStatusUserDetailsChecker();
 
 	protected MessageSourceAccessor messages = SpringSecurityMessageSource.getAccessor();
 
@@ -95,13 +93,6 @@ public class CasAuthenticationProvider implements AuthenticationProvider, Initia
 		if (!supports(authentication.getClass())) {
 			return null;
 		}
-		if (authentication instanceof UsernamePasswordAuthenticationToken
-				&& (!CasAuthenticationFilter.CAS_STATEFUL_IDENTIFIER.equals(authentication.getPrincipal().toString())
-						&& !CasAuthenticationFilter.CAS_STATELESS_IDENTIFIER
-								.equals(authentication.getPrincipal().toString()))) {
-			// UsernamePasswordAuthenticationToken not CAS related
-			return null;
-		}
 		// If an existing CasAuthenticationToken, just check we created it
 		if (authentication instanceof CasAuthenticationToken) {
 			if (this.key.hashCode() != ((CasAuthenticationToken) authentication).getKeyHash()) {
@@ -117,8 +108,8 @@ public class CasAuthenticationProvider implements AuthenticationProvider, Initia
 					"Failed to provide a CAS service ticket to validate"));
 		}
 
-		boolean stateless = (authentication instanceof UsernamePasswordAuthenticationToken
-				&& CasAuthenticationFilter.CAS_STATELESS_IDENTIFIER.equals(authentication.getPrincipal()));
+		boolean stateless = (authentication instanceof CasServiceTicketAuthenticationToken token
+				&& token.isStateless());
 		CasAuthenticationToken result = null;
 
 		if (stateless) {
@@ -197,6 +188,17 @@ public class CasAuthenticationProvider implements AuthenticationProvider, Initia
 		this.authenticationUserDetailsService = authenticationUserDetailsService;
 	}
 
+	/**
+	 * Sets the UserDetailsChecker to be used for checking the status of retrieved user
+	 * details. This allows customization of the UserDetailsChecker implementation.
+	 * @param userDetailsChecker the UserDetailsChecker to be set
+	 * @since 6.4
+	 */
+	public void setUserDetailsChecker(final UserDetailsChecker userDetailsChecker) {
+		Assert.notNull(userDetailsChecker, "userDetailsChecker cannot be null");
+		this.userDetailsChecker = userDetailsChecker;
+	}
+
 	public void setServiceProperties(final ServiceProperties serviceProperties) {
 		this.serviceProperties = serviceProperties;
 	}
@@ -236,7 +238,7 @@ public class CasAuthenticationProvider implements AuthenticationProvider, Initia
 
 	@Override
 	public boolean supports(final Class<?> authentication) {
-		return (UsernamePasswordAuthenticationToken.class.isAssignableFrom(authentication))
+		return (CasServiceTicketAuthenticationToken.class.isAssignableFrom(authentication))
 				|| (CasAuthenticationToken.class.isAssignableFrom(authentication))
 				|| (CasAssertionAuthenticationToken.class.isAssignableFrom(authentication));
 	}

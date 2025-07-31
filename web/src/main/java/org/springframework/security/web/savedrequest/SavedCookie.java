@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2016 the original author or authors.
+ * Copyright 2002-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,9 @@ package org.springframework.security.web.savedrequest;
 
 import java.io.Serializable;
 
-import javax.servlet.http.Cookie;
+import jakarta.servlet.http.Cookie;
+
+import org.springframework.security.core.SpringSecurityCoreVersion;
 
 /**
  * Stores off the values of a cookie in a serializable holder
@@ -27,37 +29,32 @@ import javax.servlet.http.Cookie;
  */
 public class SavedCookie implements Serializable {
 
-	private final java.lang.String name;
+	private static final long serialVersionUID = SpringSecurityCoreVersion.SERIAL_VERSION_UID;
 
-	private final java.lang.String value;
+	private final String name;
 
-	private final java.lang.String comment;
+	private final String value;
 
-	private final java.lang.String domain;
+	private final String domain;
 
 	private final int maxAge;
 
-	private final java.lang.String path;
+	private final String path;
 
 	private final boolean secure;
 
-	private final int version;
-
-	public SavedCookie(String name, String value, String comment, String domain, int maxAge, String path,
-			boolean secure, int version) {
+	public SavedCookie(String name, String value, String domain, int maxAge, String path, boolean secure) {
 		this.name = name;
 		this.value = value;
-		this.comment = comment;
 		this.domain = domain;
 		this.maxAge = maxAge;
 		this.path = path;
 		this.secure = secure;
-		this.version = version;
 	}
 
 	public SavedCookie(Cookie cookie) {
-		this(cookie.getName(), cookie.getValue(), cookie.getComment(), cookie.getDomain(), cookie.getMaxAge(),
-				cookie.getPath(), cookie.getSecure(), cookie.getVersion());
+		this(cookie.getName(), cookie.getValue(), cookie.getDomain(), cookie.getMaxAge(), cookie.getPath(),
+				cookie.getSecure());
 	}
 
 	public String getName() {
@@ -66,10 +63,6 @@ public class SavedCookie implements Serializable {
 
 	public String getValue() {
 		return this.value;
-	}
-
-	public String getComment() {
-		return this.comment;
 	}
 
 	public String getDomain() {
@@ -88,22 +81,14 @@ public class SavedCookie implements Serializable {
 		return this.secure;
 	}
 
-	public int getVersion() {
-		return this.version;
-	}
-
 	public Cookie getCookie() {
 		Cookie cookie = new Cookie(getName(), getValue());
-		if (getComment() != null) {
-			cookie.setComment(getComment());
-		}
 		if (getDomain() != null) {
 			cookie.setDomain(getDomain());
 		}
 		if (getPath() != null) {
 			cookie.setPath(getPath());
 		}
-		cookie.setVersion(getVersion());
 		cookie.setMaxAge(getMaxAge());
 		cookie.setSecure(isSecure());
 		return cookie;

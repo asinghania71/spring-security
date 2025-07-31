@@ -16,12 +16,20 @@
 
 package org.springframework.security.oauth2.client.oidc.userinfo;
 
+import java.util.LinkedHashSet;
+import java.util.Set;
+
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.client.registration.ClientRegistration;
 import org.springframework.security.oauth2.core.AuthorizationGrantType;
+import org.springframework.security.oauth2.core.OAuth2AccessToken;
+import org.springframework.security.oauth2.core.oidc.OidcUserInfo;
+import org.springframework.security.oauth2.core.oidc.user.DefaultOidcUser;
+import org.springframework.security.oauth2.core.oidc.user.OidcUser;
+import org.springframework.security.oauth2.core.oidc.user.OidcUserAuthority;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
-
-import java.util.Set;
 
 /**
  * Utilities for working with the {@link OidcUserRequest}
@@ -47,8 +55,7 @@ final class OidcUserRequestUtils {
 	static boolean shouldRetrieveUserInfo(OidcUserRequest userRequest, Set<String> accessibleScopes) {
 		// Auto-disabled if UserInfo Endpoint URI is not provided
 		ClientRegistration clientRegistration = userRequest.getClientRegistration();
-		ClientRegistration.ProviderDetails providerDetails = clientRegistration.getProviderDetails();
-		if (StringUtils.isEmpty(providerDetails.getUserInfoEndpoint().getUri())) {
+		if (!StringUtils.hasLength(clientRegistration.getProviderDetails().getUserInfoEndpoint().getUri())) {
 			return false;
 		}
 		// The Claims requested by the profile, email, address, and phone scope values
@@ -73,6 +80,26 @@ final class OidcUserRequestUtils {
 			// @formatter:on
 		}
 		return false;
+	}
+
+	static OidcUser getUser(OidcUserRequest userRequest, OidcUserInfo userInfo) {
+		Set<GrantedAuthority> authorities = new LinkedHashSet<>();
+		ClientRegistration.ProviderDetails providerDetails = userRequest.getClientRegistration().getProviderDetails();
+		String userNameAttributeName = providerDetails.getUserInfoEndpoint().getUserNameAttributeName();
+		if (StringUtils.hasText(userNameAttributeName)) {
+			authorities.add(new OidcUserAuthority(userRequest.getIdToken(), userInfo, userNameAttributeName));
+		}
+		else {
+			authorities.add(new OidcUserAuthority(userRequest.getIdToken(), userInfo));
+		}
+		OAuth2AccessToken token = userRequest.getAccessToken();
+		for (String scope : token.getScopes()) {
+			authorities.add(new SimpleGrantedAuthority("SCOPE_" + scope));
+		}
+		if (StringUtils.hasText(userNameAttributeName)) {
+			return new DefaultOidcUser(authorities, userRequest.getIdToken(), userInfo, userNameAttributeName);
+		}
+		return new DefaultOidcUser(authorities, userRequest.getIdToken(), userInfo);
 	}
 
 	private OidcUserRequestUtils() {

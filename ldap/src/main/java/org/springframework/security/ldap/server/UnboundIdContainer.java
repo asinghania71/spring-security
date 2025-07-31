@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2018 the original author or authors.
+ * Copyright 2002-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,16 +33,18 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
 import org.springframework.context.Lifecycle;
 import org.springframework.core.io.Resource;
+import org.springframework.lang.NonNull;
 import org.springframework.util.StringUtils;
 
 /**
  * @author Eddú Meléndez
  */
-public class UnboundIdContainer implements InitializingBean, DisposableBean, Lifecycle, ApplicationContextAware {
+public class UnboundIdContainer
+		implements EmbeddedLdapServerContainer, InitializingBean, DisposableBean, Lifecycle, ApplicationContextAware {
 
 	private InMemoryDirectoryServer directoryServer;
 
-	private String defaultPartitionSuffix;
+	private final String defaultPartitionSuffix;
 
 	private int port = 53389;
 
@@ -50,17 +52,19 @@ public class UnboundIdContainer implements InitializingBean, DisposableBean, Lif
 
 	private boolean running;
 
-	private String ldif;
+	private final String ldif;
 
 	public UnboundIdContainer(String defaultPartitionSuffix, String ldif) {
 		this.defaultPartitionSuffix = defaultPartitionSuffix;
 		this.ldif = ldif;
 	}
 
+	@Override
 	public int getPort() {
 		return this.port;
 	}
 
+	@Override
 	public void setPort(int port) {
 		this.port = port;
 	}
@@ -76,7 +80,7 @@ public class UnboundIdContainer implements InitializingBean, DisposableBean, Lif
 	}
 
 	@Override
-	public void setApplicationContext(ApplicationContext applicationContext) throws BeansException {
+	public void setApplicationContext(@NonNull ApplicationContext applicationContext) throws BeansException {
 		this.context = applicationContext;
 	}
 
@@ -130,6 +134,7 @@ public class UnboundIdContainer implements InitializingBean, DisposableBean, Lif
 	@Override
 	public void stop() {
 		this.directoryServer.shutDown(true);
+		this.running = false;
 	}
 
 	@Override

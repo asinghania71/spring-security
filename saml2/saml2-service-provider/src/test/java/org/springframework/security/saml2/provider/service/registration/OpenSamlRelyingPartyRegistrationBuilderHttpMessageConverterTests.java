@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2020 the original author or authors.
+ * Copyright 2002-2025 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -66,8 +66,8 @@ public class OpenSamlRelyingPartyRegistrationBuilderHttpMessageConverterTests {
 		MockClientHttpResponse response = new MockClientHttpResponse(
 				(String.format(ENTITY_DESCRIPTOR_TEMPLATE, "")).getBytes(), HttpStatus.OK);
 		assertThatExceptionOfType(Saml2Exception.class)
-				.isThrownBy(() -> this.converter.read(RelyingPartyRegistration.Builder.class, response))
-				.withMessageContaining("Metadata response is missing the necessary IDPSSODescriptor element");
+			.isThrownBy(() -> this.converter.read(RelyingPartyRegistration.Builder.class, response))
+			.withMessageContaining("Metadata response is missing the necessary IDPSSODescriptor element");
 	}
 
 	@Test
@@ -75,9 +75,9 @@ public class OpenSamlRelyingPartyRegistrationBuilderHttpMessageConverterTests {
 		String payload = String.format(ENTITY_DESCRIPTOR_TEMPLATE, String.format(IDP_SSO_DESCRIPTOR_TEMPLATE, ""));
 		MockClientHttpResponse response = new MockClientHttpResponse(payload.getBytes(), HttpStatus.OK);
 		assertThatExceptionOfType(Saml2Exception.class)
-				.isThrownBy(() -> this.converter.read(RelyingPartyRegistration.Builder.class, response))
-				.withMessageContaining(
-						"Metadata response is missing verification certificates, necessary for verifying SAML assertions");
+			.isThrownBy(() -> this.converter.read(RelyingPartyRegistration.Builder.class, response))
+			.withMessageContaining(
+					"Metadata response is missing verification certificates, necessary for verifying SAML assertions");
 	}
 
 	@Test
@@ -86,9 +86,9 @@ public class OpenSamlRelyingPartyRegistrationBuilderHttpMessageConverterTests {
 				String.format(IDP_SSO_DESCRIPTOR_TEMPLATE, String.format(KEY_DESCRIPTOR_TEMPLATE, "use=\"signing\"")));
 		MockClientHttpResponse response = new MockClientHttpResponse(payload.getBytes(), HttpStatus.OK);
 		assertThatExceptionOfType(Saml2Exception.class)
-				.isThrownBy(() -> this.converter.read(RelyingPartyRegistration.Builder.class, response))
-				.withMessageContaining(
-						"Metadata response is missing a SingleSignOnService, necessary for sending AuthnRequests");
+			.isThrownBy(() -> this.converter.read(RelyingPartyRegistration.Builder.class, response))
+			.withMessageContaining(
+					"Metadata response is missing a SingleSignOnService, necessary for sending AuthnRequests");
 	}
 
 	@Test
@@ -100,18 +100,19 @@ public class OpenSamlRelyingPartyRegistrationBuilderHttpMessageConverterTests {
 								+ String.format(SINGLE_SIGN_ON_SERVICE_TEMPLATE)));
 		MockClientHttpResponse response = new MockClientHttpResponse(payload.getBytes(), HttpStatus.OK);
 		RelyingPartyRegistration registration = this.converter.read(RelyingPartyRegistration.Builder.class, response)
-				.registrationId("one").build();
-		RelyingPartyRegistration.AssertingPartyDetails details = registration.getAssertingPartyDetails();
+			.registrationId("one")
+			.build();
+		AssertingPartyMetadata details = registration.getAssertingPartyMetadata();
 		assertThat(details.getWantAuthnRequestsSigned()).isFalse();
 		assertThat(details.getSingleSignOnServiceLocation()).isEqualTo("sso-location");
 		assertThat(details.getSingleSignOnServiceBinding()).isEqualTo(Saml2MessageBinding.REDIRECT);
 		assertThat(details.getEntityId()).isEqualTo("entity-id");
 		assertThat(details.getVerificationX509Credentials()).hasSize(1);
 		assertThat(details.getVerificationX509Credentials().iterator().next().getCertificate())
-				.isEqualTo(x509Certificate(CERTIFICATE));
+			.isEqualTo(x509Certificate(CERTIFICATE));
 		assertThat(details.getEncryptionX509Credentials()).hasSize(1);
 		assertThat(details.getEncryptionX509Credentials().iterator().next().getCertificate())
-				.isEqualTo(x509Certificate(CERTIFICATE));
+			.isEqualTo(x509Certificate(CERTIFICATE));
 	}
 
 	// gh-9051
@@ -125,18 +126,19 @@ public class OpenSamlRelyingPartyRegistrationBuilderHttpMessageConverterTests {
 										+ String.format(SINGLE_SIGN_ON_SERVICE_TEMPLATE))));
 		MockClientHttpResponse response = new MockClientHttpResponse(payload.getBytes(), HttpStatus.OK);
 		RelyingPartyRegistration registration = this.converter.read(RelyingPartyRegistration.Builder.class, response)
-				.registrationId("one").build();
-		RelyingPartyRegistration.AssertingPartyDetails details = registration.getAssertingPartyDetails();
+			.registrationId("one")
+			.build();
+		AssertingPartyMetadata details = registration.getAssertingPartyMetadata();
 		assertThat(details.getWantAuthnRequestsSigned()).isFalse();
 		assertThat(details.getSingleSignOnServiceLocation()).isEqualTo("sso-location");
 		assertThat(details.getSingleSignOnServiceBinding()).isEqualTo(Saml2MessageBinding.REDIRECT);
 		assertThat(details.getEntityId()).isEqualTo("entity-id");
 		assertThat(details.getVerificationX509Credentials()).hasSize(1);
 		assertThat(details.getVerificationX509Credentials().iterator().next().getCertificate())
-				.isEqualTo(x509Certificate(CERTIFICATE));
+			.isEqualTo(x509Certificate(CERTIFICATE));
 		assertThat(details.getEncryptionX509Credentials()).hasSize(1);
 		assertThat(details.getEncryptionX509Credentials().iterator().next().getCertificate())
-				.isEqualTo(x509Certificate(CERTIFICATE));
+			.isEqualTo(x509Certificate(CERTIFICATE));
 	}
 
 	@Test
@@ -145,13 +147,14 @@ public class OpenSamlRelyingPartyRegistrationBuilderHttpMessageConverterTests {
 				String.format(KEY_DESCRIPTOR_TEMPLATE, "") + String.format(SINGLE_SIGN_ON_SERVICE_TEMPLATE)));
 		MockClientHttpResponse response = new MockClientHttpResponse(payload.getBytes(), HttpStatus.OK);
 		RelyingPartyRegistration registration = this.converter.read(RelyingPartyRegistration.Builder.class, response)
-				.registrationId("one").build();
-		RelyingPartyRegistration.AssertingPartyDetails details = registration.getAssertingPartyDetails();
+			.registrationId("one")
+			.build();
+		AssertingPartyMetadata details = registration.getAssertingPartyMetadata();
 		assertThat(details.getVerificationX509Credentials().iterator().next().getCertificate())
-				.isEqualTo(x509Certificate(CERTIFICATE));
+			.isEqualTo(x509Certificate(CERTIFICATE));
 		assertThat(details.getEncryptionX509Credentials()).hasSize(1);
 		assertThat(details.getEncryptionX509Credentials().iterator().next().getCertificate())
-				.isEqualTo(x509Certificate(CERTIFICATE));
+			.isEqualTo(x509Certificate(CERTIFICATE));
 	}
 
 	X509Certificate x509Certificate(String data) {
@@ -170,8 +173,8 @@ public class OpenSamlRelyingPartyRegistrationBuilderHttpMessageConverterTests {
 		String payload = "<saml2:Assertion xmlns:saml2=\"https://some.endpoint\"/>";
 		MockClientHttpResponse response = new MockClientHttpResponse(payload.getBytes(), HttpStatus.OK);
 		assertThatExceptionOfType(Saml2Exception.class)
-				.isThrownBy(() -> this.converter.read(RelyingPartyRegistration.Builder.class, response))
-				.withMessage("Unsupported element of type saml2:Assertion");
+			.isThrownBy(() -> this.converter.read(RelyingPartyRegistration.Builder.class, response))
+			.withMessage("Unsupported element of type saml2:Assertion");
 	}
 
 }

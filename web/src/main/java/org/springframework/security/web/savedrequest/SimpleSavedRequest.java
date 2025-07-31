@@ -16,6 +16,7 @@
 
 package org.springframework.security.web.savedrequest;
 
+import java.io.Serial;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -23,7 +24,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
-import javax.servlet.http.Cookie;
+import jakarta.servlet.http.Cookie;
 
 import org.springframework.util.Assert;
 
@@ -34,6 +35,9 @@ import org.springframework.util.Assert;
  * @since 5.1
  */
 public class SimpleSavedRequest implements SavedRequest {
+
+	@Serial
+	private static final long serialVersionUID = 807650604272166969L;
 
 	private String redirectUrl;
 
@@ -126,7 +130,7 @@ public class SimpleSavedRequest implements SavedRequest {
 	}
 
 	public void setLocales(List<Locale> locales) {
-		Assert.notNull("locales cannot be null");
+		Assert.notNull(locales, "locales cannot be null");
 		this.locales = locales;
 	}
 

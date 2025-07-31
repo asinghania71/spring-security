@@ -16,10 +16,12 @@
 
 package org.springframework.security.web;
 
-import javax.servlet.FilterChain;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
+import java.util.Enumeration;
+import java.util.NoSuchElementException;
 
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.Test;
 
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -32,6 +34,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.mockito.Mockito.mock;
+import static org.springframework.security.web.servlet.TestMockHttpServletRequests.get;
 
 /**
  * Tests {@link FilterInvocation}.
@@ -43,14 +46,8 @@ public class FilterInvocationTests {
 
 	@Test
 	public void testGettersAndStringMethods() {
-		MockHttpServletRequest request = new MockHttpServletRequest(null, null);
-		request.setServletPath("/HelloWorld");
-		request.setPathInfo("/some/more/segments.html");
-		request.setServerName("localhost");
-		request.setScheme("http");
-		request.setServerPort(80);
-		request.setContextPath("/mycontext");
-		request.setRequestURI("/mycontext/HelloWorld/some/more/segments.html");
+		MockHttpServletRequest request = get().requestUri("/mycontext", "/HelloWorld", "/some/more/segments.html")
+			.build();
 		MockHttpServletResponse response = new MockHttpServletResponse();
 		FilterChain chain = mock(FilterChain.class);
 		FilterInvocation fi = new FilterInvocation(request, response, chain);
@@ -60,7 +57,7 @@ public class FilterInvocationTests {
 		assertThat(fi.getHttpResponse()).isEqualTo(response);
 		assertThat(fi.getChain()).isEqualTo(chain);
 		assertThat(fi.getRequestUrl()).isEqualTo("/HelloWorld/some/more/segments.html");
-		assertThat(fi.toString()).isEqualTo("filter invocation [/HelloWorld/some/more/segments.html]");
+		assertThat(fi.toString()).isEqualTo("filter invocation [GET /HelloWorld/some/more/segments.html]");
 		assertThat(fi.getFullRequestUrl()).isEqualTo("http://localhost/mycontext/HelloWorld/some/more/segments.html");
 	}
 
@@ -75,53 +72,42 @@ public class FilterInvocationTests {
 	public void testRejectsNullServletRequest() {
 		MockHttpServletResponse response = new MockHttpServletResponse();
 		assertThatIllegalArgumentException()
-				.isThrownBy(() -> new FilterInvocation(null, response, mock(FilterChain.class)));
+			.isThrownBy(() -> new FilterInvocation(null, response, mock(FilterChain.class)));
 	}
 
 	@Test
 	public void testRejectsNullServletResponse() {
 		MockHttpServletRequest request = new MockHttpServletRequest(null, null);
 		assertThatIllegalArgumentException()
-				.isThrownBy(() -> new FilterInvocation(request, null, mock(FilterChain.class)));
+			.isThrownBy(() -> new FilterInvocation(request, null, mock(FilterChain.class)));
 	}
 
 	@Test
 	public void testStringMethodsWithAQueryString() {
-		MockHttpServletRequest request = new MockHttpServletRequest();
-		request.setQueryString("foo=bar");
-		request.setServletPath("/HelloWorld");
-		request.setServerName("localhost");
-		request.setScheme("http");
-		request.setServerPort(80);
-		request.setContextPath("/mycontext");
-		request.setRequestURI("/mycontext/HelloWorld");
+		MockHttpServletRequest request = get().requestUri("/mycontext", "/HelloWorld", null)
+			.queryString("foo=bar")
+			.build();
 		MockHttpServletResponse response = new MockHttpServletResponse();
 		FilterInvocation fi = new FilterInvocation(request, response, mock(FilterChain.class));
 		assertThat(fi.getRequestUrl()).isEqualTo("/HelloWorld?foo=bar");
-		assertThat(fi.toString()).isEqualTo("filter invocation [/HelloWorld?foo=bar]");
+		assertThat(fi.toString()).isEqualTo("filter invocation [GET /HelloWorld?foo=bar]");
 		assertThat(fi.getFullRequestUrl()).isEqualTo("http://localhost/mycontext/HelloWorld?foo=bar");
 	}
 
 	@Test
 	public void testStringMethodsWithoutAnyQueryString() {
-		MockHttpServletRequest request = new MockHttpServletRequest(null, null);
-		request.setServletPath("/HelloWorld");
-		request.setServerName("localhost");
-		request.setScheme("http");
-		request.setServerPort(80);
-		request.setContextPath("/mycontext");
-		request.setRequestURI("/mycontext/HelloWorld");
+		MockHttpServletRequest request = get().requestUri("/mycontext", "/HelloWorld", null).build();
 		MockHttpServletResponse response = new MockHttpServletResponse();
 		FilterInvocation fi = new FilterInvocation(request, response, mock(FilterChain.class));
 		assertThat(fi.getRequestUrl()).isEqualTo("/HelloWorld");
-		assertThat(fi.toString()).isEqualTo("filter invocation [/HelloWorld]");
+		assertThat(fi.toString()).isEqualTo("filter invocation [GET /HelloWorld]");
 		assertThat(fi.getFullRequestUrl()).isEqualTo("http://localhost/mycontext/HelloWorld");
 	}
 
 	@Test
 	public void dummyChainRejectsInvocation() throws Exception {
 		assertThatExceptionOfType(UnsupportedOperationException.class).isThrownBy(() -> FilterInvocation.DUMMY_CHAIN
-				.doFilter(mock(HttpServletRequest.class), mock(HttpServletResponse.class)));
+			.doFilter(mock(HttpServletRequest.class), mock(HttpServletResponse.class)));
 	}
 
 	@Test
@@ -140,6 +126,25 @@ public class FilterInvocationTests {
 		MockServletContext mockServletContext = new MockServletContext();
 		FilterInvocation filterInvocation = new FilterInvocation(contextPath, servletPath, method, mockServletContext);
 		assertThat(filterInvocation.getRequest().getServletContext()).isSameAs(mockServletContext);
+	}
+
+	@Test
+	public void testDummyRequestGetHeaders() {
+		DummyRequest request = new DummyRequest();
+		request.addHeader("known", "val");
+		Enumeration<String> headers = request.getHeaders("known");
+		assertThat(headers.hasMoreElements()).isTrue();
+		assertThat(headers.nextElement()).isEqualTo("val");
+		assertThat(headers.hasMoreElements()).isFalse();
+		assertThatExceptionOfType(NoSuchElementException.class).isThrownBy(headers::nextElement);
+	}
+
+	@Test
+	public void testDummyRequestGetHeadersNull() {
+		DummyRequest request = new DummyRequest();
+		Enumeration<String> headers = request.getHeaders("unknown");
+		assertThat(headers.hasMoreElements()).isFalse();
+		assertThatExceptionOfType(NoSuchElementException.class).isThrownBy(headers::nextElement);
 	}
 
 }

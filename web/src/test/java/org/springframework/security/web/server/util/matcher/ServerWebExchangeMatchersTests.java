@@ -25,7 +25,7 @@ import org.springframework.web.server.ServerWebExchange;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verifyZeroInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 /**
  * @author Rob Winch
@@ -43,33 +43,33 @@ public class ServerWebExchangeMatchersTests {
 	@Test
 	public void pathMatchersWhenSingleAndSamePatternAndMethodThenMatches() {
 		assertThat(ServerWebExchangeMatchers.pathMatchers(HttpMethod.GET, "/").matches(this.exchange).block().isMatch())
-				.isTrue();
+			.isTrue();
 	}
 
 	@Test
 	public void pathMatchersWhenSingleAndSamePatternAndDiffMethodThenDoesNotMatch() {
 		assertThat(
 				ServerWebExchangeMatchers.pathMatchers(HttpMethod.POST, "/").matches(this.exchange).block().isMatch())
-						.isFalse();
+			.isFalse();
 	}
 
 	@Test
 	public void pathMatchersWhenSingleAndDifferentPatternThenDoesNotMatch() {
 		assertThat(ServerWebExchangeMatchers.pathMatchers("/foobar").matches(this.exchange).block().isMatch())
-				.isFalse();
+			.isFalse();
 	}
 
 	@Test
 	public void pathMatchersWhenMultiThenMatches() {
 		assertThat(ServerWebExchangeMatchers.pathMatchers("/foobar", "/").matches(this.exchange).block().isMatch())
-				.isTrue();
+			.isTrue();
 	}
 
 	@Test
 	public void anyExchangeWhenMockThenMatches() {
 		ServerWebExchange mockExchange = mock(ServerWebExchange.class);
 		assertThat(ServerWebExchangeMatchers.anyExchange().matches(mockExchange).block().isMatch()).isTrue();
-		verifyZeroInteractions(mockExchange);
+		verifyNoMoreInteractions(mockExchange);
 	}
 
 	/**

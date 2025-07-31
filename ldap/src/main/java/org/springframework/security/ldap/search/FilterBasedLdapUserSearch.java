@@ -52,7 +52,7 @@ public class FilterBasedLdapUserSearch implements LdapUserSearch {
 	/**
 	 * Context name to search in, relative to the base of the configured ContextSource.
 	 */
-	private String searchBase = "";
+	private final String searchBase;
 
 	/**
 	 * The filter expression used in the user search. This is an LDAP search filter (as
@@ -78,9 +78,9 @@ public class FilterBasedLdapUserSearch implements LdapUserSearch {
 		this.contextSource = contextSource;
 		this.searchBase = searchBase;
 		setSearchSubtree(true);
-		if (searchBase.length() == 0) {
+		if (searchBase.isEmpty()) {
 			logger.info(LogMessage.format("Searches will be performed from the root %s since SearchBase not set",
-					contextSource.getBaseLdapPath()));
+					contextSource.getBaseLdapName()));
 		}
 	}
 
@@ -104,7 +104,7 @@ public class FilterBasedLdapUserSearch implements LdapUserSearch {
 		}
 		catch (IncorrectResultSizeDataAccessException ex) {
 			if (ex.getActualSize() == 0) {
-				throw new UsernameNotFoundException("User " + username + " not found in directory.");
+				throw UsernameNotFoundException.fromUsername(username);
 			}
 			// Search should never return multiple results if properly configured
 			throw ex;
@@ -128,7 +128,7 @@ public class FilterBasedLdapUserSearch implements LdapUserSearch {
 	 */
 	public void setSearchSubtree(boolean searchSubtree) {
 		this.searchControls
-				.setSearchScope(searchSubtree ? SearchControls.SUBTREE_SCOPE : SearchControls.ONELEVEL_SCOPE);
+			.setSearchScope(searchSubtree ? SearchControls.SUBTREE_SCOPE : SearchControls.ONELEVEL_SCOPE);
 	}
 
 	/**
@@ -157,9 +157,9 @@ public class FilterBasedLdapUserSearch implements LdapUserSearch {
 		sb.append(getClass().getSimpleName()).append(" [");
 		sb.append("searchFilter=").append(this.searchFilter).append("; ");
 		sb.append("searchBase=").append(this.searchBase).append("; ");
-		sb.append("scope=").append(
-				(this.searchControls.getSearchScope() != SearchControls.SUBTREE_SCOPE) ? "single-level" : "subtree")
-				.append("; ");
+		sb.append("scope=")
+			.append((this.searchControls.getSearchScope() != SearchControls.SUBTREE_SCOPE) ? "single-level" : "subtree")
+			.append("; ");
 		sb.append("searchTimeLimit=").append(this.searchControls.getTimeLimit()).append("; ");
 		sb.append("derefLinkFlag=").append(this.searchControls.getDerefLinkFlag()).append(" ]");
 		return sb.toString();

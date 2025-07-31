@@ -28,7 +28,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.ldap.core.ContextSource;
 import org.springframework.ldap.core.DirContextAdapter;
 import org.springframework.security.core.GrantedAuthority;
-import org.springframework.security.ldap.ApacheDsContainerConfig;
+import org.springframework.security.ldap.UnboundIdContainerConfig;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 
@@ -39,7 +39,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @author Eddú Meléndez
  */
 @ExtendWith(SpringExtension.class)
-@ContextConfiguration(classes = ApacheDsContainerConfig.class)
+@ContextConfiguration(classes = UnboundIdContainerConfig.class)
 public class NestedLdapAuthoritiesPopulatorTests {
 
 	@Autowired
@@ -128,19 +128,19 @@ public class NestedLdapAuthoritiesPopulatorTests {
 		LdapAuthority[] ldapAuthorities = authorities.toArray(new LdapAuthority[0]);
 		assertThat(ldapAuthorities).hasSize(5);
 		// groovy-developers group
-		assertThat(ldapAuthorities[0].getAttributes().containsKey("member")).isTrue();
+		assertThat(ldapAuthorities[0].getAttributes()).containsKey("member");
 		assertThat(ldapAuthorities[0].getAttributes().get("member")).isNotNull();
 		assertThat(ldapAuthorities[0].getAttributes().get("member")).hasSize(3);
 		assertThat(ldapAuthorities[0].getFirstAttributeValue("member"))
-				.isEqualTo("cn=groovy-developers,ou=jdeveloper,dc=springframework,dc=org");
+			.isEqualTo("cn=groovy-developers,ou=jdeveloper,dc=springframework,dc=org");
 
 		// java group
-		assertThat(ldapAuthorities[1].getAttributes().containsKey("member")).isTrue();
+		assertThat(ldapAuthorities[1].getAttributes()).containsKey("member");
 		assertThat(ldapAuthorities[1].getAttributes().get("member")).isNotNull();
 		assertThat(ldapAuthorities[1].getAttributes().get("member")).hasSize(3);
 		assertThat(this.groovyDevelopers.getDn()).isEqualTo(ldapAuthorities[1].getFirstAttributeValue("member"));
 		assertThat(ldapAuthorities[2].getAttributes().get("member"))
-				.contains("uid=closuredude,ou=people,dc=springframework,dc=org");
+			.contains("uid=closuredude,ou=people,dc=springframework,dc=org");
 
 		// test non existent attribute
 		assertThat(ldapAuthorities[2].getFirstAttributeValue("test")).isNull();

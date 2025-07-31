@@ -44,7 +44,6 @@ import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
-import static org.mockito.Mockito.verifyZeroInteractions;
 
 /**
  * @author Luke Taylor
@@ -119,7 +118,7 @@ public class DefaultAuthenticationEventPublisherTests {
 		Properties p = new Properties();
 		p.put(MockAuthenticationException.class.getName(), "NoSuchClass");
 		assertThatExceptionOfType(RuntimeException.class)
-				.isThrownBy(() -> this.publisher.setAdditionalExceptionMappings(p));
+			.isThrownBy(() -> this.publisher.setAdditionalExceptionMappings(p));
 	}
 
 	@Test
@@ -132,7 +131,7 @@ public class DefaultAuthenticationEventPublisherTests {
 		this.publisher.setApplicationEventPublisher(appPublisher);
 		this.publisher.publishAuthenticationFailure(new AuthenticationException("") {
 		}, mock(Authentication.class));
-		verifyZeroInteractions(appPublisher);
+		verifyNoMoreInteractions(appPublisher);
 	}
 
 	@Test
@@ -175,7 +174,7 @@ public class DefaultAuthenticationEventPublisherTests {
 	public void defaultAuthenticationFailureEventClassSetNullThen() {
 		this.publisher = new DefaultAuthenticationEventPublisher();
 		assertThatIllegalArgumentException()
-				.isThrownBy(() -> this.publisher.setDefaultAuthenticationFailureEvent(null));
+			.isThrownBy(() -> this.publisher.setDefaultAuthenticationFailureEvent(null));
 	}
 
 	@Test
@@ -193,7 +192,7 @@ public class DefaultAuthenticationEventPublisherTests {
 	public void defaultAuthenticationFailureEventMissingAppropriateConstructorThen() {
 		this.publisher = new DefaultAuthenticationEventPublisher();
 		assertThatExceptionOfType(RuntimeException.class).isThrownBy(() -> this.publisher
-				.setDefaultAuthenticationFailureEvent(AuthenticationFailureEventWithoutAppropriateConstructor.class));
+			.setDefaultAuthenticationFailureEvent(AuthenticationFailureEventWithoutAppropriateConstructor.class));
 	}
 
 	private static final class AuthenticationFailureEventWithoutAppropriateConstructor

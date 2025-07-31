@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2018 the original author or authors.
+ * Copyright 2002-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -88,8 +88,11 @@ import org.springframework.util.xml.DomUtils;
  * @author Ben Alex
  * @author Luke Taylor
  * @author Rob Winch
+ * @author Ngoc Nhan
  * @since 2.0
+ * @deprecated Use {@link MethodSecurityBeanDefinitionParser} instead
  */
+@Deprecated
 public class GlobalMethodSecurityBeanDefinitionParser implements BeanDefinitionParser {
 
 	private final Log logger = LogFactory.getLog(getClass());
@@ -142,27 +145,28 @@ public class GlobalMethodSecurityBeanDefinitionParser implements BeanDefinitionP
 			Element prePostElt = DomUtils.getChildElementByTagName(element, Elements.INVOCATION_HANDLING);
 			Element expressionHandlerElt = DomUtils.getChildElementByTagName(element, Elements.EXPRESSION_HANDLER);
 			if (prePostElt != null && expressionHandlerElt != null) {
-				pc.getReaderContext().error(Elements.INVOCATION_HANDLING + " and " + Elements.EXPRESSION_HANDLER
-						+ " cannot be used together ", source);
+				pc.getReaderContext()
+					.error(Elements.INVOCATION_HANDLING + " and " + Elements.EXPRESSION_HANDLER
+							+ " cannot be used together ", source);
 			}
 			BeanDefinitionBuilder preInvocationVoterBldr = BeanDefinitionBuilder
-					.rootBeanDefinition(PreInvocationAuthorizationAdviceVoter.class);
+				.rootBeanDefinition(PreInvocationAuthorizationAdviceVoter.class);
 			// After-invocation provider to handle post-invocation filtering and
 			// authorization expression annotations.
 			BeanDefinitionBuilder afterInvocationBldr = BeanDefinitionBuilder
-					.rootBeanDefinition(PostInvocationAdviceProvider.class);
+				.rootBeanDefinition(PostInvocationAdviceProvider.class);
 			// The metadata source for the security interceptor
 			BeanDefinitionBuilder mds = BeanDefinitionBuilder
-					.rootBeanDefinition(PrePostAnnotationSecurityMetadataSource.class);
+				.rootBeanDefinition(PrePostAnnotationSecurityMetadataSource.class);
 			if (prePostElt != null) {
 				// Customized override of expression handling system
 				String attributeFactoryRef = DomUtils
-						.getChildElementByTagName(prePostElt, Elements.INVOCATION_ATTRIBUTE_FACTORY)
-						.getAttribute("ref");
+					.getChildElementByTagName(prePostElt, Elements.INVOCATION_ATTRIBUTE_FACTORY)
+					.getAttribute("ref");
 				String preAdviceRef = DomUtils.getChildElementByTagName(prePostElt, Elements.PRE_INVOCATION_ADVICE)
-						.getAttribute("ref");
+					.getAttribute("ref");
 				String postAdviceRef = DomUtils.getChildElementByTagName(prePostElt, Elements.POST_INVOCATION_ADVICE)
-						.getAttribute("ref");
+					.getAttribute("ref");
 				mds.addConstructorArgReference(attributeFactoryRef);
 				preInvocationVoterBldr.addConstructorArgReference(preAdviceRef);
 				afterInvocationBldr.addConstructorArgReference(postAdviceRef);
@@ -179,16 +183,16 @@ public class GlobalMethodSecurityBeanDefinitionParser implements BeanDefinitionP
 					lazyInitPP.getConstructorArgumentValues().addGenericArgumentValue(expressionHandlerRef);
 					pc.getReaderContext().registerWithGeneratedName(lazyInitPP);
 					BeanDefinitionBuilder lazyMethodSecurityExpressionHandlerBldr = BeanDefinitionBuilder
-							.rootBeanDefinition(LazyInitTargetSource.class);
+						.rootBeanDefinition(LazyInitTargetSource.class);
 					lazyMethodSecurityExpressionHandlerBldr.addPropertyValue("targetBeanName", expressionHandlerRef);
 					BeanDefinitionBuilder expressionHandlerProxyBldr = BeanDefinitionBuilder
-							.rootBeanDefinition(ProxyFactoryBean.class);
+						.rootBeanDefinition(ProxyFactoryBean.class);
 					expressionHandlerProxyBldr.addPropertyValue("targetSource",
 							lazyMethodSecurityExpressionHandlerBldr.getBeanDefinition());
 					expressionHandlerProxyBldr.addPropertyValue("proxyInterfaces",
 							MethodSecurityExpressionHandler.class);
 					expressionHandlerRef = pc.getReaderContext()
-							.generateBeanName(expressionHandlerProxyBldr.getBeanDefinition());
+						.generateBeanName(expressionHandlerProxyBldr.getBeanDefinition());
 					pc.registerBeanComponent(new BeanComponentDefinition(expressionHandlerProxyBldr.getBeanDefinition(),
 							expressionHandlerRef));
 				}
@@ -201,15 +205,15 @@ public class GlobalMethodSecurityBeanDefinitionParser implements BeanDefinitionP
 							+ "was configured. All hasPermission() expressions will evaluate to false.");
 				}
 				BeanDefinitionBuilder expressionPreAdviceBldr = BeanDefinitionBuilder
-						.rootBeanDefinition(ExpressionBasedPreInvocationAdvice.class);
+					.rootBeanDefinition(ExpressionBasedPreInvocationAdvice.class);
 				expressionPreAdviceBldr.addPropertyReference("expressionHandler", expressionHandlerRef);
 				preInvocationVoterBldr.addConstructorArgValue(expressionPreAdviceBldr.getBeanDefinition());
 				BeanDefinitionBuilder expressionPostAdviceBldr = BeanDefinitionBuilder
-						.rootBeanDefinition(ExpressionBasedPostInvocationAdvice.class);
+					.rootBeanDefinition(ExpressionBasedPostInvocationAdvice.class);
 				expressionPostAdviceBldr.addConstructorArgReference(expressionHandlerRef);
 				afterInvocationBldr.addConstructorArgValue(expressionPostAdviceBldr.getBeanDefinition());
 				BeanDefinitionBuilder annotationInvocationFactory = BeanDefinitionBuilder
-						.rootBeanDefinition(ExpressionBasedAnnotationAttributeFactory.class);
+					.rootBeanDefinition(ExpressionBasedAnnotationAttributeFactory.class);
 				annotationInvocationFactory.addConstructorArgReference(expressionHandlerRef);
 				mds.addConstructorArgValue(annotationInvocationFactory.getBeanDefinition());
 			}
@@ -219,7 +223,7 @@ public class GlobalMethodSecurityBeanDefinitionParser implements BeanDefinitionP
 		}
 		if (useSecured) {
 			delegates.add(BeanDefinitionBuilder.rootBeanDefinition(SecuredAnnotationSecurityMetadataSource.class)
-					.getBeanDefinition());
+				.getBeanDefinition());
 		}
 		if (jsr250Enabled) {
 			RootBeanDefinition jsrMetadataSource = registerWithDefaultRolePrefix(pc,
@@ -329,12 +333,12 @@ public class GlobalMethodSecurityBeanDefinitionParser implements BeanDefinitionP
 			String accessConfig = childElt.getAttribute(ATT_ACCESS);
 			String expression = childElt.getAttribute(ATT_EXPRESSION);
 			if (!StringUtils.hasText(accessConfig)) {
-				parserContext.getReaderContext().error("Access configuration required",
-						parserContext.extractSource(childElt));
+				parserContext.getReaderContext()
+					.error("Access configuration required", parserContext.extractSource(childElt));
 			}
 			if (!StringUtils.hasText(expression)) {
-				parserContext.getReaderContext().error("Pointcut expression required",
-						parserContext.extractSource(childElt));
+				parserContext.getReaderContext()
+					.error("Pointcut expression required", parserContext.extractSource(childElt));
 			}
 			String[] attributeTokens = StringUtils.commaDelimitedListToStringArray(accessConfig);
 			List<ConfigAttribute> attributes = new ArrayList<>(attributeTokens.length);
@@ -349,8 +353,8 @@ public class GlobalMethodSecurityBeanDefinitionParser implements BeanDefinitionP
 	private BeanReference registerMethodSecurityInterceptor(ParserContext pc, String authMgrRef, String accessManagerId,
 			String runAsManagerId, BeanReference metadataSource, List<BeanMetadataElement> afterInvocationProviders,
 			Object source, boolean useAspectJ) {
-		BeanDefinitionBuilder bldr = BeanDefinitionBuilder.rootBeanDefinition(
-				useAspectJ ? AspectJMethodSecurityInterceptor.class : MethodSecurityInterceptor.class);
+		BeanDefinitionBuilder bldr = BeanDefinitionBuilder
+			.rootBeanDefinition(useAspectJ ? AspectJMethodSecurityInterceptor.class : MethodSecurityInterceptor.class);
 		bldr.getRawBeanDefinition().setSource(source);
 		bldr.addPropertyReference("accessDecisionManager", accessManagerId);
 		RootBeanDefinition authMgr = new RootBeanDefinition(AuthenticationManagerDelegator.class);
@@ -480,13 +484,8 @@ public class GlobalMethodSecurityBeanDefinitionParser implements BeanDefinitionP
 
 		@Override
 		public final void setApplicationContext(ApplicationContext applicationContext) throws BeansException {
-			String[] grantedAuthorityDefaultsBeanNames = applicationContext
-					.getBeanNamesForType(GrantedAuthorityDefaults.class);
-			if (grantedAuthorityDefaultsBeanNames.length == 1) {
-				GrantedAuthorityDefaults grantedAuthorityDefaults = applicationContext
-						.getBean(grantedAuthorityDefaultsBeanNames[0], GrantedAuthorityDefaults.class);
-				this.rolePrefix = grantedAuthorityDefaults.getRolePrefix();
-			}
+			applicationContext.getBeanProvider(GrantedAuthorityDefaults.class)
+				.ifUnique((grantedAuthorityDefaults) -> this.rolePrefix = grantedAuthorityDefaults.getRolePrefix());
 		}
 
 	}

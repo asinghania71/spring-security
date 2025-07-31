@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2016 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -46,7 +46,9 @@ import org.springframework.util.xml.DomUtils;
  * for use with a FilterSecurityInterceptor.
  *
  * @author Luke Taylor
+ * @deprecated Use `use-authorization-manager` property instead
  */
+@Deprecated
 public class FilterInvocationSecurityMetadataSourceParser implements BeanDefinitionParser {
 
 	private static final String ATT_USE_EXPRESSIONS = "use-expressions";
@@ -67,17 +69,18 @@ public class FilterInvocationSecurityMetadataSourceParser implements BeanDefinit
 		// Check for attributes that aren't allowed in this context
 		for (Element elt : interceptUrls) {
 			if (StringUtils.hasLength(elt.getAttribute(HttpSecurityBeanDefinitionParser.ATT_REQUIRES_CHANNEL))) {
-				parserContext.getReaderContext().error("The attribute '"
-						+ HttpSecurityBeanDefinitionParser.ATT_REQUIRES_CHANNEL + "' isn't allowed here.", elt);
+				parserContext.getReaderContext()
+					.error("The attribute '" + HttpSecurityBeanDefinitionParser.ATT_REQUIRES_CHANNEL
+							+ "' isn't allowed here.", elt);
 			}
 			if (StringUtils.hasLength(elt.getAttribute(HttpSecurityBeanDefinitionParser.ATT_FILTERS))) {
-				parserContext.getReaderContext().error(
-						"The attribute '" + HttpSecurityBeanDefinitionParser.ATT_FILTERS + "' isn't allowed here.",
-						elt);
+				parserContext.getReaderContext()
+					.error("The attribute '" + HttpSecurityBeanDefinitionParser.ATT_FILTERS + "' isn't allowed here.",
+							elt);
 			}
 			if (StringUtils.hasLength(elt.getAttribute(ATT_SERVLET_PATH))) {
-				parserContext.getReaderContext().error("The attribute '" + ATT_SERVLET_PATH + "' isn't allowed here.",
-						elt);
+				parserContext.getReaderContext()
+					.error("The attribute '" + ATT_SERVLET_PATH + "' isn't allowed here.", elt);
 			}
 		}
 		BeanDefinition mds = createSecurityMetadataSource(interceptUrls, false, element, parserContext);
@@ -91,7 +94,7 @@ public class FilterInvocationSecurityMetadataSourceParser implements BeanDefinit
 
 	static RootBeanDefinition createSecurityMetadataSource(List<Element> interceptUrls, boolean addAllAuth,
 			Element httpElt, ParserContext pc) {
-		MatcherType matcherType = MatcherType.fromElement(httpElt);
+		MatcherType matcherType = MatcherType.fromElementOrMvc(httpElt);
 		boolean useExpressions = isUseExpressions(httpElt);
 		ManagedMap<BeanMetadataElement, BeanDefinition> requestToAttributesMap = parseInterceptUrlsForFilterInvocationRequestMap(
 				matcherType, interceptUrls, useExpressions, addAllAuth, pc);
@@ -108,7 +111,7 @@ public class FilterInvocationSecurityMetadataSourceParser implements BeanDefinit
 				expressionHandlerRef = registerDefaultExpressionHandler(pc);
 			}
 			fidsBuilder = BeanDefinitionBuilder
-					.rootBeanDefinition(ExpressionBasedFilterInvocationSecurityMetadataSource.class);
+				.rootBeanDefinition(ExpressionBasedFilterInvocationSecurityMetadataSource.class);
 			fidsBuilder.addConstructorArgValue(requestToAttributesMap);
 			fidsBuilder.addConstructorArgReference(expressionHandlerRef);
 		}
@@ -156,10 +159,10 @@ public class FilterInvocationSecurityMetadataSourceParser implements BeanDefinit
 			if (!StringUtils.hasText(servletPath)) {
 				servletPath = null;
 			}
-			else if (!MatcherType.mvc.equals(matcherType)) {
-				parserContext.getReaderContext().error(
-						ATT_SERVLET_PATH + " is not applicable for request-matcher: '" + matcherType.name() + "'",
-						urlElt);
+			else if (!MatcherType.path.equals(matcherType)) {
+				parserContext.getReaderContext()
+					.error(ATT_SERVLET_PATH + " is not applicable for request-matcher: '" + matcherType.name() + "'",
+							urlElt);
 			}
 			BeanMetadataElement matcher = hasMatcherRef ? new RuntimeBeanReference(matcherRef)
 					: matcherType.createMatcher(parserContext, path, method, servletPath);

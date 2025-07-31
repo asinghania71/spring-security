@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2020 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,15 +23,16 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
-import javax.servlet.FilterChain;
-import javax.servlet.ServletException;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 
 import org.springframework.security.authentication.AuthenticationDetailsSource;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.context.SecurityContextHolderStrategy;
 import org.springframework.security.oauth2.client.OAuth2AuthorizedClient;
 import org.springframework.security.oauth2.client.authentication.OAuth2AuthorizationCodeAuthenticationProvider;
 import org.springframework.security.oauth2.client.authentication.OAuth2AuthorizationCodeAuthenticationToken;
@@ -103,6 +104,9 @@ import org.springframework.web.util.UriComponentsBuilder;
  */
 public class OAuth2AuthorizationCodeGrantFilter extends OncePerRequestFilter {
 
+	private SecurityContextHolderStrategy securityContextHolderStrategy = SecurityContextHolder
+		.getContextHolderStrategy();
+
 	private final ClientRegistrationRepository clientRegistrationRepository;
 
 	private final OAuth2AuthorizedClientRepository authorizedClientRepository;
@@ -158,6 +162,17 @@ public class OAuth2AuthorizationCodeGrantFilter extends OncePerRequestFilter {
 		this.requestCache = requestCache;
 	}
 
+	/**
+	 * Sets the {@link SecurityContextHolderStrategy} to use. The default action is to use
+	 * the {@link SecurityContextHolderStrategy} stored in {@link SecurityContextHolder}.
+	 *
+	 * @since 5.8
+	 */
+	public void setSecurityContextHolderStrategy(SecurityContextHolderStrategy securityContextHolderStrategy) {
+		Assert.notNull(securityContextHolderStrategy, "securityContextHolderStrategy cannot be null");
+		this.securityContextHolderStrategy = securityContextHolderStrategy;
+	}
+
 	@Override
 	protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
 			throws ServletException, IOException {
@@ -174,7 +189,7 @@ public class OAuth2AuthorizationCodeGrantFilter extends OncePerRequestFilter {
 			return false;
 		}
 		OAuth2AuthorizationRequest authorizationRequest = this.authorizationRequestRepository
-				.loadAuthorizationRequest(request);
+			.loadAuthorizationRequest(request);
 		if (authorizationRequest == null) {
 			return false;
 		}
@@ -204,7 +219,7 @@ public class OAuth2AuthorizationCodeGrantFilter extends OncePerRequestFilter {
 	private void processAuthorizationResponse(HttpServletRequest request, HttpServletResponse response)
 			throws IOException {
 		OAuth2AuthorizationRequest authorizationRequest = this.authorizationRequestRepository
-				.removeAuthorizationRequest(request, response);
+			.removeAuthorizationRequest(request, response);
 		String registrationId = authorizationRequest.getAttribute(OAuth2ParameterNames.REGISTRATION_ID);
 		ClientRegistration clientRegistration = this.clientRegistrationRepository.findByRegistrationId(registrationId);
 		MultiValueMap<String, String> params = OAuth2AuthorizationResponseUtils.toMultiMap(request.getParameterMap());
@@ -217,22 +232,22 @@ public class OAuth2AuthorizationCodeGrantFilter extends OncePerRequestFilter {
 		OAuth2AuthorizationCodeAuthenticationToken authenticationResult;
 		try {
 			authenticationResult = (OAuth2AuthorizationCodeAuthenticationToken) this.authenticationManager
-					.authenticate(authenticationRequest);
+				.authenticate(authenticationRequest);
 		}
 		catch (OAuth2AuthorizationException ex) {
 			OAuth2Error error = ex.getError();
 			UriComponentsBuilder uriBuilder = UriComponentsBuilder.fromUriString(authorizationRequest.getRedirectUri())
-					.queryParam(OAuth2ParameterNames.ERROR, error.getErrorCode());
-			if (!StringUtils.isEmpty(error.getDescription())) {
+				.queryParam(OAuth2ParameterNames.ERROR, error.getErrorCode());
+			if (StringUtils.hasLength(error.getDescription())) {
 				uriBuilder.queryParam(OAuth2ParameterNames.ERROR_DESCRIPTION, error.getDescription());
 			}
-			if (!StringUtils.isEmpty(error.getUri())) {
+			if (StringUtils.hasLength(error.getUri())) {
 				uriBuilder.queryParam(OAuth2ParameterNames.ERROR_URI, error.getUri());
 			}
 			this.redirectStrategy.sendRedirect(request, response, uriBuilder.build().encode().toString());
 			return;
 		}
-		Authentication currentAuthentication = SecurityContextHolder.getContext().getAuthentication();
+		Authentication currentAuthentication = this.securityContextHolderStrategy.getContext().getAuthentication();
 		String principalName = (currentAuthentication != null) ? currentAuthentication.getName() : "anonymousUser";
 		OAuth2AuthorizedClient authorizedClient = new OAuth2AuthorizedClient(
 				authenticationResult.getClientRegistration(), principalName, authenticationResult.getAccessToken(),

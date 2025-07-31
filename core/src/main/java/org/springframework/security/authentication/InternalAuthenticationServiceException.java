@@ -16,6 +16,8 @@
 
 package org.springframework.security.authentication;
 
+import java.io.Serial;
+
 /**
  * <p>
  * Thrown if an authentication request could not be processed due to a system problem that
@@ -29,13 +31,16 @@ package org.springframework.security.authentication;
  * <p>
  * This might be thrown if a backend authentication repository is unavailable, for
  * example. However, it would not be thrown in the event that an error occurred when
- * validating an OpenID response with an OpenID Provider.
+ * validating an OIDC response from an OIDC provider.
  * </p>
  *
  * @author Rob Winch
  *
  */
 public class InternalAuthenticationServiceException extends AuthenticationServiceException {
+
+	@Serial
+	private static final long serialVersionUID = -6029644854192497840L;
 
 	public InternalAuthenticationServiceException(String message, Throwable cause) {
 		super(message, cause);

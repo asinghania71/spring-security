@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2013 the original author or authors.
+ * Copyright 2002-2025 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,8 +26,8 @@ import org.springframework.security.authentication.AuthenticationEventPublisher;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.authentication.ProviderManager;
+import org.springframework.security.config.ObjectPostProcessor;
 import org.springframework.security.config.annotation.AbstractConfiguredSecurityBuilder;
-import org.springframework.security.config.annotation.ObjectPostProcessor;
 import org.springframework.security.config.annotation.SecurityBuilder;
 import org.springframework.security.config.annotation.SecurityConfigurer;
 import org.springframework.security.config.annotation.authentication.ProviderManagerBuilder;
@@ -149,7 +149,7 @@ public class AuthenticationManagerBuilder
 	 * {@link #getDefaultUserDetailsService()} method. Note that additional
 	 * {@link UserDetailsService}'s may override this {@link UserDetailsService} as the
 	 * default. See the <a href=
-	 * "https://docs.spring.io/spring-security/site/docs/current/reference/htmlsingle/#user-schema"
+	 * "https://docs.spring.io/spring-security/reference/servlet/appendix/database-schema.html"
 	 * >User Schema</a> section of the reference for the default schema.
 	 * </p>
 	 * @return a {@link JdbcUserDetailsManagerConfigurer} to allow customization of the
@@ -195,7 +195,9 @@ public class AuthenticationManagerBuilder
 	 * @throws Exception if an error occurs when adding the LDAP authentication
 	 */
 	public LdapAuthenticationProviderConfigurer<AuthenticationManagerBuilder> ldapAuthentication() throws Exception {
-		return apply(new LdapAuthenticationProviderConfigurer<>());
+		LdapAuthenticationProviderConfigurer<AuthenticationManagerBuilder> ldap = new LdapAuthenticationProviderConfigurer<>();
+		with(ldap);
+		return ldap;
 	}
 
 	/**
@@ -277,7 +279,8 @@ public class AuthenticationManagerBuilder
 	private <C extends UserDetailsAwareConfigurer<AuthenticationManagerBuilder, ? extends UserDetailsService>> C apply(
 			C configurer) throws Exception {
 		this.defaultUserDetailsService = configurer.getUserDetailsService();
-		return super.apply(configurer);
+		with(configurer);
+		return configurer;
 	}
 
 }

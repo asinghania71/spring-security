@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2018 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ package org.springframework.security.config.annotation.web.configurers;
 
 import java.util.LinkedHashMap;
 
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.HttpSecurityBuilder;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.web.AuthenticationEntryPoint;
@@ -76,7 +77,7 @@ public final class ExceptionHandlingConfigurer<H extends HttpSecurityBuilder<H>>
 
 	/**
 	 * Creates a new instance
-	 * @see HttpSecurity#exceptionHandling()
+	 * @see HttpSecurity#exceptionHandling(Customizer)
 	 */
 	public ExceptionHandlingConfigurer() {
 	}
@@ -187,6 +188,7 @@ public final class ExceptionHandlingConfigurer<H extends HttpSecurityBuilder<H>>
 				getRequestCache(http));
 		AccessDeniedHandler deniedHandler = getAccessDeniedHandler(http);
 		exceptionTranslationFilter.setAccessDeniedHandler(deniedHandler);
+		exceptionTranslationFilter.setSecurityContextHolderStrategy(getSecurityContextHolderStrategy());
 		exceptionTranslationFilter = postProcess(exceptionTranslationFilter);
 		http.addFilter(exceptionTranslationFilter);
 	}

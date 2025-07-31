@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2025 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,8 @@
 
 package org.springframework.security.core.context;
 
+import java.util.function.Supplier;
+
 import org.springframework.context.ApplicationEvent;
 
 /**
@@ -24,11 +26,27 @@ import org.springframework.context.ApplicationEvent;
  * @author Josh Cummings
  * @since 5.6
  */
+@SuppressWarnings("serial")
 public class SecurityContextChangedEvent extends ApplicationEvent {
 
-	private final SecurityContext oldContext;
+	public static final Supplier<SecurityContext> NO_CONTEXT = () -> null;
 
-	private final SecurityContext newContext;
+	private final Supplier<SecurityContext> oldContext;
+
+	private final Supplier<SecurityContext> newContext;
+
+	/**
+	 * Construct an event
+	 * @param oldContext the old security context
+	 * @param newContext the new security context, use
+	 * {@link SecurityContextChangedEvent#NO_CONTEXT} for if the context is cleared
+	 * @since 5.8
+	 */
+	public SecurityContextChangedEvent(Supplier<SecurityContext> oldContext, Supplier<SecurityContext> newContext) {
+		super(SecurityContextHolder.class);
+		this.oldContext = oldContext;
+		this.newContext = newContext;
+	}
 
 	/**
 	 * Construct an event
@@ -36,9 +54,7 @@ public class SecurityContextChangedEvent extends ApplicationEvent {
 	 * @param newContext the new security context
 	 */
 	public SecurityContextChangedEvent(SecurityContext oldContext, SecurityContext newContext) {
-		super(SecurityContextHolder.class);
-		this.oldContext = oldContext;
-		this.newContext = newContext;
+		this(() -> oldContext, (newContext != null) ? () -> newContext : NO_CONTEXT);
 	}
 
 	/**
@@ -47,7 +63,7 @@ public class SecurityContextChangedEvent extends ApplicationEvent {
 	 * @return the previous {@link SecurityContext}
 	 */
 	public SecurityContext getOldContext() {
-		return this.oldContext;
+		return this.oldContext.get();
 	}
 
 	/**
@@ -56,7 +72,21 @@ public class SecurityContextChangedEvent extends ApplicationEvent {
 	 * @return the current {@link SecurityContext}
 	 */
 	public SecurityContext getNewContext() {
-		return this.newContext;
+		return this.newContext.get();
+	}
+
+	/**
+	 * Say whether the event is a context-clearing event.
+	 *
+	 * <p>
+	 * This method is handy for avoiding looking up the new context to confirm it is a
+	 * cleared event.
+	 * @return {@code true} if the new context is
+	 * {@link SecurityContextChangedEvent#NO_CONTEXT}
+	 * @since 5.8
+	 */
+	public boolean isCleared() {
+		return this.newContext == NO_CONTEXT;
 	}
 
 }

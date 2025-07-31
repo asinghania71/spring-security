@@ -21,12 +21,12 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 
-import javax.servlet.FilterChain;
-import javax.servlet.ServletException;
-import javax.servlet.ServletRequest;
-import javax.servlet.ServletResponse;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.ServletRequest;
+import jakarta.servlet.ServletResponse;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 
 import org.springframework.beans.BeansException;
 import org.springframework.context.ApplicationEventPublisher;
@@ -35,6 +35,7 @@ import org.springframework.context.MessageSource;
 import org.springframework.context.MessageSourceAware;
 import org.springframework.context.support.MessageSourceAccessor;
 import org.springframework.core.log.LogMessage;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AccountExpiredException;
 import org.springframework.security.authentication.AccountStatusUserDetailsChecker;
 import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
@@ -49,6 +50,7 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.SpringSecurityMessageSource;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.context.SecurityContextHolderStrategy;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsChecker;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -58,12 +60,15 @@ import org.springframework.security.web.authentication.AuthenticationSuccessHand
 import org.springframework.security.web.authentication.SimpleUrlAuthenticationFailureHandler;
 import org.springframework.security.web.authentication.SimpleUrlAuthenticationSuccessHandler;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
+import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
+import org.springframework.security.web.context.RequestAttributeSecurityContextRepository;
+import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.security.web.util.UrlUtils;
-import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 import org.springframework.security.web.util.matcher.RequestMatcher;
 import org.springframework.util.Assert;
 import org.springframework.web.filter.GenericFilterBean;
-import org.springframework.web.util.UrlPathHelper;
+
+import static org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher.pathPattern;
 
 /**
  * Switch User processing filter responsible for user context switching.
@@ -114,6 +119,9 @@ public class SwitchUserFilter extends GenericFilterBean implements ApplicationEv
 
 	public static final String ROLE_PREVIOUS_ADMINISTRATOR = "ROLE_PREVIOUS_ADMINISTRATOR";
 
+	private SecurityContextHolderStrategy securityContextHolderStrategy = SecurityContextHolder
+		.getContextHolderStrategy();
+
 	private ApplicationEventPublisher eventPublisher;
 
 	private AuthenticationDetailsSource<HttpServletRequest, ?> authenticationDetailsSource = new WebAuthenticationDetailsSource();
@@ -141,6 +149,8 @@ public class SwitchUserFilter extends GenericFilterBean implements ApplicationEv
 	private AuthenticationSuccessHandler successHandler;
 
 	private AuthenticationFailureHandler failureHandler;
+
+	private SecurityContextRepository securityContextRepository = new HttpSessionSecurityContextRepository();
 
 	@Override
 	public void afterPropertiesSet() {
@@ -175,10 +185,11 @@ public class SwitchUserFilter extends GenericFilterBean implements ApplicationEv
 			try {
 				Authentication targetUser = attemptSwitchUser(request);
 				// update the current context to the new target user
-				SecurityContext context = SecurityContextHolder.createEmptyContext();
+				SecurityContext context = this.securityContextHolderStrategy.createEmptyContext();
 				context.setAuthentication(targetUser);
-				SecurityContextHolder.setContext(context);
+				this.securityContextHolderStrategy.setContext(context);
 				this.logger.debug(LogMessage.format("Set SecurityContextHolder to %s", targetUser));
+				this.securityContextRepository.saveContext(context, request, response);
 				// redirect to target url
 				this.successHandler.onAuthenticationSuccess(request, response, targetUser);
 			}
@@ -192,10 +203,11 @@ public class SwitchUserFilter extends GenericFilterBean implements ApplicationEv
 			// get the original authentication object (if exists)
 			Authentication originalUser = attemptExitUser(request);
 			// update the current context back to the original user
-			SecurityContext context = SecurityContextHolder.createEmptyContext();
+			SecurityContext context = this.securityContextHolderStrategy.createEmptyContext();
 			context.setAuthentication(originalUser);
-			SecurityContextHolder.setContext(context);
+			this.securityContextHolderStrategy.setContext(context);
 			this.logger.debug(LogMessage.format("Set SecurityContextHolder to %s", originalUser));
+			this.securityContextRepository.saveContext(context, request, response);
 			// redirect to target url
 			this.successHandler.onAuthenticationSuccess(request, response, originalUser);
 			return;
@@ -228,7 +240,7 @@ public class SwitchUserFilter extends GenericFilterBean implements ApplicationEv
 		// publish event
 		if (this.eventPublisher != null) {
 			this.eventPublisher.publishEvent(new AuthenticationSwitchUserEvent(
-					SecurityContextHolder.getContext().getAuthentication(), targetUser));
+					this.securityContextHolderStrategy.getContext().getAuthentication(), targetUser));
 		}
 		return targetUserRequest;
 	}
@@ -244,10 +256,10 @@ public class SwitchUserFilter extends GenericFilterBean implements ApplicationEv
 	protected Authentication attemptExitUser(HttpServletRequest request)
 			throws AuthenticationCredentialsNotFoundException {
 		// need to check to see if the current user has a SwitchUserGrantedAuthority
-		Authentication current = SecurityContextHolder.getContext().getAuthentication();
+		Authentication current = this.securityContextHolderStrategy.getContext().getAuthentication();
 		if (current == null) {
 			throw new AuthenticationCredentialsNotFoundException(this.messages
-					.getMessage("SwitchUserFilter.noCurrentUser", "No current user associated with this request"));
+				.getMessage("SwitchUserFilter.noCurrentUser", "No current user associated with this request"));
 		}
 		// check to see if the current user did actual switch to another user
 		// if so, get the original source user so we can switch back
@@ -255,7 +267,7 @@ public class SwitchUserFilter extends GenericFilterBean implements ApplicationEv
 		if (original == null) {
 			this.logger.debug("Failed to find original user");
 			throw new AuthenticationCredentialsNotFoundException(this.messages
-					.getMessage("SwitchUserFilter.noOriginalAuthentication", "Failed to find original user"));
+				.getMessage("SwitchUserFilter.noOriginalAuthentication", "Failed to find original user"));
 		}
 		// get the source user details
 		UserDetails originalUser = null;
@@ -297,7 +309,8 @@ public class SwitchUserFilter extends GenericFilterBean implements ApplicationEv
 		List<GrantedAuthority> newAuths = new ArrayList<>(orig);
 		newAuths.add(switchAuthority);
 		// create the new authentication token
-		targetUserRequest = new UsernamePasswordAuthenticationToken(targetUser, targetUser.getPassword(), newAuths);
+		targetUserRequest = UsernamePasswordAuthenticationToken.authenticated(targetUser, targetUser.getPassword(),
+				newAuths);
 		// set details
 		targetUserRequest.setDetails(this.authenticationDetailsSource.buildDetails(request));
 		return targetUserRequest;
@@ -309,7 +322,7 @@ public class SwitchUserFilter extends GenericFilterBean implements ApplicationEv
 			return attemptExitUser(request);
 		}
 		catch (AuthenticationCredentialsNotFoundException ex) {
-			return SecurityContextHolder.getContext().getAuthentication();
+			return this.securityContextHolderStrategy.getContext().getAuthentication();
 		}
 	}
 
@@ -509,8 +522,32 @@ public class SwitchUserFilter extends GenericFilterBean implements ApplicationEv
 		this.switchAuthorityRole = switchAuthorityRole;
 	}
 
+	/**
+	 * Sets the {@link SecurityContextHolderStrategy} to use. The default action is to use
+	 * the {@link SecurityContextHolderStrategy} stored in {@link SecurityContextHolder}.
+	 *
+	 * @since 5.8
+	 */
+	public void setSecurityContextHolderStrategy(SecurityContextHolderStrategy securityContextHolderStrategy) {
+		Assert.notNull(securityContextHolderStrategy, "securityContextHolderStrategy cannot be null");
+		this.securityContextHolderStrategy = securityContextHolderStrategy;
+	}
+
+	/**
+	 * Sets the {@link SecurityContextRepository} to save the {@link SecurityContext} on
+	 * switch user success. The default is
+	 * {@link RequestAttributeSecurityContextRepository}.
+	 * @param securityContextRepository the {@link SecurityContextRepository} to use.
+	 * Cannot be null.
+	 * @since 5.7.7
+	 */
+	public void setSecurityContextRepository(SecurityContextRepository securityContextRepository) {
+		Assert.notNull(securityContextRepository, "securityContextRepository cannot be null");
+		this.securityContextRepository = securityContextRepository;
+	}
+
 	private static RequestMatcher createMatcher(String pattern) {
-		return new AntPathRequestMatcher(pattern, "POST", true, new UrlPathHelper());
+		return pathPattern(HttpMethod.POST, pattern);
 	}
 
 }

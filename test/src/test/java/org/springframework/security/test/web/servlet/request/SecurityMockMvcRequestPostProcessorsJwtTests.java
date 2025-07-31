@@ -19,8 +19,7 @@ package org.springframework.security.test.web.servlet.request;
 import java.util.Arrays;
 import java.util.List;
 
-import javax.servlet.http.HttpServletResponse;
-
+import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -103,7 +102,7 @@ public class SecurityMockMvcRequestPostProcessorsJwtTests {
 		assertThat(token.getAuthorities()).isNotEmpty();
 		assertThat(token.getToken()).isNotNull();
 		assertThat(token.getToken().getSubject()).isEqualTo("user");
-		assertThat(token.getToken().getHeaders().get("alg")).isEqualTo("none");
+		assertThat(token.getToken().getHeaders()).containsEntry("alg", "none");
 	}
 
 	@Test
@@ -120,8 +119,9 @@ public class SecurityMockMvcRequestPostProcessorsJwtTests {
 
 	@Test
 	public void jwtWhenProvidingCustomAuthoritiesThenProducesJwtAuthentication() {
-		jwt().jwt((jwt) -> jwt.claim("scope", "ignored authorities")).authorities(this.authority1, this.authority2)
-				.postProcessRequest(this.request);
+		jwt().jwt((jwt) -> jwt.claim("scope", "ignored authorities"))
+			.authorities(this.authority1, this.authority2)
+			.postProcessRequest(this.request);
 		verify(this.repository).saveContext(this.contextCaptor.capture(), eq(this.request),
 				any(HttpServletResponse.class));
 		SecurityContext context = this.contextCaptor.getValue();
@@ -135,14 +135,15 @@ public class SecurityMockMvcRequestPostProcessorsJwtTests {
 		verify(this.repository).saveContext(this.contextCaptor.capture(), eq(this.request),
 				any(HttpServletResponse.class));
 		SecurityContext context = this.contextCaptor.getValue();
-		assertThat((List<GrantedAuthority>) context.getAuthentication().getAuthorities()).containsOnly(
-				new SimpleGrantedAuthority("SCOPE_scoped"), new SimpleGrantedAuthority("SCOPE_authorities"));
+		assertThat((List<GrantedAuthority>) context.getAuthentication().getAuthorities())
+			.containsOnly(new SimpleGrantedAuthority("SCOPE_scoped"), new SimpleGrantedAuthority("SCOPE_authorities"));
 	}
 
 	@Test
 	public void jwtWhenProvidingGrantedAuthoritiesThenProducesJwtAuthentication() {
 		jwt().jwt((jwt) -> jwt.claim("scope", "ignored authorities"))
-				.authorities((jwt) -> Arrays.asList(this.authority1)).postProcessRequest(this.request);
+			.authorities((jwt) -> Arrays.asList(this.authority1))
+			.postProcessRequest(this.request);
 		verify(this.repository).saveContext(this.contextCaptor.capture(), eq(this.request),
 				any(HttpServletResponse.class));
 		SecurityContext context = this.contextCaptor.getValue();
@@ -159,7 +160,7 @@ public class SecurityMockMvcRequestPostProcessorsJwtTests {
 		JwtAuthenticationToken retrievedToken = (JwtAuthenticationToken) context.getAuthentication();
 		assertThat(retrievedToken.getToken().getSubject()).isEqualTo("some_user");
 		assertThat(retrievedToken.getToken().getTokenValue()).isEqualTo("token");
-		assertThat(retrievedToken.getToken().getHeaders().get("header1")).isEqualTo("value1");
+		assertThat(retrievedToken.getToken().getHeaders()).containsEntry("header1", "value1");
 	}
 
 }

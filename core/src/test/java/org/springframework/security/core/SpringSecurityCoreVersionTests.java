@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2013 the original author or authors.
+ * Copyright 2002-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,12 +18,12 @@ package org.springframework.security.core;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Answers;
@@ -39,7 +39,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyZeroInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 /**
  * Checks that the embedded version information is up to date.
@@ -61,24 +61,15 @@ public class SpringSecurityCoreVersionTests {
 
 	@BeforeEach
 	public void setup() throws Exception {
-		setFinalStaticField(SpringSecurityCoreVersion.class, "logger", this.logger);
+		Field logger = ReflectionUtils.findField(SpringSecurityCoreVersion.class, "logger");
+		StaticFinalReflectionUtils.setField(logger, this.logger);
 	}
 
 	@AfterEach
 	public void cleanup() throws Exception {
 		System.clearProperty(getDisableChecksProperty());
-		setFinalStaticField(SpringSecurityCoreVersion.class, "logger",
-				LogFactory.getLog(SpringSecurityCoreVersion.class));
-	}
-
-	private static void setFinalStaticField(Class<?> clazz, String fieldName, Object value)
-			throws ReflectiveOperationException {
-		Field field = clazz.getDeclaredField(fieldName);
-		field.setAccessible(true);
-		Field modifiers = Field.class.getDeclaredField("modifiers");
-		modifiers.setAccessible(true);
-		modifiers.setInt(field, field.getModifiers() & ~Modifier.FINAL);
-		field.set(null, value);
+		Field logger = ReflectionUtils.findField(SpringSecurityCoreVersion.class, "logger");
+		StaticFinalReflectionUtils.setField(logger, LogFactory.getLog(SpringSecurityCoreVersion.class));
 	}
 
 	@Test
@@ -89,6 +80,7 @@ public class SpringSecurityCoreVersionTests {
 	}
 
 	@Test
+	@Disabled("Since 6.3. See gh-3737")
 	public void serialVersionMajorAndMinorVersionMatchBuildVersion() {
 		String version = System.getProperty("springSecurityVersion");
 		// Strip patch version
@@ -104,7 +96,7 @@ public class SpringSecurityCoreVersionTests {
 		expectSpringSecurityVersionThenReturn(version);
 		expectSpringVersionThenReturn(version);
 		performChecks();
-		verifyZeroInteractions(this.logger);
+		verifyNoMoreInteractions(this.logger);
 	}
 
 	@Test
@@ -113,7 +105,7 @@ public class SpringSecurityCoreVersionTests {
 		expectSpringSecurityVersionThenReturn(version);
 		expectSpringVersionThenReturn(null);
 		performChecks();
-		verifyZeroInteractions(this.logger);
+		verifyNoMoreInteractions(this.logger);
 	}
 
 	@Test
@@ -149,7 +141,7 @@ public class SpringSecurityCoreVersionTests {
 		expectSpringVersionThenReturn("2");
 		System.setProperty(getDisableChecksProperty(), Boolean.TRUE.toString());
 		performChecks();
-		verifyZeroInteractions(this.logger);
+		verifyNoMoreInteractions(this.logger);
 	}
 
 	private String getDisableChecksProperty() {

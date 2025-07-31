@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2020 the original author or authors.
+ * Copyright 2002-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,7 +49,7 @@ public class OAuth2ErrorHttpMessageConverter extends AbstractHttpMessageConverte
 
 	private static final Charset DEFAULT_CHARSET = StandardCharsets.UTF_8;
 
-	private static final ParameterizedTypeReference<Map<String, Object>> STRING_OBJECT_MAP = new ParameterizedTypeReference<Map<String, Object>>() {
+	private static final ParameterizedTypeReference<Map<String, Object>> STRING_OBJECT_MAP = new ParameterizedTypeReference<>() {
 	};
 
 	private GenericHttpMessageConverter<Object> jsonMessageConverter = HttpMessageConverters.getJsonMessageConverter();
@@ -75,9 +75,10 @@ public class OAuth2ErrorHttpMessageConverter extends AbstractHttpMessageConverte
 			// gh-8157: Parse parameter values as Object in order to handle potential JSON
 			// Object and then convert values to String
 			Map<String, Object> errorParameters = (Map<String, Object>) this.jsonMessageConverter
-					.read(STRING_OBJECT_MAP.getType(), null, inputMessage);
-			return this.errorConverter.convert(errorParameters.entrySet().stream()
-					.collect(Collectors.toMap(Map.Entry::getKey, (entry) -> String.valueOf(entry.getValue()))));
+				.read(STRING_OBJECT_MAP.getType(), null, inputMessage);
+			return this.errorConverter.convert(errorParameters.entrySet()
+				.stream()
+				.collect(Collectors.toMap(Map.Entry::getKey, (entry) -> String.valueOf(entry.getValue()))));
 		}
 		catch (Exception ex) {
 			throw new HttpMessageNotReadableException(

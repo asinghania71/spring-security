@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2018 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,9 +20,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
 import org.springframework.security.config.test.SpringTestContext;
 import org.springframework.security.config.test.SpringTestContextExtension;
 import org.springframework.security.core.userdetails.PasswordEncodedUser;
@@ -48,7 +48,7 @@ public class NamespaceAuthenticationManagerTests {
 	public void authenticationMangerWhenDefaultThenEraseCredentialsIsTrue() throws Exception {
 		this.spring.register(EraseCredentialsTrueDefaultConfig.class).autowire();
 		SecurityMockMvcResultMatchers.AuthenticatedMatcher nullCredentials = authenticated()
-				.withAuthentication((a) -> assertThat(a.getCredentials()).isNull());
+			.withAuthentication((a) -> assertThat(a.getCredentials()).isNull());
 		this.mockMvc.perform(formLogin()).andExpect(nullCredentials);
 		this.mockMvc.perform(formLogin()).andExpect(nullCredentials);
 		// no exception due to username being cleared out
@@ -58,7 +58,7 @@ public class NamespaceAuthenticationManagerTests {
 	public void authenticationMangerWhenEraseCredentialsIsFalseThenCredentialsNotNull() throws Exception {
 		this.spring.register(EraseCredentialsFalseConfig.class).autowire();
 		SecurityMockMvcResultMatchers.AuthenticatedMatcher notNullCredentials = authenticated()
-				.withAuthentication((a) -> assertThat(a.getCredentials()).isNotNull());
+			.withAuthentication((a) -> assertThat(a.getCredentials()).isNotNull());
 		this.mockMvc.perform(formLogin()).andExpect(notNullCredentials);
 		this.mockMvc.perform(formLogin()).andExpect(notNullCredentials);
 		// no exception due to username being cleared out
@@ -69,12 +69,13 @@ public class NamespaceAuthenticationManagerTests {
 	public void authenticationManagerWhenGlobalAndEraseCredentialsIsFalseThenCredentialsNotNull() throws Exception {
 		this.spring.register(GlobalEraseCredentialsFalseConfig.class).autowire();
 		SecurityMockMvcResultMatchers.AuthenticatedMatcher notNullCredentials = authenticated()
-				.withAuthentication((a) -> assertThat(a.getCredentials()).isNotNull());
+			.withAuthentication((a) -> assertThat(a.getCredentials()).isNotNull());
 		this.mockMvc.perform(formLogin()).andExpect(notNullCredentials);
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class EraseCredentialsTrueDefaultConfig extends WebSecurityConfigurerAdapter {
+	static class EraseCredentialsTrueDefaultConfig {
 
 		@Autowired
 		void configureGlobal(AuthenticationManagerBuilder auth) throws Exception {
@@ -87,11 +88,12 @@ public class NamespaceAuthenticationManagerTests {
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class EraseCredentialsFalseConfig extends WebSecurityConfigurerAdapter {
+	static class EraseCredentialsFalseConfig {
 
-		@Override
-		public void configure(AuthenticationManagerBuilder auth) throws Exception {
+		@Autowired
+		void configure(AuthenticationManagerBuilder auth) throws Exception {
 			// @formatter:off
 			auth
 				.eraseCredentials(false)
@@ -102,8 +104,9 @@ public class NamespaceAuthenticationManagerTests {
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class GlobalEraseCredentialsFalseConfig extends WebSecurityConfigurerAdapter {
+	static class GlobalEraseCredentialsFalseConfig {
 
 		@Autowired
 		void configureGlobal(AuthenticationManagerBuilder auth) throws Exception {

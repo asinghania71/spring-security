@@ -18,9 +18,9 @@ package org.springframework.security.web.csrf;
 
 import java.util.UUID;
 
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-import javax.servlet.http.HttpSession;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpSession;
 
 import org.springframework.util.Assert;
 
@@ -38,7 +38,7 @@ public final class HttpSessionCsrfTokenRepository implements CsrfTokenRepository
 	private static final String DEFAULT_CSRF_HEADER_NAME = "X-CSRF-TOKEN";
 
 	private static final String DEFAULT_CSRF_TOKEN_ATTR_NAME = HttpSessionCsrfTokenRepository.class.getName()
-			.concat(".CSRF_TOKEN");
+		.concat(".CSRF_TOKEN");
 
 	private String parameterName = DEFAULT_CSRF_PARAMETER_NAME;
 

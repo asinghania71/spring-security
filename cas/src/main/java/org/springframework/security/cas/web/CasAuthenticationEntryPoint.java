@@ -1,5 +1,5 @@
 /*
- * Copyright 2004, 2005, 2006 Acegi Technology Pty Limited
+ * Copyright 2002-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,15 +18,17 @@ package org.springframework.security.cas.web;
 
 import java.io.IOException;
 
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-
-import org.jasig.cas.client.util.CommonUtils;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import org.apereo.cas.client.util.CommonUtils;
+import org.apereo.cas.client.util.WebUtils;
 
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.security.cas.ServiceProperties;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.web.AuthenticationEntryPoint;
+import org.springframework.security.web.DefaultRedirectStrategy;
+import org.springframework.security.web.RedirectStrategy;
 import org.springframework.util.Assert;
 
 /**
@@ -60,6 +62,8 @@ public class CasAuthenticationEntryPoint implements AuthenticationEntryPoint, In
 	 */
 	private boolean encodeServiceUrlWithSessionId = true;
 
+	private RedirectStrategy redirectStrategy = new DefaultRedirectStrategy();
+
 	@Override
 	public void afterPropertiesSet() {
 		Assert.hasLength(this.loginUrl, "loginUrl must be specified");
@@ -73,7 +77,7 @@ public class CasAuthenticationEntryPoint implements AuthenticationEntryPoint, In
 		String urlEncodedService = createServiceUrl(servletRequest, response);
 		String redirectUrl = createRedirectUrl(urlEncodedService);
 		preCommence(servletRequest, response);
-		response.sendRedirect(redirectUrl);
+		this.redirectStrategy.sendRedirect(servletRequest, response, redirectUrl);
 	}
 
 	/**
@@ -84,7 +88,7 @@ public class CasAuthenticationEntryPoint implements AuthenticationEntryPoint, In
 	 * @return the constructed service url. CANNOT be NULL.
 	 */
 	protected String createServiceUrl(HttpServletRequest request, HttpServletResponse response) {
-		return CommonUtils.constructServiceUrl(null, response, this.serviceProperties.getService(), null,
+		return WebUtils.constructServiceUrl(null, response, this.serviceProperties.getService(), null,
 				this.serviceProperties.getArtifactParameter(), this.encodeServiceUrlWithSessionId);
 	}
 
@@ -145,6 +149,16 @@ public class CasAuthenticationEntryPoint implements AuthenticationEntryPoint, In
 	 */
 	protected boolean getEncodeServiceUrlWithSessionId() {
 		return this.encodeServiceUrlWithSessionId;
+	}
+
+	/**
+	 * Sets the {@link RedirectStrategy} to use
+	 * @param redirectStrategy the {@link RedirectStrategy} to use
+	 * @since 6.3
+	 */
+	public void setRedirectStrategy(RedirectStrategy redirectStrategy) {
+		Assert.notNull(redirectStrategy, "redirectStrategy cannot be null");
+		this.redirectStrategy = redirectStrategy;
 	}
 
 }

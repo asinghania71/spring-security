@@ -1,5 +1,5 @@
 /*
- * Copyright 2011-2021 the original author or authors.
+ * Copyright 2011-2025 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,10 +17,11 @@
 package org.springframework.security.crypto.encrypt;
 
 import java.security.SecureRandom;
+import java.time.Duration;
+import java.time.temporal.ChronoUnit;
 import java.util.Random;
 import java.util.UUID;
 
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -28,6 +29,8 @@ import org.springframework.security.crypto.codec.Hex;
 import org.springframework.security.crypto.encrypt.AesBytesEncryptor.CipherAlgorithm;
 import org.springframework.security.crypto.keygen.BytesKeyGenerator;
 import org.springframework.security.crypto.keygen.KeyGenerators;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 public class BouncyCastleAesBytesEncryptorEquivalencyTests {
 
@@ -96,17 +99,17 @@ public class BouncyCastleAesBytesEncryptorEquivalencyTests {
 			// and can decrypt back to the original input
 			byte[] leftEncrypted = left.encrypt(this.testData);
 			byte[] rightEncrypted = right.encrypt(this.testData);
-			Assertions.assertArrayEquals(leftEncrypted, rightEncrypted);
+			assertThat(rightEncrypted).containsExactly(leftEncrypted);
 			byte[] leftDecrypted = left.decrypt(leftEncrypted);
 			byte[] rightDecrypted = right.decrypt(rightEncrypted);
-			Assertions.assertArrayEquals(this.testData, leftDecrypted);
-			Assertions.assertArrayEquals(this.testData, rightDecrypted);
+			assertThat(leftDecrypted).containsExactly(this.testData);
+			assertThat(rightDecrypted).containsExactly(this.testData);
 		}
 	}
 
 	private void testCompatibility(BytesEncryptor left, BytesEncryptor right) {
 		// tests that right can decrypt what left encrypted and vice versa
-		// and that the decypted data is the same as the original
+		// and that the decrypted data is the same as the original
 		for (int size = 1; size < 2048; size++) {
 			this.testData = new byte[size];
 			this.secureRandom.nextBytes(this.testData);
@@ -114,9 +117,28 @@ public class BouncyCastleAesBytesEncryptorEquivalencyTests {
 			byte[] rightEncrypted = right.encrypt(this.testData);
 			byte[] leftDecrypted = left.decrypt(rightEncrypted);
 			byte[] rightDecrypted = right.decrypt(leftEncrypted);
-			Assertions.assertArrayEquals(this.testData, leftDecrypted);
-			Assertions.assertArrayEquals(this.testData, rightDecrypted);
+			assertThat(leftDecrypted).containsExactly(this.testData);
+			assertThat(rightDecrypted).containsExactly(this.testData);
 		}
+	}
+
+	private long testSpeed(BytesEncryptor bytesEncryptor) {
+		long start = System.nanoTime();
+		for (int size = 0; size < 2048; size++) {
+			this.testData = new byte[size];
+			this.secureRandom.nextBytes(this.testData);
+			byte[] encrypted = bytesEncryptor.encrypt(this.testData);
+			byte[] decrypted = bytesEncryptor.decrypt(encrypted);
+			assertThat(decrypted).containsExactly(this.testData);
+		}
+		return System.nanoTime() - start;
+	}
+
+	private String nanosToReadableString(String label, long nanos) {
+		Duration duration = Duration.ofNanos(nanos);
+		Duration millis = duration.truncatedTo(ChronoUnit.MILLIS);
+		Duration micros = duration.minus(millis).dividedBy(1000);
+		return "%s: %dms %dμs".formatted(label, duration.toMillis(), micros.toNanos());
 	}
 
 	/**

@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2019 the original author or authors.
+ * Copyright 2002-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,17 +19,18 @@ package org.springframework.security.web.session;
 import java.io.IOException;
 import java.util.List;
 
-import javax.servlet.FilterChain;
-import javax.servlet.ServletException;
-import javax.servlet.ServletRequest;
-import javax.servlet.ServletResponse;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-import javax.servlet.http.HttpSession;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.ServletRequest;
+import jakarta.servlet.ServletResponse;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpSession;
 
 import org.springframework.core.log.LogMessage;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.context.SecurityContextHolderStrategy;
 import org.springframework.security.core.session.SessionInformation;
 import org.springframework.security.core.session.SessionRegistry;
 import org.springframework.security.web.RedirectStrategy;
@@ -66,6 +67,9 @@ import org.springframework.web.filter.GenericFilterBean;
  * @author Onur Kagan Ozcan
  */
 public class ConcurrentSessionFilter extends GenericFilterBean {
+
+	private SecurityContextHolderStrategy securityContextHolderStrategy = SecurityContextHolder
+		.getContextHolderStrategy();
 
 	private final SessionRegistry sessionRegistry;
 
@@ -134,10 +138,10 @@ public class ConcurrentSessionFilter extends GenericFilterBean {
 				if (info.isExpired()) {
 					// Expired - abort processing
 					this.logger.debug(LogMessage
-							.of(() -> "Requested session ID " + request.getRequestedSessionId() + " has expired."));
+						.of(() -> "Requested session ID " + request.getRequestedSessionId() + " has expired."));
 					doLogout(request, response);
 					this.sessionInformationExpiredStrategy
-							.onExpiredSessionDetected(new SessionInformationExpiredEvent(info, request, response));
+						.onExpiredSessionDetected(new SessionInformationExpiredEvent(info, request, response, chain));
 					return;
 				}
 				// Non-expired - update last request date/time
@@ -162,9 +166,20 @@ public class ConcurrentSessionFilter extends GenericFilterBean {
 	}
 
 	private void doLogout(HttpServletRequest request, HttpServletResponse response) {
-		Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+		Authentication auth = this.securityContextHolderStrategy.getContext().getAuthentication();
 
 		this.handlers.logout(request, response, auth);
+	}
+
+	/**
+	 * Sets the {@link SecurityContextHolderStrategy} to use. The default action is to use
+	 * the {@link SecurityContextHolderStrategy} stored in {@link SecurityContextHolder}.
+	 *
+	 * @since 5.8
+	 */
+	public void setSecurityContextHolderStrategy(SecurityContextHolderStrategy securityContextHolderStrategy) {
+		Assert.notNull(securityContextHolderStrategy, "securityContextHolderStrategy cannot be null");
+		this.securityContextHolderStrategy = securityContextHolderStrategy;
 	}
 
 	public void setLogoutHandlers(LogoutHandler[] handlers) {
@@ -206,8 +221,9 @@ public class ConcurrentSessionFilter extends GenericFilterBean {
 		@Override
 		public void onExpiredSessionDetected(SessionInformationExpiredEvent event) throws IOException {
 			HttpServletResponse response = event.getResponse();
-			response.getWriter().print("This session has been expired (possibly due to multiple concurrent "
-					+ "logins being attempted as the same user).");
+			response.getWriter()
+				.print("This session has been expired (possibly due to multiple concurrent "
+						+ "logins being attempted as the same user).");
 			response.flushBuffer();
 		}
 

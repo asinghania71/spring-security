@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2025 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,9 +19,10 @@ package org.springframework.security.oauth2.server.resource.web;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import javax.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletRequest;
 
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
 import org.springframework.security.oauth2.server.resource.BearerTokenError;
@@ -38,6 +39,8 @@ import org.springframework.util.StringUtils;
  */
 public final class DefaultBearerTokenResolver implements BearerTokenResolver {
 
+	private static final String ACCESS_TOKEN_PARAMETER_NAME = "access_token";
+
 	private static final Pattern authorizationPattern = Pattern.compile("^Bearer (?<token>[a-zA-Z0-9-._~+/]+=*)$",
 			Pattern.CASE_INSENSITIVE);
 
@@ -49,21 +52,77 @@ public final class DefaultBearerTokenResolver implements BearerTokenResolver {
 
 	@Override
 	public String resolve(final HttpServletRequest request) {
-		final String authorizationHeaderToken = resolveFromAuthorizationHeader(request);
-		final String parameterToken = isParameterTokenSupportedForRequest(request)
-				? resolveFromRequestParameters(request) : null;
-		if (authorizationHeaderToken != null) {
-			if (parameterToken != null) {
-				final BearerTokenError error = BearerTokenErrors
-						.invalidRequest("Found multiple bearer tokens in the request");
+		// @formatter:off
+		return resolveToken(
+			resolveFromAuthorizationHeader(request),
+			resolveAccessTokenFromQueryString(request),
+			resolveAccessTokenFromBody(request)
+		);
+		// @formatter:on
+	}
+
+	private static String resolveToken(String... accessTokens) {
+		if (accessTokens == null || accessTokens.length == 0) {
+			return null;
+		}
+
+		String accessToken = null;
+		for (String token : accessTokens) {
+			if (accessToken == null) {
+				accessToken = token;
+			}
+			else if (token != null) {
+				BearerTokenError error = BearerTokenErrors
+					.invalidRequest("Found multiple bearer tokens in the request");
 				throw new OAuth2AuthenticationException(error);
 			}
-			return authorizationHeaderToken;
 		}
-		if (parameterToken != null && isParameterTokenEnabledForRequest(request)) {
-			return parameterToken;
+
+		if (accessToken != null && accessToken.isBlank()) {
+			BearerTokenError error = BearerTokenErrors
+				.invalidRequest("The requested token parameter is an empty string");
+			throw new OAuth2AuthenticationException(error);
 		}
-		return null;
+
+		return accessToken;
+	}
+
+	private String resolveFromAuthorizationHeader(HttpServletRequest request) {
+		String authorization = request.getHeader(this.bearerTokenHeaderName);
+		if (!StringUtils.startsWithIgnoreCase(authorization, "bearer")) {
+			return null;
+		}
+
+		Matcher matcher = authorizationPattern.matcher(authorization);
+		if (!matcher.matches()) {
+			BearerTokenError error = BearerTokenErrors.invalidToken("Bearer token is malformed");
+			throw new OAuth2AuthenticationException(error);
+		}
+
+		return matcher.group("token");
+	}
+
+	private String resolveAccessTokenFromQueryString(HttpServletRequest request) {
+		if (!this.allowUriQueryParameter || !HttpMethod.GET.name().equals(request.getMethod())) {
+			return null;
+		}
+
+		return resolveToken(request.getParameterValues(ACCESS_TOKEN_PARAMETER_NAME));
+	}
+
+	private String resolveAccessTokenFromBody(HttpServletRequest request) {
+		if (!this.allowFormEncodedBodyParameter
+				|| !MediaType.APPLICATION_FORM_URLENCODED_VALUE.equals(request.getContentType())
+				|| HttpMethod.GET.name().equals(request.getMethod())) {
+			return null;
+		}
+
+		String queryString = request.getQueryString();
+		if (queryString != null && queryString.contains(ACCESS_TOKEN_PARAMETER_NAME)) {
+			return null;
+		}
+
+		return resolveToken(request.getParameterValues(ACCESS_TOKEN_PARAMETER_NAME));
 	}
 
 	/**
@@ -99,43 +158,6 @@ public final class DefaultBearerTokenResolver implements BearerTokenResolver {
 	 */
 	public void setBearerTokenHeaderName(String bearerTokenHeaderName) {
 		this.bearerTokenHeaderName = bearerTokenHeaderName;
-	}
-
-	private String resolveFromAuthorizationHeader(HttpServletRequest request) {
-		String authorization = request.getHeader(this.bearerTokenHeaderName);
-		if (!StringUtils.startsWithIgnoreCase(authorization, "bearer")) {
-			return null;
-		}
-		Matcher matcher = authorizationPattern.matcher(authorization);
-		if (!matcher.matches()) {
-			BearerTokenError error = BearerTokenErrors.invalidToken("Bearer token is malformed");
-			throw new OAuth2AuthenticationException(error);
-		}
-		return matcher.group("token");
-	}
-
-	private static String resolveFromRequestParameters(HttpServletRequest request) {
-		String[] values = request.getParameterValues("access_token");
-		if (values == null || values.length == 0) {
-			return null;
-		}
-		if (values.length == 1) {
-			return values[0];
-		}
-		BearerTokenError error = BearerTokenErrors.invalidRequest("Found multiple bearer tokens in the request");
-		throw new OAuth2AuthenticationException(error);
-	}
-
-	private boolean isParameterTokenSupportedForRequest(final HttpServletRequest request) {
-		return (("POST".equals(request.getMethod())
-				&& MediaType.APPLICATION_FORM_URLENCODED_VALUE.equals(request.getContentType()))
-				|| "GET".equals(request.getMethod()));
-	}
-
-	private boolean isParameterTokenEnabledForRequest(final HttpServletRequest request) {
-		return ((this.allowFormEncodedBodyParameter && "POST".equals(request.getMethod())
-				&& MediaType.APPLICATION_FORM_URLENCODED_VALUE.equals(request.getContentType()))
-				|| (this.allowUriQueryParameter && "GET".equals(request.getMethod())));
 	}
 
 }

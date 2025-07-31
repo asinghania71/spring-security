@@ -18,9 +18,11 @@ package org.springframework.security.web.access.channel;
 
 import java.io.IOException;
 
-import javax.servlet.ServletException;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+
+import org.springframework.security.web.PortMapper;
 
 /**
  * May be used by a {@link ChannelProcessor} to launch a web channel.
@@ -31,7 +33,11 @@ import javax.servlet.http.HttpServletResponse;
  * interface to assist <code>ChannelProcessor</code>s in performing this delegation.
  *
  * @author Ben Alex
+ * @deprecated please use
+ * {@link org.springframework.security.web.transport.HttpsRedirectFilter} and its
+ * associated {@link PortMapper}
  */
+@Deprecated
 public interface ChannelEntryPoint {
 
 	/**

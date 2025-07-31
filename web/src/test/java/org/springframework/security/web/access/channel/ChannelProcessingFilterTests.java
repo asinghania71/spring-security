@@ -19,8 +19,7 @@ package org.springframework.security.web.access.channel;
 import java.io.IOException;
 import java.util.Collection;
 
-import javax.servlet.FilterChain;
-
+import jakarta.servlet.FilterChain;
 import org.junit.jupiter.api.Test;
 
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -33,6 +32,7 @@ import org.springframework.security.web.access.intercept.FilterInvocationSecurit
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.mockito.Mockito.mock;
+import static org.springframework.security.web.servlet.TestMockHttpServletRequests.get;
 
 /**
  * Tests {@link ChannelProcessingFilter}.
@@ -82,9 +82,8 @@ public class ChannelProcessingFilterTests {
 		filter.setChannelDecisionManager(new MockChannelDecisionManager(true, "SOME_ATTRIBUTE"));
 		MockFilterInvocationDefinitionMap fids = new MockFilterInvocationDefinitionMap("/path", true, "SOME_ATTRIBUTE");
 		filter.setSecurityMetadataSource(fids);
-		MockHttpServletRequest request = new MockHttpServletRequest();
+		MockHttpServletRequest request = get("/path").build();
 		request.setQueryString("info=now");
-		request.setServletPath("/path");
 		MockHttpServletResponse response = new MockHttpServletResponse();
 		filter.doFilter(request, response, mock(FilterChain.class));
 	}
@@ -95,9 +94,8 @@ public class ChannelProcessingFilterTests {
 		filter.setChannelDecisionManager(new MockChannelDecisionManager(false, "SOME_ATTRIBUTE"));
 		MockFilterInvocationDefinitionMap fids = new MockFilterInvocationDefinitionMap("/path", true, "SOME_ATTRIBUTE");
 		filter.setSecurityMetadataSource(fids);
-		MockHttpServletRequest request = new MockHttpServletRequest();
+		MockHttpServletRequest request = get("/path").build();
 		request.setQueryString("info=now");
-		request.setServletPath("/path");
 		MockHttpServletResponse response = new MockHttpServletResponse();
 		filter.doFilter(request, response, mock(FilterChain.class));
 	}
@@ -108,9 +106,8 @@ public class ChannelProcessingFilterTests {
 		filter.setChannelDecisionManager(new MockChannelDecisionManager(false, "NOT_USED"));
 		MockFilterInvocationDefinitionMap fids = new MockFilterInvocationDefinitionMap("/path", true, "NOT_USED");
 		filter.setSecurityMetadataSource(fids);
-		MockHttpServletRequest request = new MockHttpServletRequest();
+		MockHttpServletRequest request = get("/PATH_NOT_MATCHING_CONFIG_ATTRIBUTE").build();
 		request.setQueryString("info=now");
-		request.setServletPath("/PATH_NOT_MATCHING_CONFIG_ATTRIBUTE");
 		MockHttpServletResponse response = new MockHttpServletResponse();
 		filter.doFilter(request, response, mock(FilterChain.class));
 	}

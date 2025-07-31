@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2019 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,31 +16,35 @@
 
 package org.springframework.security.config.annotation.web.configuration;
 
-import javax.annotation.PreDestroy;
-
+import jakarta.annotation.PreDestroy;
 import okhttp3.mockwebserver.Dispatcher;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
 import okhttp3.mockwebserver.RecordedRequest;
-import org.apache.commons.lang.StringUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.SecurityContextChangedListenerConfig;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.test.SpringTestContext;
 import org.springframework.security.config.test.SpringTestContextExtension;
+import org.springframework.security.core.context.SecurityContextHolderStrategy;
 import org.springframework.security.oauth2.server.resource.authentication.BearerTokenAuthentication;
 import org.springframework.security.oauth2.server.resource.authentication.TestBearerTokenAuthentications;
 import org.springframework.security.oauth2.server.resource.web.reactive.function.client.ServletBearerExchangeFilterFunction;
+import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.reactive.function.client.WebClient;
 
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.verify;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -86,11 +90,31 @@ public class SecurityReactorContextConfigurationResourceServerTests {
 		// @formatter:on
 	}
 
-	@EnableWebSecurity
-	static class BearerFilterConfig extends WebSecurityConfigurerAdapter {
+	@Test
+	public void requestWhenCustomSecurityContextHolderStrategyThenUses() throws Exception {
+		BearerTokenAuthentication authentication = TestBearerTokenAuthentications.bearer();
+		this.spring
+			.register(BearerFilterConfig.class, WebServerConfig.class, Controller.class,
+					SecurityContextChangedListenerConfig.class)
+			.autowire();
+		MockHttpServletRequestBuilder authenticatedRequest = get("/token").with(authentication(authentication));
+		// @formatter:off
+		this.mockMvc.perform(authenticatedRequest)
+				.andExpect(status().isOk())
+				.andExpect(content().string("Bearer token"));
+		// @formatter:on
+		SecurityContextHolderStrategy strategy = this.spring.getContext().getBean(SecurityContextHolderStrategy.class);
+		verify(strategy, atLeastOnce()).getContext();
+	}
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+	@Configuration
+	@EnableWebSecurity
+	static class BearerFilterConfig {
+
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+			http.securityContext((context) -> context.requireExplicitSave(false));
+			return http.build();
 		}
 
 		@Bean
@@ -101,11 +125,13 @@ public class SecurityReactorContextConfigurationResourceServerTests {
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class BearerFilterlessConfig extends WebSecurityConfigurerAdapter {
+	static class BearerFilterlessConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+			return http.build();
 		}
 
 		@Bean
@@ -171,7 +197,7 @@ public class SecurityReactorContextConfigurationResourceServerTests {
 		public MockResponse dispatch(RecordedRequest request) {
 			MockResponse response = new MockResponse().setResponseCode(200);
 			String header = request.getHeader("Authorization");
-			if (StringUtils.isBlank(header)) {
+			if (!StringUtils.hasText(header)) {
 				return response;
 			}
 			return response.setBody(header);

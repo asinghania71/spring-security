@@ -20,11 +20,10 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
-import javax.servlet.http.Cookie;
-
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.annotation.PropertyAccessor;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import jakarta.servlet.http.Cookie;
 import org.json.JSONException;
 import org.junit.jupiter.api.Test;
 import org.skyscreamer.jsonassert.JSONAssert;
@@ -43,11 +42,9 @@ public class SavedCookieMixinTests extends AbstractMixinTests {
 		+ "\"@class\": \"org.springframework.security.web.savedrequest.SavedCookie\", "
 		+ "\"name\": \"SESSION\", "
 		+ "\"value\": \"123456789\", "
-		+ "\"comment\": null, "
 		+ "\"maxAge\": -1, "
 		+ "\"path\": null, "
 		+ "\"secure\":false, "
-		+ "\"version\": 0, "
 		+ "\"domain\": null"
 	+ "}";
 	// @formatter:on
@@ -67,7 +64,7 @@ public class SavedCookieMixinTests extends AbstractMixinTests {
 	public void serializeWithOverrideConfigurationTest() throws JsonProcessingException, JSONException {
 		SavedCookie savedCookie = new SavedCookie(new Cookie("SESSION", "123456789"));
 		this.mapper.setVisibility(PropertyAccessor.FIELD, JsonAutoDetect.Visibility.PUBLIC_ONLY)
-				.setVisibility(PropertyAccessor.GETTER, JsonAutoDetect.Visibility.ANY);
+			.setVisibility(PropertyAccessor.GETTER, JsonAutoDetect.Visibility.ANY);
 		String actualJson = this.mapper.writeValueAsString(savedCookie);
 		JSONAssert.assertEquals(COOKIE_JSON, actualJson, true);
 	}
@@ -96,8 +93,6 @@ public class SavedCookieMixinTests extends AbstractMixinTests {
 		assertThat(savedCookie.getName()).isEqualTo("SESSION");
 		assertThat(savedCookie.getValue()).isEqualTo("123456789");
 		assertThat(savedCookie.isSecure()).isEqualTo(false);
-		assertThat(savedCookie.getVersion()).isZero();
-		assertThat(savedCookie.getComment()).isNull();
 	}
 
 }

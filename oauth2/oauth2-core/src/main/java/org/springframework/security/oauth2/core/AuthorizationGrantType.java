@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2025 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,15 +23,16 @@ import org.springframework.util.Assert;
 
 /**
  * An authorization grant is a credential representing the resource owner's authorization
- * (to access it's protected resources) to the client and used by the client to obtain an
+ * (to access its protected resources) to the client and used by the client to obtain an
  * access token.
  *
  * <p>
- * The OAuth 2.0 Authorization Framework defines four standard grant types: authorization
- * code, implicit, resource owner password credentials, and client credentials. It also
- * provides an extensibility mechanism for defining additional grant types.
+ * The OAuth 2.0 Authorization Framework defines the standard grant types: authorization
+ * code, refresh token and client credentials. It also provides an extensibility mechanism
+ * for defining additional grant types.
  *
  * @author Joe Grandja
+ * @author Steve Riesenberg
  * @since 5.0
  * @see <a target="_blank" href="https://tools.ietf.org/html/rfc6749#section-1.3">Section
  * 1.3 Authorization Grant</a>
@@ -42,28 +43,27 @@ public final class AuthorizationGrantType implements Serializable {
 
 	public static final AuthorizationGrantType AUTHORIZATION_CODE = new AuthorizationGrantType("authorization_code");
 
-	/**
-	 * It is not recommended to use the implicit flow due to the inherent risks of
-	 * returning access tokens in an HTTP redirect without any confirmation that it has
-	 * been received by the client.
-	 *
-	 * @see <a target="_blank" href="https://oauth.net/2/grant-types/implicit/">OAuth 2.0
-	 * Implicit Grant</a>
-	 */
-	@Deprecated
-	public static final AuthorizationGrantType IMPLICIT = new AuthorizationGrantType("implicit");
-
 	public static final AuthorizationGrantType REFRESH_TOKEN = new AuthorizationGrantType("refresh_token");
 
 	public static final AuthorizationGrantType CLIENT_CREDENTIALS = new AuthorizationGrantType("client_credentials");
-
-	public static final AuthorizationGrantType PASSWORD = new AuthorizationGrantType("password");
 
 	/**
 	 * @since 5.5
 	 */
 	public static final AuthorizationGrantType JWT_BEARER = new AuthorizationGrantType(
 			"urn:ietf:params:oauth:grant-type:jwt-bearer");
+
+	/**
+	 * @since 6.1
+	 */
+	public static final AuthorizationGrantType DEVICE_CODE = new AuthorizationGrantType(
+			"urn:ietf:params:oauth:grant-type:device_code");
+
+	/**
+	 * @since 6.3
+	 */
+	public static final AuthorizationGrantType TOKEN_EXCHANGE = new AuthorizationGrantType(
+			"urn:ietf:params:oauth:grant-type:token-exchange");
 
 	private final String value;
 
@@ -99,6 +99,11 @@ public final class AuthorizationGrantType implements Serializable {
 	@Override
 	public int hashCode() {
 		return this.getValue().hashCode();
+	}
+
+	@Override
+	public String toString() {
+		return "AuthorizationGrantType{" + "value='" + this.value + '\'' + '}';
 	}
 
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,6 @@
 
 package org.springframework.security.oauth2.jwt;
 
-import java.net.URI;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -39,10 +37,13 @@ import com.nimbusds.jwt.proc.ConfigurableJWTProcessor;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.RequestEntity;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.security.oauth2.jose.jws.SignatureAlgorithm;
 import org.springframework.util.Assert;
 import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.RestOperations;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.util.UriComponents;
 import org.springframework.web.util.UriComponentsBuilder;
 
 /**
@@ -64,19 +65,31 @@ final class JwtDecoderProviderConfigurationUtils {
 
 	private static final RestTemplate rest = new RestTemplate();
 
-	private static final ParameterizedTypeReference<Map<String, Object>> STRING_OBJECT_MAP = new ParameterizedTypeReference<Map<String, Object>>() {
+	static {
+		int connectTimeout = Integer.parseInt(System.getProperty("sun.net.client.defaultConnectTimeout", "30000"));
+		int readTimeout = Integer.parseInt(System.getProperty("sun.net.client.defaultReadTimeout", "30000"));
+		SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+		requestFactory.setConnectTimeout(connectTimeout);
+		requestFactory.setReadTimeout(readTimeout);
+		rest.setRequestFactory(requestFactory);
+	}
+
+	private static final ParameterizedTypeReference<Map<String, Object>> STRING_OBJECT_MAP = new ParameterizedTypeReference<>() {
 	};
 
 	private JwtDecoderProviderConfigurationUtils() {
 	}
 
 	static Map<String, Object> getConfigurationForOidcIssuerLocation(String oidcIssuerLocation) {
-		return getConfiguration(oidcIssuerLocation, oidc(URI.create(oidcIssuerLocation)));
+		return getConfiguration(oidcIssuerLocation, rest, oidc(oidcIssuerLocation));
+	}
+
+	static Map<String, Object> getConfigurationForIssuerLocation(String issuer, RestOperations rest) {
+		return getConfiguration(issuer, rest, oidc(issuer), oidcRfc8414(issuer), oauth(issuer));
 	}
 
 	static Map<String, Object> getConfigurationForIssuerLocation(String issuer) {
-		URI uri = URI.create(issuer);
-		return getConfiguration(issuer, oidc(uri), oidcRfc8414(uri), oauth(uri));
+		return getConfigurationForIssuerLocation(issuer, rest);
 	}
 
 	static void validateIssuer(Map<String, Object> configuration, String issuer) {
@@ -96,8 +109,10 @@ final class JwtDecoderProviderConfigurationUtils {
 	}
 
 	static <C extends SecurityContext> Set<JWSAlgorithm> getJWSAlgorithms(JWKSource<C> jwkSource) {
-		JWKMatcher jwkMatcher = new JWKMatcher.Builder().publicOnly(true).keyUses(KeyUse.SIGNATURE, null)
-				.keyTypes(KeyType.RSA, KeyType.EC).build();
+		JWKMatcher jwkMatcher = new JWKMatcher.Builder().publicOnly(true)
+			.keyUses(KeyUse.SIGNATURE, null)
+			.keyTypes(KeyType.RSA, KeyType.EC)
+			.build();
 		Set<JWSAlgorithm> jwsAlgorithms = new HashSet<>();
 		try {
 			List<? extends JWK> jwks = jwkSource.get(new JWKSelector(jwkMatcher), null);
@@ -142,11 +157,11 @@ final class JwtDecoderProviderConfigurationUtils {
 		return "(unavailable)";
 	}
 
-	private static Map<String, Object> getConfiguration(String issuer, URI... uris) {
+	private static Map<String, Object> getConfiguration(String issuer, RestOperations rest, UriComponents... uris) {
 		String errorMessage = "Unable to resolve the Configuration with the provided Issuer of " + "\"" + issuer + "\"";
-		for (URI uri : uris) {
+		for (UriComponents uri : uris) {
 			try {
-				RequestEntity<Void> request = RequestEntity.get(uri).build();
+				RequestEntity<Void> request = RequestEntity.get(uri.toUriString()).build();
 				ResponseEntity<Map<String, Object>> response = rest.exchange(request, STRING_OBJECT_MAP);
 				Map<String, Object> configuration = response.getBody();
 				Assert.isTrue(configuration.get("jwks_uri") != null, "The public JWK set URI must not be null");
@@ -166,27 +181,30 @@ final class JwtDecoderProviderConfigurationUtils {
 		throw new IllegalArgumentException(errorMessage);
 	}
 
-	private static URI oidc(URI issuer) {
+	static UriComponents oidc(String issuer) {
+		UriComponents uri = UriComponentsBuilder.fromUriString(issuer).build();
 		// @formatter:off
-		return UriComponentsBuilder.fromUri(issuer)
-				.replacePath(issuer.getPath() + OIDC_METADATA_PATH)
-				.build(Collections.emptyMap());
+		return UriComponentsBuilder.newInstance().uriComponents(uri)
+				.replacePath(uri.getPath() + OIDC_METADATA_PATH)
+				.build();
 		// @formatter:on
 	}
 
-	private static URI oidcRfc8414(URI issuer) {
+	static UriComponents oidcRfc8414(String issuer) {
+		UriComponents uri = UriComponentsBuilder.fromUriString(issuer).build();
 		// @formatter:off
-		return UriComponentsBuilder.fromUri(issuer)
-				.replacePath(OIDC_METADATA_PATH + issuer.getPath())
-				.build(Collections.emptyMap());
+		return UriComponentsBuilder.newInstance().uriComponents(uri)
+				.replacePath(OIDC_METADATA_PATH + uri.getPath())
+				.build();
 		// @formatter:on
 	}
 
-	private static URI oauth(URI issuer) {
+	static UriComponents oauth(String issuer) {
+		UriComponents uri = UriComponentsBuilder.fromUriString(issuer).build();
 		// @formatter:off
-		return UriComponentsBuilder.fromUri(issuer)
-				.replacePath(OAUTH_METADATA_PATH + issuer.getPath())
-				.build(Collections.emptyMap());
+		return UriComponentsBuilder.newInstance().uriComponents(uri)
+				.replacePath(OAUTH_METADATA_PATH + uri.getPath())
+				.build();
 		// @formatter:on
 	}
 

@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2025 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,7 +39,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.RequestEntity;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.authority.AuthorityUtils;
 import org.springframework.security.oauth2.core.OAuth2AuthenticatedPrincipal;
+import org.springframework.security.oauth2.core.OAuth2TokenIntrospectionClaimAccessor;
 import org.springframework.security.oauth2.core.OAuth2TokenIntrospectionClaimNames;
 import org.springframework.web.client.RestOperations;
 
@@ -157,7 +159,7 @@ public class SpringOpaqueTokenIntrospectorTests {
 			OpaqueTokenIntrospector introspectionClient = new SpringOpaqueTokenIntrospector(introspectUri, CLIENT_ID,
 					"wrong");
 			assertThatExceptionOfType(OAuth2IntrospectionException.class)
-					.isThrownBy(() -> introspectionClient.introspect("token"));
+				.isThrownBy(() -> introspectionClient.introspect("token"));
 		}
 	}
 
@@ -184,7 +186,7 @@ public class SpringOpaqueTokenIntrospectorTests {
 		OpaqueTokenIntrospector introspectionClient = new SpringOpaqueTokenIntrospector(INTROSPECTION_URL,
 				restOperations);
 		given(restOperations.exchange(any(RequestEntity.class), eq(STRING_OBJECT_MAP)))
-				.willReturn(response(introspectedValues));
+			.willReturn(response(introspectedValues));
 		OAuth2AuthenticatedPrincipal authority = introspectionClient.introspect("token");
 		// @formatter:off
 		assertThat(authority.getAttributes())
@@ -203,7 +205,7 @@ public class SpringOpaqueTokenIntrospectorTests {
 		OpaqueTokenIntrospector introspectionClient = new SpringOpaqueTokenIntrospector(INTROSPECTION_URL,
 				restOperations);
 		given(restOperations.exchange(any(RequestEntity.class), eq(STRING_OBJECT_MAP)))
-				.willThrow(new IllegalStateException("server was unresponsive"));
+			.willThrow(new IllegalStateException("server was unresponsive"));
 		// @formatter:off
 		assertThatExceptionOfType(OAuth2IntrospectionException.class)
 				.isThrownBy(() -> introspectionClient.introspect("token"))
@@ -218,7 +220,7 @@ public class SpringOpaqueTokenIntrospectorTests {
 				restOperations);
 		given(restOperations.exchange(any(RequestEntity.class), eq(STRING_OBJECT_MAP))).willReturn(response("{}"));
 		assertThatExceptionOfType(OAuth2IntrospectionException.class)
-				.isThrownBy(() -> introspectionClient.introspect("token"));
+			.isThrownBy(() -> introspectionClient.introspect("token"));
 	}
 
 	@Test
@@ -228,7 +230,7 @@ public class SpringOpaqueTokenIntrospectorTests {
 				restOperations);
 		given(restOperations.exchange(any(RequestEntity.class), eq(STRING_OBJECT_MAP))).willReturn(INVALID);
 		assertThatExceptionOfType(OAuth2IntrospectionException.class)
-				.isThrownBy(() -> introspectionClient.introspect("token"));
+			.isThrownBy(() -> introspectionClient.introspect("token"));
 	}
 
 	// gh-7563
@@ -244,28 +246,43 @@ public class SpringOpaqueTokenIntrospectorTests {
 		assertThat(scope).containsExactly("read", "write", "dolphin");
 	}
 
+	// gh-15165
+	@Test
+	public void introspectWhenActiveThenMapsAuthorities() {
+		RestOperations restOperations = mock(RestOperations.class);
+		OpaqueTokenIntrospector introspectionClient = new SpringOpaqueTokenIntrospector(INTROSPECTION_URL,
+				restOperations);
+		given(restOperations.exchange(any(RequestEntity.class), eq(STRING_OBJECT_MAP))).willReturn(ACTIVE);
+		OAuth2AuthenticatedPrincipal principal = introspectionClient.introspect("token");
+		assertThat(principal.getAuthorities()).isNotEmpty();
+		Collection<String> scope = principal.getAttribute("scope");
+		assertThat(scope).containsExactly("read", "write", "dolphin");
+		Collection<String> authorities = AuthorityUtils.authorityListToSet(principal.getAuthorities());
+		assertThat(authorities).containsExactly("SCOPE_read", "SCOPE_write", "SCOPE_dolphin");
+	}
+
 	@Test
 	public void constructorWhenIntrospectionUriIsNullThenIllegalArgumentException() {
 		assertThatIllegalArgumentException()
-				.isThrownBy(() -> new SpringOpaqueTokenIntrospector(null, CLIENT_ID, CLIENT_SECRET));
+			.isThrownBy(() -> new SpringOpaqueTokenIntrospector(null, CLIENT_ID, CLIENT_SECRET));
 	}
 
 	@Test
 	public void constructorWhenClientIdIsNullThenIllegalArgumentException() {
 		assertThatIllegalArgumentException()
-				.isThrownBy(() -> new SpringOpaqueTokenIntrospector(INTROSPECTION_URL, null, CLIENT_SECRET));
+			.isThrownBy(() -> new SpringOpaqueTokenIntrospector(INTROSPECTION_URL, null, CLIENT_SECRET));
 	}
 
 	@Test
 	public void constructorWhenClientSecretIsNullThenIllegalArgumentException() {
 		assertThatIllegalArgumentException()
-				.isThrownBy(() -> new SpringOpaqueTokenIntrospector(INTROSPECTION_URL, CLIENT_ID, null));
+			.isThrownBy(() -> new SpringOpaqueTokenIntrospector(INTROSPECTION_URL, CLIENT_ID, null));
 	}
 
 	@Test
 	public void constructorWhenRestOperationsIsNullThenIllegalArgumentException() {
 		assertThatIllegalArgumentException()
-				.isThrownBy(() -> new SpringOpaqueTokenIntrospector(INTROSPECTION_URL, null));
+			.isThrownBy(() -> new SpringOpaqueTokenIntrospector(INTROSPECTION_URL, null));
 	}
 
 	@Test
@@ -274,7 +291,7 @@ public class SpringOpaqueTokenIntrospectorTests {
 		SpringOpaqueTokenIntrospector introspectionClient = new SpringOpaqueTokenIntrospector(INTROSPECTION_URL,
 				restOperations);
 		assertThatExceptionOfType(IllegalArgumentException.class)
-				.isThrownBy(() -> introspectionClient.setRequestEntityConverter(null));
+			.isThrownBy(() -> introspectionClient.setRequestEntityConverter(null));
 	}
 
 	@SuppressWarnings("unchecked")
@@ -291,6 +308,79 @@ public class SpringOpaqueTokenIntrospectorTests {
 		introspectionClient.setRequestEntityConverter(requestEntityConverter);
 		introspectionClient.introspect(tokenToIntrospect);
 		verify(requestEntityConverter).convert(tokenToIntrospect);
+	}
+
+	@Test
+	public void setAuthenticationConverterWhenConverterIsNullThenExceptionIsThrown() {
+		RestOperations restOperations = mock(RestOperations.class);
+		SpringOpaqueTokenIntrospector introspectionClient = new SpringOpaqueTokenIntrospector(INTROSPECTION_URL,
+				restOperations);
+		assertThatExceptionOfType(IllegalArgumentException.class)
+			.isThrownBy(() -> introspectionClient.setAuthenticationConverter(null));
+	}
+
+	@Test
+	public void setAuthenticationConverterWhenNonNullConverterGivenThenConverterUsed() {
+		RestOperations restOperations = mock(RestOperations.class);
+		Converter<String, RequestEntity<?>> requestEntityConverter = mock(Converter.class);
+		RequestEntity requestEntity = mock(RequestEntity.class);
+		Converter<OAuth2TokenIntrospectionClaimAccessor, OAuth2AuthenticatedPrincipal> authenticationConverter = mock(
+				Converter.class);
+		OAuth2AuthenticatedPrincipal oAuth2AuthenticatedPrincipal = mock(OAuth2AuthenticatedPrincipal.class);
+		String tokenToIntrospect = "some token";
+		given(requestEntityConverter.convert(tokenToIntrospect)).willReturn(requestEntity);
+		given(restOperations.exchange(requestEntity, STRING_OBJECT_MAP)).willReturn(response(ACTIVE_RESPONSE));
+		given(authenticationConverter.convert(any())).willReturn(oAuth2AuthenticatedPrincipal);
+		SpringOpaqueTokenIntrospector introspectionClient = new SpringOpaqueTokenIntrospector(INTROSPECTION_URL,
+				restOperations);
+		introspectionClient.setRequestEntityConverter(requestEntityConverter);
+		introspectionClient.setAuthenticationConverter(authenticationConverter);
+		introspectionClient.introspect(tokenToIntrospect);
+		verify(authenticationConverter).convert(any());
+	}
+
+	@Test
+	public void introspectWithoutEncodeClientCredentialsThenExceptionIsThrown() throws Exception {
+		try (MockWebServer server = new MockWebServer()) {
+			String response = """
+					{
+						"active": true,
+						"username": "client%&1"
+					}
+					""";
+			server.setDispatcher(requiresAuth("client%25%261", "secret%40%242", response));
+			String introspectUri = server.url("/introspect").toString();
+			OpaqueTokenIntrospector introspectionClient = new SpringOpaqueTokenIntrospector(introspectUri, "client%&1",
+					"secret@$2");
+			assertThatExceptionOfType(OAuth2IntrospectionException.class)
+				.isThrownBy(() -> introspectionClient.introspect("token"));
+		}
+	}
+
+	@Test
+	public void introspectWithEncodeClientCredentialsThenOk() throws Exception {
+		try (MockWebServer server = new MockWebServer()) {
+			String response = """
+					{
+						"active": true,
+						"username": "client&1"
+					}
+					""";
+			server.setDispatcher(requiresAuth("client%261", "secret%40%242", response));
+			String introspectUri = server.url("/introspect").toString();
+			OpaqueTokenIntrospector introspectionClient = SpringOpaqueTokenIntrospector
+				.withIntrospectionUri(introspectUri)
+				.clientId("client&1")
+				.clientSecret("secret@$2")
+				.build();
+			OAuth2AuthenticatedPrincipal authority = introspectionClient.introspect("token");
+			// @formatter:off
+			assertThat(authority.getAttributes())
+					.isNotNull()
+					.containsEntry(OAuth2TokenIntrospectionClaimNames.ACTIVE, true)
+					.containsEntry(OAuth2TokenIntrospectionClaimNames.USERNAME, "client&1");
+			// @formatter:on
+		}
 	}
 
 	private static ResponseEntity<Map<String, Object>> response(String content) {

@@ -1,8 +1,8 @@
 [[jackson]]
 = Jackson Support
 
-Spring Security provides Jackson support for persisting Spring Security related classes.
-This can improve the performance of serializing Spring Security related classes when working with distributed sessions (i.e. session replication, Spring Session, etc).
+Spring Security provides Jackson support for persisting Spring Security-related classes.
+This can improve the performance of serializing Spring Security-related classes when working with distributed sessions (session replication, Spring Session, and so on).
 
 To use it, register the `SecurityJackson2Modules.getModules(ClassLoader)` with `ObjectMapper` (https://github.com/FasterXML/jackson-databind[jackson-databind]):
 
@@ -23,8 +23,8 @@ String json = mapper.writeValueAsString(context);
 ====
 The following Spring Security modules provide Jackson support:
 
-- spring-security-core (`CoreJackson2Module`)
-- spring-security-web (`WebJackson2Module`, `WebServletJackson2Module`, `WebServerJackson2Module`)
-- <<oauth2client, spring-security-oauth2-client>> (`OAuth2ClientJackson2Module`)
-- spring-security-cas (`CasJackson2Module`)
+- spring-security-core (javadoc:org.springframework.security.jackson2.CoreJackson2Module[])
+- spring-security-web (javadoc:org.springframework.security.web.jackson2.WebJackson2Module[], javadoc:org.springframework.security.web.jackson2.WebServletJackson2Module[], javadoc:org.springframework.security.web.server.jackson2.WebServerJackson2Module[])
+- <<oauth2client, spring-security-oauth2-client>> (javadoc:org.springframework.security.oauth2.client.jackson2.OAuth2ClientJackson2Module[])
+- spring-security-cas (javadoc:org.springframework.security.cas.jackson2.CasJackson2Module[])
 ====

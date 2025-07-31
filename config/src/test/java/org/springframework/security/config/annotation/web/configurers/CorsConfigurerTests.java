@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2019 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,12 +26,13 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.BeanCreationException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
 import org.springframework.security.config.test.SpringTestContext;
 import org.springframework.security.config.test.SpringTestContextExtension;
+import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -67,62 +68,70 @@ public class CorsConfigurerTests {
 	@Test
 	public void configureWhenNoMvcThenException() {
 		assertThatExceptionOfType(BeanCreationException.class)
-				.isThrownBy(() -> this.spring.register(DefaultCorsConfig.class).autowire()).withMessageContaining(
-						"Please ensure Spring Security & Spring MVC are configured in a shared ApplicationContext");
+			.isThrownBy(() -> this.spring.register(DefaultCorsConfig.class).autowire())
+			.withMessageContaining(
+					"Please ensure that you are using `@EnableWebMvc`, are publishing a `WebMvcConfigurer`, "
+							+ "or are publishing a `CorsConfigurationSource` bean.");
 	}
 
 	@Test
 	public void getWhenCrossOriginAnnotationThenRespondsWithCorsHeaders() throws Exception {
 		this.spring.register(MvcCorsConfig.class).autowire();
 		this.mvc.perform(get("/").header(HttpHeaders.ORIGIN, "https://example.com"))
-				.andExpect(header().exists("Access-Control-Allow-Origin"))
-				.andExpect(header().exists("X-Content-Type-Options"));
+			.andExpect(header().exists("Access-Control-Allow-Origin"))
+			.andExpect(header().exists("X-Content-Type-Options"));
 	}
 
 	@Test
 	public void optionsWhenCrossOriginAnnotationThenRespondsWithCorsHeaders() throws Exception {
 		this.spring.register(MvcCorsConfig.class).autowire();
-		this.mvc.perform(options("/")
+		this.mvc
+			.perform(options("/")
 				.header(org.springframework.http.HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, HttpMethod.POST.name())
-				.header(HttpHeaders.ORIGIN, "https://example.com")).andExpect(status().isOk())
-				.andExpect(header().exists("Access-Control-Allow-Origin"))
-				.andExpect(header().exists("X-Content-Type-Options"));
+				.header(HttpHeaders.ORIGIN, "https://example.com"))
+			.andExpect(status().isOk())
+			.andExpect(header().exists("Access-Control-Allow-Origin"))
+			.andExpect(header().exists("X-Content-Type-Options"));
 	}
 
 	@Test
 	public void getWhenDefaultsInLambdaAndCrossOriginAnnotationThenRespondsWithCorsHeaders() throws Exception {
 		this.spring.register(MvcCorsInLambdaConfig.class).autowire();
 		this.mvc.perform(get("/").header(HttpHeaders.ORIGIN, "https://example.com"))
-				.andExpect(header().exists("Access-Control-Allow-Origin"))
-				.andExpect(header().exists("X-Content-Type-Options"));
+			.andExpect(header().exists("Access-Control-Allow-Origin"))
+			.andExpect(header().exists("X-Content-Type-Options"));
 	}
 
 	@Test
 	public void optionsWhenDefaultsInLambdaAndCrossOriginAnnotationThenRespondsWithCorsHeaders() throws Exception {
 		this.spring.register(MvcCorsInLambdaConfig.class).autowire();
-		this.mvc.perform(options("/")
+		this.mvc
+			.perform(options("/")
 				.header(org.springframework.http.HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, HttpMethod.POST.name())
-				.header(HttpHeaders.ORIGIN, "https://example.com")).andExpect(status().isOk())
-				.andExpect(header().exists("Access-Control-Allow-Origin"))
-				.andExpect(header().exists("X-Content-Type-Options"));
+				.header(HttpHeaders.ORIGIN, "https://example.com"))
+			.andExpect(status().isOk())
+			.andExpect(header().exists("Access-Control-Allow-Origin"))
+			.andExpect(header().exists("X-Content-Type-Options"));
 	}
 
 	@Test
 	public void getWhenCorsConfigurationSourceBeanThenRespondsWithCorsHeaders() throws Exception {
 		this.spring.register(ConfigSourceConfig.class).autowire();
 		this.mvc.perform(get("/").header(HttpHeaders.ORIGIN, "https://example.com"))
-				.andExpect(header().exists("Access-Control-Allow-Origin"))
-				.andExpect(header().exists("X-Content-Type-Options"));
+			.andExpect(header().exists("Access-Control-Allow-Origin"))
+			.andExpect(header().exists("X-Content-Type-Options"));
 	}
 
 	@Test
 	public void optionsWhenCorsConfigurationSourceBeanThenRespondsWithCorsHeaders() throws Exception {
 		this.spring.register(ConfigSourceConfig.class).autowire();
-		this.mvc.perform(options("/")
+		this.mvc
+			.perform(options("/")
 				.header(org.springframework.http.HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, HttpMethod.POST.name())
-				.header(HttpHeaders.ORIGIN, "https://example.com")).andExpect(status().isOk())
-				.andExpect(header().exists("Access-Control-Allow-Origin"))
-				.andExpect(header().exists("X-Content-Type-Options"));
+				.header(HttpHeaders.ORIGIN, "https://example.com"))
+			.andExpect(status().isOk())
+			.andExpect(header().exists("Access-Control-Allow-Origin"))
+			.andExpect(header().exists("X-Content-Type-Options"));
 	}
 
 	@Test
@@ -130,85 +139,93 @@ public class CorsConfigurerTests {
 			throws Exception {
 		this.spring.register(ConfigSourceInLambdaConfig.class).autowire();
 		this.mvc.perform(get("/").header(HttpHeaders.ORIGIN, "https://example.com"))
-				.andExpect(header().exists("Access-Control-Allow-Origin"))
-				.andExpect(header().exists("X-Content-Type-Options"));
+			.andExpect(header().exists("Access-Control-Allow-Origin"))
+			.andExpect(header().exists("X-Content-Type-Options"));
 	}
 
 	@Test
 	public void optionsWhenMvcCorsInLambdaConfigAndCorsConfigurationSourceBeanThenRespondsWithCorsHeaders()
 			throws Exception {
 		this.spring.register(ConfigSourceInLambdaConfig.class).autowire();
-		this.mvc.perform(options("/")
+		this.mvc
+			.perform(options("/")
 				.header(org.springframework.http.HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, HttpMethod.POST.name())
-				.header(HttpHeaders.ORIGIN, "https://example.com")).andExpect(status().isOk())
-				.andExpect(header().exists("Access-Control-Allow-Origin"))
-				.andExpect(header().exists("X-Content-Type-Options"));
+				.header(HttpHeaders.ORIGIN, "https://example.com"))
+			.andExpect(status().isOk())
+			.andExpect(header().exists("Access-Control-Allow-Origin"))
+			.andExpect(header().exists("X-Content-Type-Options"));
 	}
 
 	@Test
 	public void getWhenCorsFilterBeanThenRespondsWithCorsHeaders() throws Exception {
 		this.spring.register(CorsFilterConfig.class).autowire();
 		this.mvc.perform(get("/").header(HttpHeaders.ORIGIN, "https://example.com"))
-				.andExpect(header().exists("Access-Control-Allow-Origin"))
-				.andExpect(header().exists("X-Content-Type-Options"));
+			.andExpect(header().exists("Access-Control-Allow-Origin"))
+			.andExpect(header().exists("X-Content-Type-Options"));
 	}
 
 	@Test
 	public void optionsWhenCorsFilterBeanThenRespondsWithCorsHeaders() throws Exception {
 		this.spring.register(CorsFilterConfig.class).autowire();
-		this.mvc.perform(options("/")
+		this.mvc
+			.perform(options("/")
 				.header(org.springframework.http.HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, HttpMethod.POST.name())
-				.header(HttpHeaders.ORIGIN, "https://example.com")).andExpect(status().isOk())
-				.andExpect(header().exists("Access-Control-Allow-Origin"))
-				.andExpect(header().exists("X-Content-Type-Options"));
+				.header(HttpHeaders.ORIGIN, "https://example.com"))
+			.andExpect(status().isOk())
+			.andExpect(header().exists("Access-Control-Allow-Origin"))
+			.andExpect(header().exists("X-Content-Type-Options"));
 	}
 
 	@Test
 	public void getWhenConfigSourceInLambdaConfigAndCorsFilterBeanThenRespondsWithCorsHeaders() throws Exception {
 		this.spring.register(CorsFilterInLambdaConfig.class).autowire();
 		this.mvc.perform(get("/").header(HttpHeaders.ORIGIN, "https://example.com"))
-				.andExpect(header().exists("Access-Control-Allow-Origin"))
-				.andExpect(header().exists("X-Content-Type-Options"));
+			.andExpect(header().exists("Access-Control-Allow-Origin"))
+			.andExpect(header().exists("X-Content-Type-Options"));
 	}
 
 	@Test
 	public void optionsWhenConfigSourceInLambdaConfigAndCorsFilterBeanThenRespondsWithCorsHeaders() throws Exception {
 		this.spring.register(CorsFilterInLambdaConfig.class).autowire();
-		this.mvc.perform(options("/")
+		this.mvc
+			.perform(options("/")
 				.header(org.springframework.http.HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, HttpMethod.POST.name())
-				.header(HttpHeaders.ORIGIN, "https://example.com")).andExpect(status().isOk())
-				.andExpect(header().exists("Access-Control-Allow-Origin"))
-				.andExpect(header().exists("X-Content-Type-Options"));
+				.header(HttpHeaders.ORIGIN, "https://example.com"))
+			.andExpect(status().isOk())
+			.andExpect(header().exists("Access-Control-Allow-Origin"))
+			.andExpect(header().exists("X-Content-Type-Options"));
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class DefaultCorsConfig extends WebSecurityConfigurerAdapter {
+	static class DefaultCorsConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.authorizeRequests()
-					.anyRequest().authenticated()
-					.and()
-				.cors();
+				.authorizeHttpRequests((requests) -> requests
+					.anyRequest().authenticated())
+				.cors(withDefaults());
+			return http.build();
 			// @formatter:on
 		}
 
 	}
 
+	@Configuration
 	@EnableWebMvc
 	@EnableWebSecurity
-	static class MvcCorsConfig extends WebSecurityConfigurerAdapter {
+	static class MvcCorsConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.authorizeRequests()
-					.anyRequest().authenticated()
-					.and()
-				.cors();
+				.authorizeHttpRequests((requests) -> requests
+					.anyRequest().authenticated())
+				.cors(withDefaults());
+			return http.build();
 			// @formatter:on
 		}
 
@@ -225,19 +242,20 @@ public class CorsConfigurerTests {
 
 	}
 
+	@Configuration
 	@EnableWebMvc
 	@EnableWebSecurity
-	static class MvcCorsInLambdaConfig extends WebSecurityConfigurerAdapter {
+	static class MvcCorsInLambdaConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.authorizeRequests((authorizeRequests) ->
-					authorizeRequests
+				.authorizeHttpRequests((authorize) -> authorize
 						.anyRequest().authenticated()
 				)
 				.cors(withDefaults());
+			return http.build();
 			// @formatter:on
 		}
 
@@ -254,17 +272,18 @@ public class CorsConfigurerTests {
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class ConfigSourceConfig extends WebSecurityConfigurerAdapter {
+	static class ConfigSourceConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.authorizeRequests()
-					.anyRequest().authenticated()
-					.and()
-				.cors();
+				.authorizeHttpRequests((requests) -> requests
+					.anyRequest().authenticated())
+				.cors(withDefaults());
+			return http.build();
 			// @formatter:on
 		}
 
@@ -280,18 +299,19 @@ public class CorsConfigurerTests {
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class ConfigSourceInLambdaConfig extends WebSecurityConfigurerAdapter {
+	static class ConfigSourceInLambdaConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.authorizeRequests((authorizeRequests) ->
-					authorizeRequests
+				.authorizeHttpRequests((authorize) -> authorize
 						.anyRequest().authenticated()
 				)
 				.cors(withDefaults());
+			return http.build();
 			// @formatter:on
 		}
 
@@ -307,17 +327,18 @@ public class CorsConfigurerTests {
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class CorsFilterConfig extends WebSecurityConfigurerAdapter {
+	static class CorsFilterConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.authorizeRequests()
-					.anyRequest().authenticated()
-					.and()
-				.cors();
+				.authorizeHttpRequests((requests) -> requests
+					.anyRequest().authenticated())
+				.cors(withDefaults());
+			return http.build();
 			// @formatter:on
 		}
 
@@ -333,18 +354,19 @@ public class CorsConfigurerTests {
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class CorsFilterInLambdaConfig extends WebSecurityConfigurerAdapter {
+	static class CorsFilterInLambdaConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.authorizeRequests((authorizeRequests) ->
-					authorizeRequests
+				.authorizeHttpRequests((authorize) -> authorize
 						.anyRequest().authenticated()
 				)
 				.cors(withDefaults());
+			return http.build();
 			// @formatter:on
 		}
 

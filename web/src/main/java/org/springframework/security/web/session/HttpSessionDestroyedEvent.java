@@ -20,7 +20,7 @@ import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.List;
 
-import javax.servlet.http.HttpSession;
+import jakarta.servlet.http.HttpSession;
 
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.session.SessionDestroyedEvent;
@@ -33,6 +33,7 @@ import org.springframework.security.core.session.SessionDestroyedEvent;
  * @author Luke Taylor
  * @author Rob Winch
  */
+@SuppressWarnings("serial")
 public class HttpSessionDestroyedEvent extends SessionDestroyedEvent {
 
 	public HttpSessionDestroyedEvent(HttpSession session) {

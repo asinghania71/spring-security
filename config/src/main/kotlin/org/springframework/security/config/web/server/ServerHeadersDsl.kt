@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,13 @@
 
 package org.springframework.security.config.web.server
 
-import org.springframework.security.web.server.header.*
+import org.springframework.security.web.server.header.CacheControlServerHttpHeadersWriter
+import org.springframework.security.web.server.header.ServerHttpHeadersWriter
+import org.springframework.security.web.server.header.ContentTypeOptionsServerHttpHeadersWriter
+import org.springframework.security.web.server.header.ReferrerPolicyServerHttpHeadersWriter
+import org.springframework.security.web.server.header.StrictTransportSecurityServerHttpHeadersWriter
+import org.springframework.security.web.server.header.XFrameOptionsServerHttpHeadersWriter
+import org.springframework.security.web.server.header.XXssProtectionServerHttpHeadersWriter
 
 /**
  * A Kotlin DSL to configure [ServerHttpSecurity] headers using idiomatic Kotlin code.
@@ -35,6 +41,10 @@ class ServerHeadersDsl {
     private var referrerPolicy: ((ServerHttpSecurity.HeaderSpec.ReferrerPolicySpec) -> Unit)? = null
     private var featurePolicyDirectives: String? = null
     private var permissionsPolicy: ((ServerHttpSecurity.HeaderSpec.PermissionsPolicySpec) -> Unit)? = null
+    private var crossOriginOpenerPolicy: ((ServerHttpSecurity.HeaderSpec.CrossOriginOpenerPolicySpec) -> Unit)? = null
+    private var crossOriginEmbedderPolicy: ((ServerHttpSecurity.HeaderSpec.CrossOriginEmbedderPolicySpec) -> Unit)? = null
+    private var crossOriginResourcePolicy: ((ServerHttpSecurity.HeaderSpec.CrossOriginResourcePolicySpec) -> Unit)? = null
+    private var writers = mutableListOf<ServerHttpHeadersWriter>()
 
     private var disabled = false
 
@@ -158,6 +168,49 @@ class ServerHeadersDsl {
     }
 
     /**
+     * Allows configuration for <a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Cross-Origin-Opener-Policy">
+     * Cross-Origin-Opener-Policy</a> header.
+     *
+     * @since 5.7
+     * @param crossOriginOpenerPolicyConfig the customization to apply to the header
+     */
+    fun crossOriginOpenerPolicy(crossOriginOpenerPolicyConfig: ServerCrossOriginOpenerPolicyDsl.() -> Unit) {
+        this.crossOriginOpenerPolicy = ServerCrossOriginOpenerPolicyDsl().apply(crossOriginOpenerPolicyConfig).get()
+    }
+
+    /**
+     * Allows configuration for <a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Cross-Origin-Embedder-Policy">
+     * Cross-Origin-Embedder-Policy</a> header.
+     *
+     * @since 5.7
+     * @param crossOriginEmbedderPolicyConfig the customization to apply to the header
+     */
+    fun crossOriginEmbedderPolicy(crossOriginEmbedderPolicyConfig: ServerCrossOriginEmbedderPolicyDsl.() -> Unit) {
+        this.crossOriginEmbedderPolicy = ServerCrossOriginEmbedderPolicyDsl().apply(crossOriginEmbedderPolicyConfig).get()
+    }
+
+    /**
+     * Allows configuration for <a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Cross-Origin-Resource-Policy">
+     * Cross-Origin-Resource-Policy</a> header.
+     *
+     * @since 5.7
+     * @param crossOriginResourcePolicyConfig the customization to apply to the header
+     */
+    fun crossOriginResourcePolicy(crossOriginResourcePolicyConfig: ServerCrossOriginResourcePolicyDsl.() -> Unit) {
+        this.crossOriginResourcePolicy = ServerCrossOriginResourcePolicyDsl().apply(crossOriginResourcePolicyConfig).get()
+    }
+
+    /**
+     * Configures custom headers writer
+     *
+     * @since 6.5
+     * @param writer the [ServerHttpHeadersWriter] to provide custom headers writer
+     */
+    fun writer(writer: ServerHttpHeadersWriter) {
+        this.writers.add(writer)
+    }
+
+    /**
      * Disables HTTP response headers.
      */
     fun disable() {
@@ -193,6 +246,18 @@ class ServerHeadersDsl {
             }
             referrerPolicy?.also {
                 headers.referrerPolicy(referrerPolicy)
+            }
+            crossOriginOpenerPolicy?.also {
+                headers.crossOriginOpenerPolicy(crossOriginOpenerPolicy)
+            }
+            crossOriginEmbedderPolicy?.also {
+                headers.crossOriginEmbedderPolicy(crossOriginEmbedderPolicy)
+            }
+            crossOriginResourcePolicy?.also {
+                headers.crossOriginResourcePolicy(crossOriginResourcePolicy)
+            }
+            writers.also {
+                writers.forEach { writer -> headers.writer(writer) }
             }
             if (disabled) {
                 headers.disable()

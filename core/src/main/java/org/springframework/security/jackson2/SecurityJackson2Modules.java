@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-2020 the original author or authors.
+ * Copyright 2015-2021 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -63,6 +63,7 @@ import org.springframework.util.ClassUtils;
  *     mapper.registerModule(new WebServletJackson2Module());
  *     mapper.registerModule(new WebServerJackson2Module());
  *     mapper.registerModule(new OAuth2ClientJackson2Module());
+ *     mapper.registerModule(new Saml2Jackson2Module());
  * </pre>
  *
  * @author Jitendra Singh.
@@ -74,7 +75,6 @@ public final class SecurityJackson2Modules {
 
 	private static final List<String> securityJackson2ModuleClasses = Arrays.asList(
 			"org.springframework.security.jackson2.CoreJackson2Module",
-			"org.springframework.security.cas.jackson2.CasJackson2Module",
 			"org.springframework.security.web.jackson2.WebJackson2Module",
 			"org.springframework.security.web.server.jackson2.WebServerJackson2Module");
 
@@ -83,6 +83,35 @@ public final class SecurityJackson2Modules {
 	private static final String oauth2ClientJackson2ModuleClass = "org.springframework.security.oauth2.client.jackson2.OAuth2ClientJackson2Module";
 
 	private static final String javaTimeJackson2ModuleClass = "com.fasterxml.jackson.datatype.jsr310.JavaTimeModule";
+
+	private static final String ldapJackson2ModuleClass = "org.springframework.security.ldap.jackson2.LdapJackson2Module";
+
+	private static final String saml2Jackson2ModuleClass = "org.springframework.security.saml2.jackson2.Saml2Jackson2Module";
+
+	private static final String casJackson2ModuleClass = "org.springframework.security.cas.jackson2.CasJackson2Module";
+
+	private static final boolean webServletPresent;
+
+	private static final boolean oauth2ClientPresent;
+
+	private static final boolean javaTimeJacksonPresent;
+
+	private static final boolean ldapJacksonPresent;
+
+	private static final boolean saml2JacksonPresent;
+
+	private static final boolean casJacksonPresent;
+
+	static {
+		ClassLoader classLoader = SecurityJackson2Modules.class.getClassLoader();
+		webServletPresent = ClassUtils.isPresent("jakarta.servlet.http.Cookie", classLoader);
+		oauth2ClientPresent = ClassUtils.isPresent("org.springframework.security.oauth2.client.OAuth2AuthorizedClient",
+				classLoader);
+		javaTimeJacksonPresent = ClassUtils.isPresent(javaTimeJackson2ModuleClass, classLoader);
+		ldapJacksonPresent = ClassUtils.isPresent(ldapJackson2ModuleClass, classLoader);
+		saml2JacksonPresent = ClassUtils.isPresent(saml2Jackson2ModuleClass, classLoader);
+		casJacksonPresent = ClassUtils.isPresent(casJackson2ModuleClass, classLoader);
+	}
 
 	private SecurityJackson2Modules() {
 	}
@@ -102,7 +131,7 @@ public final class SecurityJackson2Modules {
 			Class<? extends Module> securityModule = (Class<? extends Module>) ClassUtils.forName(className, loader);
 			if (securityModule != null) {
 				logger.debug(LogMessage.format("Loaded module %s, now registering", className));
-				return securityModule.newInstance();
+				return securityModule.getConstructor().newInstance();
 			}
 		}
 		catch (Exception ex) {
@@ -120,14 +149,23 @@ public final class SecurityJackson2Modules {
 		for (String className : securityJackson2ModuleClasses) {
 			addToModulesList(loader, modules, className);
 		}
-		if (ClassUtils.isPresent("javax.servlet.http.Cookie", loader)) {
+		if (webServletPresent) {
 			addToModulesList(loader, modules, webServletJackson2ModuleClass);
 		}
-		if (ClassUtils.isPresent("org.springframework.security.oauth2.client.OAuth2AuthorizedClient", loader)) {
+		if (oauth2ClientPresent) {
 			addToModulesList(loader, modules, oauth2ClientJackson2ModuleClass);
 		}
-		if (ClassUtils.isPresent(javaTimeJackson2ModuleClass, loader)) {
+		if (javaTimeJacksonPresent) {
 			addToModulesList(loader, modules, javaTimeJackson2ModuleClass);
+		}
+		if (ldapJacksonPresent) {
+			addToModulesList(loader, modules, ldapJackson2ModuleClass);
+		}
+		if (saml2JacksonPresent) {
+			addToModulesList(loader, modules, saml2Jackson2ModuleClass);
+		}
+		if (casJacksonPresent) {
+			addToModulesList(loader, modules, casJackson2ModuleClass);
 		}
 		return modules;
 	}
@@ -163,6 +201,7 @@ public final class SecurityJackson2Modules {
 	 *
 	 * @author Rob Winch
 	 */
+	@SuppressWarnings("serial")
 	static class AllowlistTypeResolverBuilder extends ObjectMapper.DefaultTypeResolverBuilder {
 
 		AllowlistTypeResolverBuilder(ObjectMapper.DefaultTyping defaultTyping) {
@@ -204,6 +243,7 @@ public final class SecurityJackson2Modules {
 			names.add("java.util.HashMap");
 			names.add("java.util.LinkedHashMap");
 			names.add("org.springframework.security.core.context.SecurityContextImpl");
+			names.add("java.util.Arrays$ArrayList");
 			ALLOWLIST_CLASS_NAMES = Collections.unmodifiableSet(names);
 		}
 

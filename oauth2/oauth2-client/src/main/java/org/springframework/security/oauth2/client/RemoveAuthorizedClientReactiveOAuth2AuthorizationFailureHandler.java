@@ -105,16 +105,15 @@ public class RemoveAuthorizedClientReactiveOAuth2AuthorizationFailureHandler
 		Assert.notNull(authorizedClientRemover, "authorizedClientRemover cannot be null");
 		Assert.notNull(removeAuthorizedClientErrorCodes, "removeAuthorizedClientErrorCodes cannot be null");
 		this.removeAuthorizedClientErrorCodes = Collections
-				.unmodifiableSet(new HashSet<>(removeAuthorizedClientErrorCodes));
+			.unmodifiableSet(new HashSet<>(removeAuthorizedClientErrorCodes));
 		this.delegate = authorizedClientRemover;
 	}
 
 	@Override
 	public Mono<Void> onAuthorizationFailure(OAuth2AuthorizationException authorizationException,
 			Authentication principal, Map<String, Object> attributes) {
-		if (authorizationException instanceof ClientAuthorizationException
+		if (authorizationException instanceof ClientAuthorizationException clientAuthorizationException
 				&& hasRemovalErrorCode(authorizationException)) {
-			ClientAuthorizationException clientAuthorizationException = (ClientAuthorizationException) authorizationException;
 			return this.delegate.removeAuthorizedClient(clientAuthorizationException.getClientRegistrationId(),
 					principal, attributes);
 		}

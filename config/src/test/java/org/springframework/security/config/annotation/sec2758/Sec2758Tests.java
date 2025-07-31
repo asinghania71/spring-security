@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2018 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,7 @@
 
 package org.springframework.security.config.annotation.sec2758;
 
-import javax.annotation.security.RolesAllowed;
-
+import jakarta.annotation.security.RolesAllowed;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
@@ -25,6 +24,7 @@ import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.config.BeanPostProcessor;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.core.Ordered;
 import org.springframework.core.PriorityOrdered;
 import org.springframework.security.access.annotation.Jsr250MethodSecurityMetadataSource;
@@ -33,12 +33,14 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.config.annotation.method.configuration.EnableGlobalMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
 import org.springframework.security.config.test.SpringTestContext;
 import org.springframework.security.config.test.SpringTestContextExtension;
 import org.springframework.security.test.context.annotation.SecurityTestExecutionListeners;
 import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.expression.DefaultHttpSecurityExpressionHandler;
 import org.springframework.security.web.access.expression.DefaultWebSecurityExpressionHandler;
+import org.springframework.security.web.access.expression.WebExpressionAuthorizationManager;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -78,16 +80,20 @@ public class Sec2758Tests {
 		this.service.doPreAuthorize();
 	}
 
+	@Configuration
 	@EnableWebSecurity
 	@EnableGlobalMethodSecurity(prePostEnabled = true, jsr250Enabled = true)
-	static class SecurityConfig extends WebSecurityConfigurerAdapter {
+	static class SecurityConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http, WebExpressionAuthorizationManager.Builder authz)
+				throws Exception {
 			// @formatter:off
 			http
-			.authorizeRequests()
-			.anyRequest().access("hasAnyRole('CUSTOM')");
+				.authorizeHttpRequests((requests) -> requests
+					.anyRequest().access(authz.expression("hasAnyRole('CUSTOM')"))
+				);
+			return http.build();
 			// @formatter:on
 		}
 
@@ -99,6 +105,16 @@ public class Sec2758Tests {
 		@Bean
 		static DefaultRolesPrefixPostProcessor defaultRolesPrefixPostProcessor() {
 			return new DefaultRolesPrefixPostProcessor();
+		}
+
+		@Bean
+		static WebExpressionAuthorizationManager.Builder authz(DefaultHttpSecurityExpressionHandler expressionHandler) {
+			return WebExpressionAuthorizationManager.withExpressionHandler(expressionHandler);
+		}
+
+		@Bean
+		static DefaultHttpSecurityExpressionHandler expressionHandler() {
+			return new DefaultHttpSecurityExpressionHandler();
 		}
 
 		@RestController
@@ -137,6 +153,9 @@ public class Sec2758Tests {
 			}
 			if (bean instanceof DefaultWebSecurityExpressionHandler) {
 				((DefaultWebSecurityExpressionHandler) bean).setDefaultRolePrefix(null);
+			}
+			if (bean instanceof DefaultHttpSecurityExpressionHandler http) {
+				http.setDefaultRolePrefix("");
 			}
 			return bean;
 		}

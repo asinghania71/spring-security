@@ -17,6 +17,7 @@
 package org.springframework.security.ldap.userdetails;
 
 import java.util.Collection;
+import java.util.Locale;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -83,7 +84,7 @@ public class LdapUserDetailsMapper implements UserDetailsContextMapper {
 		}
 		// Check for PPolicy data
 		PasswordPolicyResponseControl ppolicy = (PasswordPolicyResponseControl) ctx
-				.getObjectAttribute(PasswordPolicyControl.OID);
+			.getObjectAttribute(PasswordPolicyControl.OID);
 		if (ppolicy != null) {
 			essence.setTimeBeforeExpiration(ppolicy.getTimeBeforeExpiration());
 			essence.setGraceLoginsRemaining(ppolicy.getGraceLoginsRemaining());
@@ -127,7 +128,7 @@ public class LdapUserDetailsMapper implements UserDetailsContextMapper {
 	protected GrantedAuthority createAuthority(Object role) {
 		if (role instanceof String) {
 			if (this.convertToUpperCase) {
-				role = ((String) role).toUpperCase();
+				role = ((String) role).toUpperCase(Locale.ROOT);
 			}
 			return new SimpleGrantedAuthority(this.rolePrefix + role);
 		}

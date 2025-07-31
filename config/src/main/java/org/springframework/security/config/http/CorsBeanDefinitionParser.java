@@ -24,7 +24,6 @@ import org.springframework.beans.factory.config.RuntimeBeanReference;
 import org.springframework.beans.factory.support.BeanDefinitionBuilder;
 import org.springframework.beans.factory.support.RootBeanDefinition;
 import org.springframework.beans.factory.xml.ParserContext;
-import org.springframework.util.ClassUtils;
 import org.springframework.util.StringUtils;
 import org.springframework.web.filter.CorsFilter;
 
@@ -35,8 +34,6 @@ import org.springframework.web.filter.CorsFilter;
  * @since 4.1.1
  */
 public class CorsBeanDefinitionParser {
-
-	private static final String HANDLER_MAPPING_INTROSPECTOR = "org.springframework.web.servlet.handler.HandlerMappingIntrospector";
 
 	private static final String ATT_SOURCE = "configuration-source-ref";
 
@@ -64,11 +61,7 @@ public class CorsBeanDefinitionParser {
 		if (StringUtils.hasText(configurationSourceRef)) {
 			return new RuntimeBeanReference(configurationSourceRef);
 		}
-		boolean mvcPresent = ClassUtils.isPresent(HANDLER_MAPPING_INTROSPECTOR, getClass().getClassLoader());
-		if (!mvcPresent) {
-			return null;
-		}
-		return new RootBeanDefinition(HandlerMappingIntrospectorFactoryBean.class);
+		return new RootBeanDefinition(CorsConfigurationSourceFactoryBean.class);
 	}
 
 }

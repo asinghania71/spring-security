@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2016 the original author or authors.
+ * Copyright 2002-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,22 +18,32 @@ package org.springframework.security.config.http;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.function.Supplier;
 
-import javax.servlet.Filter;
-
+import jakarta.servlet.Filter;
+import jakarta.servlet.http.HttpServletRequest;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.ConfigAttribute;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
+import org.springframework.security.authentication.TestingAuthenticationToken;
+import org.springframework.security.authorization.AuthorizationManager;
+import org.springframework.security.authorization.AuthorizationResult;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.web.DefaultSecurityFilterChain;
 import org.springframework.security.web.FilterChainProxy;
 import org.springframework.security.web.FilterInvocation;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.UnreachableFilterChainException;
+import org.springframework.security.web.access.AuthorizationManagerWebInvocationPrivilegeEvaluator;
 import org.springframework.security.web.access.ExceptionTranslationFilter;
+import org.springframework.security.web.access.PathPatternRequestTransformer;
+import org.springframework.security.web.access.intercept.AuthorizationFilter;
 import org.springframework.security.web.access.intercept.FilterInvocationSecurityMetadataSource;
 import org.springframework.security.web.access.intercept.FilterSecurityInterceptor;
 import org.springframework.security.web.authentication.AnonymousAuthenticationFilter;
@@ -46,11 +56,14 @@ import org.springframework.security.web.jaasapi.JaasApiIntegrationFilter;
 import org.springframework.security.web.servletapi.SecurityContextHolderAwareRequestFilter;
 import org.springframework.security.web.session.SessionManagementFilter;
 import org.springframework.security.web.util.matcher.AnyRequestMatcher;
-import org.springframework.security.web.util.matcher.RequestMatcher;
 
 public class DefaultFilterChainValidator implements FilterChainProxy.FilterChainValidator {
 
+	private static final Authentication TEST = new TestingAuthenticationToken("", "", Collections.emptyList());
+
 	private final Log logger = LogFactory.getLog(getClass());
+
+	private final AuthorizationManagerWebInvocationPrivilegeEvaluator.HttpServletRequestTransformer requestTransformer = new PathPatternRequestTransformer();
 
 	@Override
 	public void validate(FilterChainProxy fcp) {
@@ -60,31 +73,67 @@ public class DefaultFilterChainValidator implements FilterChainProxy.FilterChain
 		}
 		checkPathOrder(new ArrayList<>(fcp.getFilterChains()));
 		checkForDuplicateMatchers(new ArrayList<>(fcp.getFilterChains()));
+		checkAuthorizationFilters(new ArrayList<>(fcp.getFilterChains()));
 	}
 
 	private void checkPathOrder(List<SecurityFilterChain> filterChains) {
 		// Check that the universal pattern is listed at the end, if at all
 		Iterator<SecurityFilterChain> chains = filterChains.iterator();
 		while (chains.hasNext()) {
-			RequestMatcher matcher = ((DefaultSecurityFilterChain) chains.next()).getRequestMatcher();
-			if (AnyRequestMatcher.INSTANCE.equals(matcher) && chains.hasNext()) {
-				throw new IllegalArgumentException("A universal match pattern ('/**') is defined "
-						+ " before other patterns in the filter chain, causing them to be ignored. Please check the "
-						+ "ordering in your <security:http> namespace or FilterChainProxy bean configuration");
+			if (chains.next() instanceof DefaultSecurityFilterChain securityFilterChain) {
+				if (AnyRequestMatcher.INSTANCE.equals(securityFilterChain.getRequestMatcher()) && chains.hasNext()) {
+					throw new UnreachableFilterChainException("A universal match pattern ('/**') is defined "
+							+ " before other patterns in the filter chain, causing them to be ignored. Please check the "
+							+ "ordering in your <security:http> namespace or FilterChainProxy bean configuration",
+							securityFilterChain, chains.next());
+				}
 			}
 		}
 	}
 
 	private void checkForDuplicateMatchers(List<SecurityFilterChain> chains) {
-		while (chains.size() > 1) {
-			DefaultSecurityFilterChain chain = (DefaultSecurityFilterChain) chains.remove(0);
-			for (SecurityFilterChain test : chains) {
-				if (chain.getRequestMatcher().equals(((DefaultSecurityFilterChain) test).getRequestMatcher())) {
-					throw new IllegalArgumentException("The FilterChainProxy contains two filter chains using the"
-							+ " matcher " + chain.getRequestMatcher() + ". If you are using multiple <http> namespace "
-							+ "elements, you must use a 'pattern' attribute to define the request patterns to which they apply.");
+		DefaultSecurityFilterChain filterChain = null;
+		for (SecurityFilterChain chain : chains) {
+			if (filterChain != null) {
+				if (chain instanceof DefaultSecurityFilterChain defaultChain) {
+					if (defaultChain.getRequestMatcher().equals(filterChain.getRequestMatcher())) {
+						throw new UnreachableFilterChainException(
+								"The FilterChainProxy contains two filter chains using the" + " matcher "
+										+ defaultChain.getRequestMatcher()
+										+ ". If you are using multiple <http> namespace "
+										+ "elements, you must use a 'pattern' attribute to define the request patterns to which they apply.",
+								defaultChain, chain);
+					}
 				}
 			}
+			if (chain instanceof DefaultSecurityFilterChain defaultChain) {
+				filterChain = defaultChain;
+			}
+		}
+	}
+
+	private void checkAuthorizationFilters(List<SecurityFilterChain> chains) {
+		Filter authorizationFilter = null;
+		Filter filterSecurityInterceptor = null;
+		for (SecurityFilterChain chain : chains) {
+			for (Filter filter : chain.getFilters()) {
+				if (filter instanceof AuthorizationFilter) {
+					authorizationFilter = filter;
+				}
+				if (filter instanceof FilterSecurityInterceptor) {
+					filterSecurityInterceptor = filter;
+				}
+			}
+			if (authorizationFilter != null && filterSecurityInterceptor != null) {
+				this.logger.warn(
+						"It is not recommended to use authorizeRequests or FilterSecurityInterceptor in the configuration. Please only use authorizeHttpRequests");
+			}
+			if (filterSecurityInterceptor != null) {
+				this.logger.warn(
+						"Usage of authorizeRequests and FilterSecurityInterceptor are deprecated. Please use authorizeHttpRequests in the configuration");
+			}
+			authorizationFilter = null;
+			filterSecurityInterceptor = null;
 		}
 	}
 
@@ -110,6 +159,7 @@ public class DefaultFilterChainValidator implements FilterChainProxy.FilterChain
 		checkForDuplicates(JaasApiIntegrationFilter.class, filters);
 		checkForDuplicates(ExceptionTranslationFilter.class, filters);
 		checkForDuplicates(FilterSecurityInterceptor.class, filters);
+		checkForDuplicates(AuthorizationFilter.class, filters);
 	}
 
 	private void checkForDuplicates(Class<? extends Filter> clazz, List<Filter> filters) {
@@ -134,13 +184,16 @@ public class DefaultFilterChainValidator implements FilterChainProxy.FilterChain
 	 * interceptor
 	 */
 	private void checkLoginPageIsntProtected(FilterChainProxy fcp, List<Filter> filterStack) {
-		ExceptionTranslationFilter etf = getFilter(ExceptionTranslationFilter.class, filterStack);
-		if (etf == null || !(etf.getAuthenticationEntryPoint() instanceof LoginUrlAuthenticationEntryPoint)) {
+		ExceptionTranslationFilter exceptions = getFilter(ExceptionTranslationFilter.class, filterStack);
+		if (exceptions == null
+				|| !(exceptions.getAuthenticationEntryPoint() instanceof LoginUrlAuthenticationEntryPoint)) {
 			return;
 		}
-		String loginPage = ((LoginUrlAuthenticationEntryPoint) etf.getAuthenticationEntryPoint()).getLoginFormUrl();
+		String loginPage = ((LoginUrlAuthenticationEntryPoint) exceptions.getAuthenticationEntryPoint())
+			.getLoginFormUrl();
 		this.logger.info("Checking whether login URL '" + loginPage + "' is accessible with your configuration");
-		FilterInvocation loginRequest = new FilterInvocation(loginPage, "POST");
+		FilterInvocation invocation = new FilterInvocation(loginPage, "POST");
+		HttpServletRequest loginRequest = this.requestTransformer.transform(invocation.getRequest());
 		List<Filter> filters = null;
 		try {
 			filters = fcp.getFilters(loginPage);
@@ -159,33 +212,26 @@ public class DefaultFilterChainValidator implements FilterChainProxy.FilterChain
 			this.logger.debug("Default generated login page is in use");
 			return;
 		}
-		FilterSecurityInterceptor fsi = getFilter(FilterSecurityInterceptor.class, filters);
-		FilterInvocationSecurityMetadataSource fids = fsi.getSecurityMetadataSource();
-		Collection<ConfigAttribute> attributes = fids.getAttributes(loginRequest);
-		if (attributes == null) {
-			this.logger.debug("No access attributes defined for login page URL");
-			if (fsi.isRejectPublicInvocations()) {
-				this.logger.warn("FilterSecurityInterceptor is configured to reject public invocations."
-						+ " Your login page may not be accessible.");
-			}
+		if (checkLoginPageIsPublic(filters, loginRequest)) {
 			return;
 		}
-		AnonymousAuthenticationFilter anonPF = getFilter(AnonymousAuthenticationFilter.class, filters);
-		if (anonPF == null) {
+		AnonymousAuthenticationFilter anonymous = getFilter(AnonymousAuthenticationFilter.class, filters);
+		if (anonymous == null) {
 			this.logger.warn("The login page is being protected by the filter chain, but you don't appear to have"
 					+ " anonymous authentication enabled. This is almost certainly an error.");
 			return;
 		}
 		// Simulate an anonymous access with the supplied attributes.
-		AnonymousAuthenticationToken token = new AnonymousAuthenticationToken("key", anonPF.getPrincipal(),
-				anonPF.getAuthorities());
+		AnonymousAuthenticationToken token = new AnonymousAuthenticationToken("key", anonymous.getPrincipal(),
+				anonymous.getAuthorities());
+		Supplier<Boolean> check = deriveAnonymousCheck(filters, loginRequest, token);
 		try {
-			fsi.getAccessDecisionManager().decide(token, loginRequest, attributes);
-		}
-		catch (AccessDeniedException ex) {
-			this.logger.warn("Anonymous access to the login page doesn't appear to be enabled. "
-					+ "This is almost certainly an error. Please check your configuration allows unauthenticated "
-					+ "access to the configured login page. (Simulated access was rejected: " + ex + ")");
+			boolean allowed = check.get();
+			if (!allowed) {
+				this.logger.warn("Anonymous access to the login page doesn't appear to be enabled. "
+						+ "This is almost certainly an error. Please check your configuration allows unauthenticated "
+						+ "access to the configured login page. (Simulated access was rejected)");
+			}
 		}
 		catch (Exception ex) {
 			// May happen legitimately if a filter-chain request matcher requires more
@@ -194,6 +240,64 @@ public class DefaultFilterChainValidator implements FilterChainProxy.FilterChain
 			this.logger.info("Unable to check access to the login page to determine if anonymous access is allowed. "
 					+ "This might be an error, but can happen under normal circumstances.", ex);
 		}
+	}
+
+	private boolean checkLoginPageIsPublic(List<Filter> filters, HttpServletRequest loginRequest) {
+		FilterSecurityInterceptor authorizationInterceptor = getFilter(FilterSecurityInterceptor.class, filters);
+		if (authorizationInterceptor != null) {
+			FilterInvocationSecurityMetadataSource fids = authorizationInterceptor.getSecurityMetadataSource();
+			Collection<ConfigAttribute> attributes = fids.getAttributes(loginRequest);
+			if (attributes == null) {
+				this.logger.debug("No access attributes defined for login page URL");
+				if (authorizationInterceptor.isRejectPublicInvocations()) {
+					this.logger.warn("FilterSecurityInterceptor is configured to reject public invocations."
+							+ " Your login page may not be accessible.");
+				}
+				return true;
+			}
+			return false;
+		}
+		AuthorizationFilter authorizationFilter = getFilter(AuthorizationFilter.class, filters);
+		if (authorizationFilter != null) {
+			AuthorizationManager<HttpServletRequest> authorizationManager = authorizationFilter
+				.getAuthorizationManager();
+			try {
+				AuthorizationResult result = authorizationManager.authorize(() -> TEST, loginRequest);
+				return result != null && result.isGranted();
+			}
+			catch (Exception ex) {
+				return false;
+			}
+		}
+		return false;
+	}
+
+	private Supplier<Boolean> deriveAnonymousCheck(List<Filter> filters, HttpServletRequest loginRequest,
+			AnonymousAuthenticationToken token) {
+		FilterSecurityInterceptor authorizationInterceptor = getFilter(FilterSecurityInterceptor.class, filters);
+		if (authorizationInterceptor != null) {
+			return () -> {
+				FilterInvocationSecurityMetadataSource source = authorizationInterceptor.getSecurityMetadataSource();
+				Collection<ConfigAttribute> attributes = source.getAttributes(loginRequest);
+				try {
+					authorizationInterceptor.getAccessDecisionManager().decide(token, loginRequest, attributes);
+					return true;
+				}
+				catch (AccessDeniedException ex) {
+					return false;
+				}
+			};
+		}
+		AuthorizationFilter authorizationFilter = getFilter(AuthorizationFilter.class, filters);
+		if (authorizationFilter != null) {
+			return () -> {
+				AuthorizationManager<HttpServletRequest> authorizationManager = authorizationFilter
+					.getAuthorizationManager();
+				AuthorizationResult result = authorizationManager.authorize(() -> token, loginRequest);
+				return result != null && result.isGranted();
+			};
+		}
+		return () -> true;
 	}
 
 }

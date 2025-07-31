@@ -20,6 +20,7 @@ import java.net.URI;
 import java.time.Duration;
 import java.util.Base64;
 import java.util.Collections;
+import java.util.function.Consumer;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -59,6 +60,9 @@ public class CookieServerRequestCache implements ServerRequestCache {
 
 	private ServerWebExchangeMatcher saveRequestMatcher = createDefaultRequestMatcher();
 
+	private Consumer<ResponseCookie.ResponseCookieBuilder> cookieCustomizer = (cookieBuilder) -> {
+	};
+
 	/**
 	 * Sets the matcher to determine if the request should be saved. The default is to
 	 * match on any GET request.
@@ -72,44 +76,68 @@ public class CookieServerRequestCache implements ServerRequestCache {
 
 	@Override
 	public Mono<Void> saveRequest(ServerWebExchange exchange) {
-		return this.saveRequestMatcher.matches(exchange).filter((m) -> m.isMatch()).map((m) -> exchange.getResponse())
-				.map(ServerHttpResponse::getCookies).doOnNext((cookies) -> {
-					ResponseCookie redirectUriCookie = createRedirectUriCookie(exchange.getRequest());
-					cookies.add(REDIRECT_URI_COOKIE_NAME, redirectUriCookie);
-					logger.debug(LogMessage.format("Request added to Cookie: %s", redirectUriCookie));
-				}).then();
+		return this.saveRequestMatcher.matches(exchange)
+			.filter((m) -> m.isMatch())
+			.map((m) -> exchange.getResponse())
+			.map(ServerHttpResponse::getCookies)
+			.doOnNext((cookies) -> {
+				ResponseCookie.ResponseCookieBuilder builder = createRedirectUriCookieBuilder(exchange.getRequest());
+				this.cookieCustomizer.accept(builder);
+				ResponseCookie redirectUriCookie = builder.build();
+				cookies.add(REDIRECT_URI_COOKIE_NAME, redirectUriCookie);
+				logger.debug(LogMessage.format("Request added to Cookie: %s", redirectUriCookie));
+			})
+			.then();
 	}
 
 	@Override
 	public Mono<URI> getRedirectUri(ServerWebExchange exchange) {
 		MultiValueMap<String, HttpCookie> cookieMap = exchange.getRequest().getCookies();
-		return Mono.justOrEmpty(cookieMap.getFirst(REDIRECT_URI_COOKIE_NAME)).map(HttpCookie::getValue)
-				.map(CookieServerRequestCache::decodeCookie)
-				.onErrorResume(IllegalArgumentException.class, (ex) -> Mono.empty()).map(URI::create);
+		return Mono.justOrEmpty(cookieMap.getFirst(REDIRECT_URI_COOKIE_NAME))
+			.map(HttpCookie::getValue)
+			.map(CookieServerRequestCache::decodeCookie)
+			.onErrorResume(IllegalArgumentException.class, (ex) -> Mono.empty())
+			.map(URI::create);
 	}
 
 	@Override
 	public Mono<ServerHttpRequest> removeMatchingRequest(ServerWebExchange exchange) {
-		return Mono.just(exchange.getResponse()).map(ServerHttpResponse::getCookies).doOnNext(
-				(cookies) -> cookies.add(REDIRECT_URI_COOKIE_NAME, invalidateRedirectUriCookie(exchange.getRequest())))
-				.thenReturn(exchange.getRequest());
+		return Mono.just(exchange.getResponse())
+			.map(ServerHttpResponse::getCookies)
+			.doOnNext((cookies) -> cookies.add(REDIRECT_URI_COOKIE_NAME,
+					invalidateRedirectUriCookie(exchange.getRequest())))
+			.thenReturn(exchange.getRequest());
 	}
 
-	private static ResponseCookie createRedirectUriCookie(ServerHttpRequest request) {
+	/**
+	 * Sets the {@link Consumer}, allowing customization of cookie.
+	 * @param cookieCustomizer customize for cookie
+	 * @since 6.4
+	 */
+	public void setCookieCustomizer(Consumer<ResponseCookie.ResponseCookieBuilder> cookieCustomizer) {
+		Assert.notNull(cookieCustomizer, "cookieCustomizer cannot be null");
+		this.cookieCustomizer = cookieCustomizer;
+	}
+
+	private static ResponseCookie.ResponseCookieBuilder createRedirectUriCookieBuilder(ServerHttpRequest request) {
 		String path = request.getPath().pathWithinApplication().value();
 		String query = request.getURI().getRawQuery();
 		String redirectUri = path + ((query != null) ? "?" + query : "");
-		return createResponseCookie(request, encodeCookie(redirectUri), COOKIE_MAX_AGE);
+		return createResponseCookieBuilder(request, encodeCookie(redirectUri), COOKIE_MAX_AGE);
 	}
 
 	private static ResponseCookie invalidateRedirectUriCookie(ServerHttpRequest request) {
-		return createResponseCookie(request, null, Duration.ZERO);
+		return createResponseCookieBuilder(request, null, Duration.ZERO).build();
 	}
 
-	private static ResponseCookie createResponseCookie(ServerHttpRequest request, String cookieValue, Duration age) {
+	private static ResponseCookie.ResponseCookieBuilder createResponseCookieBuilder(ServerHttpRequest request,
+			String cookieValue, Duration age) {
 		return ResponseCookie.from(REDIRECT_URI_COOKIE_NAME, cookieValue)
-				.path(request.getPath().contextPath().value() + "/").maxAge(age).httpOnly(true)
-				.secure("https".equalsIgnoreCase(request.getURI().getScheme())).sameSite("Lax").build();
+			.path(request.getPath().contextPath().value() + "/")
+			.maxAge(age)
+			.httpOnly(true)
+			.secure("https".equalsIgnoreCase(request.getURI().getScheme()))
+			.sameSite("Lax");
 	}
 
 	private static String encodeCookie(String cookieValue) {

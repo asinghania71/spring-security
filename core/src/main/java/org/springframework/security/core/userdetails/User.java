@@ -179,8 +179,8 @@ public class User implements UserDetails, CredentialsContainer {
 	 */
 	@Override
 	public boolean equals(Object obj) {
-		if (obj instanceof User) {
-			return this.username.equals(((User) obj).username);
+		if (obj instanceof User user) {
+			return this.username.equals(user.getUsername());
 		}
 		return false;
 	}
@@ -201,14 +201,14 @@ public class User implements UserDetails, CredentialsContainer {
 		sb.append("Password=[PROTECTED], ");
 		sb.append("Enabled=").append(this.enabled).append(", ");
 		sb.append("AccountNonExpired=").append(this.accountNonExpired).append(", ");
-		sb.append("credentialsNonExpired=").append(this.credentialsNonExpired).append(", ");
+		sb.append("CredentialsNonExpired=").append(this.credentialsNonExpired).append(", ");
 		sb.append("AccountNonLocked=").append(this.accountNonLocked).append(", ");
 		sb.append("Granted Authorities=").append(this.authorities).append("]");
 		return sb.toString();
 	}
 
 	/**
-	 * Creates a UserBuilder with a specified user name
+	 * Creates a UserBuilder with a specified username
 	 * @param username the username to use
 	 * @return the UserBuilder
 	 */
@@ -329,7 +329,7 @@ public class User implements UserDetails, CredentialsContainer {
 
 		private String password;
 
-		private List<GrantedAuthority> authorities;
+		private List<GrantedAuthority> authorities = new ArrayList<>();
 
 		private boolean accountExpired;
 
@@ -427,6 +427,7 @@ public class User implements UserDetails, CredentialsContainer {
 		 * @see #roles(String...)
 		 */
 		public UserBuilder authorities(GrantedAuthority... authorities) {
+			Assert.notNull(authorities, "authorities cannot be null");
 			return authorities(Arrays.asList(authorities));
 		}
 
@@ -439,6 +440,7 @@ public class User implements UserDetails, CredentialsContainer {
 		 * @see #roles(String...)
 		 */
 		public UserBuilder authorities(Collection<? extends GrantedAuthority> authorities) {
+			Assert.notNull(authorities, "authorities cannot be null");
 			this.authorities = new ArrayList<>(authorities);
 			return this;
 		}
@@ -452,6 +454,7 @@ public class User implements UserDetails, CredentialsContainer {
 		 * @see #roles(String...)
 		 */
 		public UserBuilder authorities(String... authorities) {
+			Assert.notNull(authorities, "authorities cannot be null");
 			return authorities(AuthorityUtils.createAuthorityList(authorities));
 		}
 

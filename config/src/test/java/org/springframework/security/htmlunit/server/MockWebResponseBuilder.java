@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2017 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,10 +20,10 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
-import com.gargoylesoftware.htmlunit.WebRequest;
-import com.gargoylesoftware.htmlunit.WebResponse;
-import com.gargoylesoftware.htmlunit.WebResponseData;
-import com.gargoylesoftware.htmlunit.util.NameValuePair;
+import org.htmlunit.WebRequest;
+import org.htmlunit.WebResponse;
+import org.htmlunit.WebResponseData;
+import org.htmlunit.util.NameValuePair;
 
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -58,7 +58,7 @@ final class MockWebResponseBuilder {
 
 	private WebResponseData webResponseData() {
 		List<NameValuePair> responseHeaders = responseHeaders();
-		HttpStatus status = this.exchangeResult.getStatus();
+		HttpStatus status = HttpStatus.resolve(this.exchangeResult.getStatus().value());
 		return new WebResponseData(this.exchangeResult.getResponseBodyContent(), status.value(),
 				status.getReasonPhrase(), responseHeaders);
 	}
@@ -67,7 +67,7 @@ final class MockWebResponseBuilder {
 		HttpHeaders responseHeaders = this.exchangeResult.getResponseHeaders();
 		List<NameValuePair> result = new ArrayList<>(responseHeaders.size());
 		responseHeaders.forEach((headerName, headerValues) -> headerValues
-				.forEach((headerValue) -> result.add(new NameValuePair(headerName, headerValue))));
+			.forEach((headerValue) -> result.add(new NameValuePair(headerName, headerValue))));
 		return result;
 	}
 

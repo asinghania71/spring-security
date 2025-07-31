@@ -16,9 +16,8 @@
 
 package org.springframework.security.test.web.servlet.setup;
 
-import javax.servlet.Filter;
-import javax.servlet.ServletContext;
-
+import jakarta.servlet.Filter;
+import jakarta.servlet.ServletContext;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -92,7 +91,7 @@ public class SecurityMockMvcConfigurerTests {
 
 	private void assertFilterAdded(Filter filter) {
 		ArgumentCaptor<SecurityMockMvcConfigurer.DelegateFilter> filterArg = ArgumentCaptor
-				.forClass(SecurityMockMvcConfigurer.DelegateFilter.class);
+			.forClass(SecurityMockMvcConfigurer.DelegateFilter.class);
 		verify(this.builder).addFilters(filterArg.capture());
 		assertThat(filterArg.getValue().getDelegate()).isEqualTo(filter);
 	}

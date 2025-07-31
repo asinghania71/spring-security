@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2019 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,14 +19,18 @@ package org.springframework.security.config.annotation.web;
 import org.junit.jupiter.api.Test;
 
 import org.springframework.beans.factory.BeanCreationException;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.mock.web.MockServletContext;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
-import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
+import org.springframework.security.web.util.matcher.RegexRequestMatcher;
 import org.springframework.web.context.support.AnnotationConfigWebApplicationContext;
 
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher.pathPattern;
 
 /**
  * Tests for {@link AbstractRequestMatcherRegistry}.
@@ -38,31 +42,31 @@ public class AbstractRequestMatcherRegistryAnyMatcherTests {
 	@Test
 	public void antMatchersCanNotWorkAfterAnyRequest() {
 		assertThatExceptionOfType(BeanCreationException.class)
-				.isThrownBy(() -> loadConfig(AntMatchersAfterAnyRequestConfig.class));
+			.isThrownBy(() -> loadConfig(AntMatchersAfterAnyRequestConfig.class));
 	}
 
 	@Test
 	public void mvcMatchersCanNotWorkAfterAnyRequest() {
 		assertThatExceptionOfType(BeanCreationException.class)
-				.isThrownBy(() -> loadConfig(MvcMatchersAfterAnyRequestConfig.class));
+			.isThrownBy(() -> loadConfig(MvcMatchersAfterAnyRequestConfig.class));
 	}
 
 	@Test
 	public void regexMatchersCanNotWorkAfterAnyRequest() {
 		assertThatExceptionOfType(BeanCreationException.class)
-				.isThrownBy(() -> loadConfig(RegexMatchersAfterAnyRequestConfig.class));
+			.isThrownBy(() -> loadConfig(RegexMatchersAfterAnyRequestConfig.class));
 	}
 
 	@Test
 	public void anyRequestCanNotWorkAfterItself() {
 		assertThatExceptionOfType(BeanCreationException.class)
-				.isThrownBy(() -> loadConfig(AnyRequestAfterItselfConfig.class));
+			.isThrownBy(() -> loadConfig(AnyRequestAfterItselfConfig.class));
 	}
 
 	@Test
 	public void requestMatchersCanNotWorkAfterAnyRequest() {
 		assertThatExceptionOfType(BeanCreationException.class)
-				.isThrownBy(() -> loadConfig(RequestMatchersAfterAnyRequestConfig.class));
+			.isThrownBy(() -> loadConfig(RequestMatchersAfterAnyRequestConfig.class));
 	}
 
 	private void loadConfig(Class<?>... configs) {
@@ -73,76 +77,86 @@ public class AbstractRequestMatcherRegistryAnyMatcherTests {
 		context.refresh();
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class AntMatchersAfterAnyRequestConfig extends WebSecurityConfigurerAdapter {
+	static class AntMatchersAfterAnyRequestConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.authorizeRequests()
-				.anyRequest().authenticated()
-				.antMatchers("/demo/**").permitAll();
+				.authorizeHttpRequests((requests) -> requests
+					.anyRequest().authenticated()
+					.requestMatchers(pathPattern("/demo/**")).permitAll());
+			return http.build();
 			// @formatter:on
 		}
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class MvcMatchersAfterAnyRequestConfig extends WebSecurityConfigurerAdapter {
+	static class MvcMatchersAfterAnyRequestConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http, PathPatternRequestMatcher.Builder builder) throws Exception {
 			// @formatter:off
 			http
-				.authorizeRequests()
-				.anyRequest().authenticated()
-				.mvcMatchers("/demo/**").permitAll();
+				.authorizeHttpRequests((requests) -> requests
+					.anyRequest().authenticated()
+					.requestMatchers(builder.matcher("/demo/**")).permitAll());
+			return http.build();
 			// @formatter:on
 		}
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class RegexMatchersAfterAnyRequestConfig extends WebSecurityConfigurerAdapter {
+	static class RegexMatchersAfterAnyRequestConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.authorizeRequests()
-				.anyRequest().authenticated()
-				.regexMatchers(".*").permitAll();
+				.authorizeHttpRequests((requests) -> requests
+					.anyRequest().authenticated()
+					.requestMatchers(new RegexRequestMatcher(".*", null)).permitAll());
+			return http.build();
 			// @formatter:on
 		}
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class AnyRequestAfterItselfConfig extends WebSecurityConfigurerAdapter {
+	static class AnyRequestAfterItselfConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.authorizeRequests()
-				.anyRequest().authenticated()
-				.anyRequest().permitAll();
+				.authorizeHttpRequests((requests) -> requests
+					.anyRequest().authenticated()
+					.anyRequest().permitAll());
+			return http.build();
 			// @formatter:on
 		}
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class RequestMatchersAfterAnyRequestConfig extends WebSecurityConfigurerAdapter {
+	static class RequestMatchersAfterAnyRequestConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.authorizeRequests()
-				.anyRequest().authenticated()
-				.requestMatchers(new AntPathRequestMatcher("/**")).permitAll();
+				.authorizeHttpRequests((requests) -> requests
+					.anyRequest().authenticated()
+					.requestMatchers(pathPattern("/**")).permitAll());
+			return http.build();
 			// @formatter:on
 		}
 

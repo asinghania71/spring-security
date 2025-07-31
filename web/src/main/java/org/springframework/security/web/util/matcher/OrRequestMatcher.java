@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2022 the original author or authors.
+ * Copyright 2002-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,8 +18,9 @@ package org.springframework.security.web.util.matcher;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 
-import javax.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletRequest;
 
 import org.springframework.util.Assert;
 
@@ -60,6 +61,42 @@ public final class OrRequestMatcher implements RequestMatcher {
 			}
 		}
 		return false;
+	}
+
+	/**
+	 * Returns a {@link MatchResult} for this {@link HttpServletRequest}. In the case of a
+	 * match, request variables are any request variables from the first underlying
+	 * matcher.
+	 * @param request the HTTP request
+	 * @return a {@link MatchResult} based on the given HTTP request
+	 * @since 6.1
+	 */
+	@Override
+	public MatchResult matcher(HttpServletRequest request) {
+		for (RequestMatcher matcher : this.requestMatchers) {
+			MatchResult result = matcher.matcher(request);
+			if (result.isMatch()) {
+				return result;
+			}
+		}
+		return MatchResult.notMatch();
+	}
+
+	@Override
+	public boolean equals(Object o) {
+		if (this == o) {
+			return true;
+		}
+		if (o == null || getClass() != o.getClass()) {
+			return false;
+		}
+		OrRequestMatcher that = (OrRequestMatcher) o;
+		return Objects.equals(this.requestMatchers, that.requestMatchers);
+	}
+
+	@Override
+	public int hashCode() {
+		return Objects.hash(this.requestMatchers);
 	}
 
 	@Override

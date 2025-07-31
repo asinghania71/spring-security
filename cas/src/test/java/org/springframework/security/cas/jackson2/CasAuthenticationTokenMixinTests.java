@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-2016 the original author or authors.
+ * Copyright 2015-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,9 +23,9 @@ import java.util.Date;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.jasig.cas.client.authentication.AttributePrincipalImpl;
-import org.jasig.cas.client.validation.Assertion;
-import org.jasig.cas.client.validation.AssertionImpl;
+import org.apereo.cas.client.authentication.AttributePrincipalImpl;
+import org.apereo.cas.client.validation.Assertion;
+import org.apereo.cas.client.validation.AssertionImpl;
 import org.json.JSONException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -79,14 +79,15 @@ public class CasAuthenticationTokenMixinTests {
 			+ "\"keyHash\": " + KEY.hashCode() + "," + "\"principal\": " + USER_JSON + ", " + "\"credentials\": "
 			+ PASSWORD + ", " + "\"authorities\": " + AUTHORITIES_ARRAYLIST_JSON + "," + "\"userDetails\": " + USER_JSON
 			+ "," + "\"authenticated\": true, " + "\"details\": null," + "\"assertion\": {"
-			+ "\"@class\": \"org.jasig.cas.client.validation.AssertionImpl\", " + "\"principal\": {"
-			+ "\"@class\": \"org.jasig.cas.client.authentication.AttributePrincipalImpl\", "
+			+ "\"@class\": \"org.apereo.cas.client.validation.AssertionImpl\", " + "\"principal\": {"
+			+ "\"@class\": \"org.apereo.cas.client.authentication.AttributePrincipalImpl\", "
 			+ "\"name\": \"assertName\", " + "\"attributes\": {\"@class\": \"java.util.Collections$EmptyMap\"}, "
 			+ "\"proxyGrantingTicket\": null, " + "\"proxyRetriever\": null" + "}, "
 			+ "\"validFromDate\": [\"java.util.Date\", " + START_DATE.getTime() + "], "
 			+ "\"validUntilDate\": [\"java.util.Date\", " + END_DATE.getTime() + "],"
 			+ "\"authenticationDate\": [\"java.util.Date\", " + START_DATE.getTime() + "], "
-			+ "\"attributes\": {\"@class\": \"java.util.Collections$EmptyMap\"}" + "}" + "}";
+			+ "\"attributes\": {\"@class\": \"java.util.Collections$EmptyMap\"},"
+			+ "\"context\": {\"@class\":\"java.util.HashMap\"}" + "}" + "}";
 
 	private static final String CAS_TOKEN_CLEARED_JSON = CAS_TOKEN_JSON.replaceFirst(PASSWORD, "null");
 
@@ -132,7 +133,7 @@ public class CasAuthenticationTokenMixinTests {
 		assertThat(token.getAssertion()).isNotNull().isInstanceOf(AssertionImpl.class);
 		assertThat(token.getKeyHash()).isEqualTo(KEY.hashCode());
 		assertThat(token.getUserDetails().getAuthorities()).extracting(GrantedAuthority::getAuthority)
-				.containsOnly("ROLE_USER");
+			.containsOnly("ROLE_USER");
 		assertThat(token.getAssertion().getAuthenticationDate()).isEqualTo(START_DATE);
 		assertThat(token.getAssertion().getValidFromDate()).isEqualTo(START_DATE);
 		assertThat(token.getAssertion().getValidUntilDate()).isEqualTo(END_DATE);
@@ -143,7 +144,7 @@ public class CasAuthenticationTokenMixinTests {
 	private CasAuthenticationToken createCasAuthenticationToken() {
 		User principal = new User("admin", "1234", Collections.singletonList(new SimpleGrantedAuthority("ROLE_USER")));
 		Collection<? extends GrantedAuthority> authorities = Collections
-				.singletonList(new SimpleGrantedAuthority("ROLE_USER"));
+			.singletonList(new SimpleGrantedAuthority("ROLE_USER"));
 		Assertion assertion = new AssertionImpl(new AttributePrincipalImpl("assertName"), START_DATE, END_DATE,
 				START_DATE, Collections.<String, Object>emptyMap());
 		return new CasAuthenticationToken(KEY, principal, principal.getPassword(), authorities,

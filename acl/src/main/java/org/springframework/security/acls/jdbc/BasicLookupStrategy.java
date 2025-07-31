@@ -42,7 +42,7 @@ import org.springframework.security.acls.domain.AuditLogger;
 import org.springframework.security.acls.domain.DefaultPermissionFactory;
 import org.springframework.security.acls.domain.DefaultPermissionGrantingStrategy;
 import org.springframework.security.acls.domain.GrantedAuthoritySid;
-import org.springframework.security.acls.domain.ObjectIdentityImpl;
+import org.springframework.security.acls.domain.ObjectIdentityRetrievalStrategyImpl;
 import org.springframework.security.acls.domain.PermissionFactory;
 import org.springframework.security.acls.domain.PrincipalSid;
 import org.springframework.security.acls.model.AccessControlEntry;
@@ -51,6 +51,7 @@ import org.springframework.security.acls.model.AclCache;
 import org.springframework.security.acls.model.MutableAcl;
 import org.springframework.security.acls.model.NotFoundException;
 import org.springframework.security.acls.model.ObjectIdentity;
+import org.springframework.security.acls.model.ObjectIdentityGenerator;
 import org.springframework.security.acls.model.Permission;
 import org.springframework.security.acls.model.PermissionGrantingStrategy;
 import org.springframework.security.acls.model.Sid;
@@ -109,6 +110,8 @@ public class BasicLookupStrategy implements LookupStrategy {
 
 	private final AclAuthorizationStrategy aclAuthorizationStrategy;
 
+	private ObjectIdentityGenerator objectIdentityGenerator;
+
 	private PermissionFactory permissionFactory = new DefaultPermissionFactory();
 
 	private final AclCache aclCache;
@@ -162,6 +165,7 @@ public class BasicLookupStrategy implements LookupStrategy {
 		this.aclCache = aclCache;
 		this.aclAuthorizationStrategy = aclAuthorizationStrategy;
 		this.grantingStrategy = grantingStrategy;
+		this.objectIdentityGenerator = new ObjectIdentityRetrievalStrategyImpl();
 		this.aclClassIdUtils = new AclClassIdUtils();
 		this.fieldAces.setAccessible(true);
 		this.fieldAcl.setAccessible(true);
@@ -488,6 +492,11 @@ public class BasicLookupStrategy implements LookupStrategy {
 		}
 	}
 
+	public final void setObjectIdentityGenerator(ObjectIdentityGenerator objectIdentityGenerator) {
+		Assert.notNull(objectIdentityGenerator, "objectIdentityGenerator cannot be null");
+		this.objectIdentityGenerator = objectIdentityGenerator;
+	}
+
 	public final void setConversionService(ConversionService conversionService) {
 		this.aclClassIdUtils = new AclClassIdUtils(conversionService);
 	}
@@ -569,7 +578,8 @@ public class BasicLookupStrategy implements LookupStrategy {
 				// target id type, e.g. UUID.
 				Serializable identifier = (Serializable) rs.getObject("object_id_identity");
 				identifier = BasicLookupStrategy.this.aclClassIdUtils.identifierFrom(identifier, rs);
-				ObjectIdentity objectIdentity = new ObjectIdentityImpl(rs.getString("class"), identifier);
+				ObjectIdentity objectIdentity = BasicLookupStrategy.this.objectIdentityGenerator
+					.createObjectIdentity(identifier, rs.getString("class"));
 
 				Acl parentAcl = null;
 				long parentAclId = rs.getLong("parent_object");

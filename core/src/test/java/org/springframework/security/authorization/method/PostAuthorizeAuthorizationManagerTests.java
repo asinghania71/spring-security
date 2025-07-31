@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2025 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,8 +23,10 @@ import java.util.Collections;
 import java.util.List;
 import java.util.function.Supplier;
 
+import org.aopalliance.intercept.MethodInvocation;
 import org.junit.jupiter.api.Test;
 
+import org.springframework.context.support.GenericApplicationContext;
 import org.springframework.core.annotation.AnnotationConfigurationException;
 import org.springframework.security.access.expression.method.DefaultMethodSecurityExpressionHandler;
 import org.springframework.security.access.expression.method.MethodSecurityExpressionHandler;
@@ -32,7 +34,7 @@ import org.springframework.security.access.intercept.method.MockMethodInvocation
 import org.springframework.security.access.prepost.PostAuthorize;
 import org.springframework.security.authentication.TestAuthentication;
 import org.springframework.security.authentication.TestingAuthenticationToken;
-import org.springframework.security.authorization.AuthorizationDecision;
+import org.springframework.security.authorization.AuthorizationResult;
 import org.springframework.security.core.Authentication;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -51,14 +53,14 @@ public class PostAuthorizeAuthorizationManagerTests {
 		MethodSecurityExpressionHandler expressionHandler = new DefaultMethodSecurityExpressionHandler();
 		PostAuthorizeAuthorizationManager manager = new PostAuthorizeAuthorizationManager();
 		manager.setExpressionHandler(expressionHandler);
-		assertThat(manager).extracting("expressionHandler").isEqualTo(expressionHandler);
+		assertThat(manager).extracting("registry").extracting("expressionHandler").isEqualTo(expressionHandler);
 	}
 
 	@Test
 	public void setExpressionHandlerWhenNullThenException() {
 		PostAuthorizeAuthorizationManager manager = new PostAuthorizeAuthorizationManager();
 		assertThatIllegalArgumentException().isThrownBy(() -> manager.setExpressionHandler(null))
-				.withMessage("expressionHandler cannot be null");
+			.withMessage("expressionHandler cannot be null");
 	}
 
 	@Test
@@ -67,7 +69,7 @@ public class PostAuthorizeAuthorizationManagerTests {
 				"doSomething", new Class[] {}, new Object[] {});
 		PostAuthorizeAuthorizationManager manager = new PostAuthorizeAuthorizationManager();
 		MethodInvocationResult result = new MethodInvocationResult(methodInvocation, null);
-		AuthorizationDecision decision = manager.check(TestAuthentication::authenticatedUser, result);
+		AuthorizationResult decision = manager.authorize(TestAuthentication::authenticatedUser, result);
 		assertThat(decision).isNull();
 	}
 
@@ -77,7 +79,7 @@ public class PostAuthorizeAuthorizationManagerTests {
 				"doSomethingString", new Class[] { String.class }, new Object[] { "grant" });
 		PostAuthorizeAuthorizationManager manager = new PostAuthorizeAuthorizationManager();
 		MethodInvocationResult result = new MethodInvocationResult(methodInvocation, null);
-		AuthorizationDecision decision = manager.check(TestAuthentication::authenticatedUser, result);
+		AuthorizationResult decision = manager.authorize(TestAuthentication::authenticatedUser, result);
 		assertThat(decision).isNotNull();
 		assertThat(decision.isGranted()).isTrue();
 	}
@@ -88,7 +90,7 @@ public class PostAuthorizeAuthorizationManagerTests {
 				"doSomethingString", new Class[] { String.class }, new Object[] { "deny" });
 		MethodInvocationResult result = new MethodInvocationResult(methodInvocation, null);
 		PostAuthorizeAuthorizationManager manager = new PostAuthorizeAuthorizationManager();
-		AuthorizationDecision decision = manager.check(TestAuthentication::authenticatedUser, result);
+		AuthorizationResult decision = manager.authorize(TestAuthentication::authenticatedUser, result);
 		assertThat(decision).isNotNull();
 		assertThat(decision.isGranted()).isFalse();
 	}
@@ -100,7 +102,7 @@ public class PostAuthorizeAuthorizationManagerTests {
 				"doSomethingList", new Class[] { List.class }, new Object[] { list });
 		MethodInvocationResult result = new MethodInvocationResult(methodInvocation, list);
 		PostAuthorizeAuthorizationManager manager = new PostAuthorizeAuthorizationManager();
-		AuthorizationDecision decision = manager.check(TestAuthentication::authenticatedUser, result);
+		AuthorizationResult decision = manager.authorize(TestAuthentication::authenticatedUser, result);
 		assertThat(decision).isNotNull();
 		assertThat(decision.isGranted()).isTrue();
 	}
@@ -112,7 +114,7 @@ public class PostAuthorizeAuthorizationManagerTests {
 				"doSomethingList", new Class[] { List.class }, new Object[] { list });
 		MethodInvocationResult result = new MethodInvocationResult(methodInvocation, list);
 		PostAuthorizeAuthorizationManager manager = new PostAuthorizeAuthorizationManager();
-		AuthorizationDecision decision = manager.check(TestAuthentication::authenticatedUser, result);
+		AuthorizationResult decision = manager.authorize(TestAuthentication::authenticatedUser, result);
 		assertThat(decision).isNotNull();
 		assertThat(decision.isGranted()).isFalse();
 	}
@@ -124,10 +126,10 @@ public class PostAuthorizeAuthorizationManagerTests {
 				ClassLevelAnnotations.class, "securedAdmin");
 		MethodInvocationResult result = new MethodInvocationResult(methodInvocation, null);
 		PostAuthorizeAuthorizationManager manager = new PostAuthorizeAuthorizationManager();
-		AuthorizationDecision decision = manager.check(authentication, result);
+		AuthorizationResult decision = manager.authorize(authentication, result);
 		assertThat(decision.isGranted()).isFalse();
 		authentication = () -> new TestingAuthenticationToken("user", "password", "ROLE_ADMIN");
-		decision = manager.check(authentication, result);
+		decision = manager.authorize(authentication, result);
 		assertThat(decision.isGranted()).isTrue();
 	}
 
@@ -138,33 +140,50 @@ public class PostAuthorizeAuthorizationManagerTests {
 				ClassLevelAnnotations.class, "securedUser");
 		MethodInvocationResult result = new MethodInvocationResult(methodInvocation, null);
 		PostAuthorizeAuthorizationManager manager = new PostAuthorizeAuthorizationManager();
-		AuthorizationDecision decision = manager.check(authentication, result);
+		AuthorizationResult decision = manager.authorize(authentication, result);
 		assertThat(decision.isGranted()).isTrue();
 		authentication = () -> new TestingAuthenticationToken("user", "password", "ROLE_ADMIN");
-		decision = manager.check(authentication, result);
+		decision = manager.authorize(authentication, result);
 		assertThat(decision.isGranted()).isFalse();
-	}
-
-	@Test
-	public void checkInheritedAnnotationsWhenDuplicatedThenAnnotationConfigurationException() throws Exception {
-		Supplier<Authentication> authentication = () -> new TestingAuthenticationToken("user", "password", "ROLE_USER");
-		MockMethodInvocation methodInvocation = new MockMethodInvocation(new TestClass(), TestClass.class,
-				"inheritedAnnotations");
-		MethodInvocationResult result = new MethodInvocationResult(methodInvocation, null);
-		PostAuthorizeAuthorizationManager manager = new PostAuthorizeAuthorizationManager();
-		assertThatExceptionOfType(AnnotationConfigurationException.class)
-				.isThrownBy(() -> manager.check(authentication, result));
 	}
 
 	@Test
 	public void checkInheritedAnnotationsWhenConflictingThenAnnotationConfigurationException() throws Exception {
 		Supplier<Authentication> authentication = () -> new TestingAuthenticationToken("user", "password", "ROLE_USER");
-		MockMethodInvocation methodInvocation = new MockMethodInvocation(new ClassLevelAnnotations(),
-				ClassLevelAnnotations.class, "inheritedAnnotations");
+		MockMethodInvocation methodInvocation = new MockMethodInvocation(new ConflictingAnnotations(),
+				ConflictingAnnotations.class, "inheritedAnnotations");
 		MethodInvocationResult result = new MethodInvocationResult(methodInvocation, null);
 		PostAuthorizeAuthorizationManager manager = new PostAuthorizeAuthorizationManager();
 		assertThatExceptionOfType(AnnotationConfigurationException.class)
-				.isThrownBy(() -> manager.check(authentication, result));
+			.isThrownBy(() -> manager.authorize(authentication, result));
+	}
+
+	@Test
+	public void checkWhenHandlerDeniedNoApplicationContextThenReflectivelyConstructs() throws Exception {
+		PostAuthorizeAuthorizationManager manager = new PostAuthorizeAuthorizationManager();
+		assertThat(handleDeniedInvocationResult("methodOne", manager)).isNull();
+		assertThatExceptionOfType(IllegalArgumentException.class)
+			.isThrownBy(() -> handleDeniedInvocationResult("methodTwo", manager));
+	}
+
+	@Test
+	public void checkWhenHandlerDeniedApplicationContextThenLooksForBean() throws Exception {
+		GenericApplicationContext context = new GenericApplicationContext();
+		context.registerBean(NoDefaultConstructorHandler.class, () -> new NoDefaultConstructorHandler(new Object()));
+		context.refresh();
+		PostAuthorizeAuthorizationManager manager = new PostAuthorizeAuthorizationManager();
+		manager.setApplicationContext(context);
+		assertThat(handleDeniedInvocationResult("methodTwo", manager)).isNull();
+		assertThatExceptionOfType(IllegalStateException.class)
+			.isThrownBy(() -> handleDeniedInvocationResult("methodOne", manager));
+	}
+
+	private Object handleDeniedInvocationResult(String methodName, PostAuthorizeAuthorizationManager manager)
+			throws Exception {
+		MethodInvocation invocation = new MockMethodInvocation(new UsingHandleDeniedAuthorization(),
+				UsingHandleDeniedAuthorization.class, methodName);
+		MethodInvocationResult result = new MethodInvocationResult(invocation, null);
+		return manager.handleDeniedInvocationResult(result, null);
 	}
 
 	public static class TestClass implements InterfaceAnnotationsOne, InterfaceAnnotationsTwo {
@@ -210,6 +229,14 @@ public class PostAuthorizeAuthorizationManagerTests {
 
 	}
 
+	public static class ConflictingAnnotations implements InterfaceAnnotationsOne, InterfaceAnnotationsTwo {
+
+		@Override
+		public void inheritedAnnotations() {
+		}
+
+	}
+
 	public interface InterfaceAnnotationsOne {
 
 		@PostAuthorize("hasRole('ADMIN')")
@@ -234,6 +261,46 @@ public class PostAuthorizeAuthorizationManagerTests {
 	@Retention(RetentionPolicy.RUNTIME)
 	@PostAuthorize("hasRole('USER')")
 	public @interface MyPostAuthorize {
+
+	}
+
+	public static final class UsingHandleDeniedAuthorization {
+
+		@HandleAuthorizationDenied(handlerClass = NullHandler.class)
+		@PostAuthorize("denyAll()")
+		public String methodOne() {
+			return "ok";
+		}
+
+		@HandleAuthorizationDenied(handlerClass = NoDefaultConstructorHandler.class)
+		@PostAuthorize("denyAll()")
+		public String methodTwo() {
+			return "ok";
+		}
+
+	}
+
+	public static final class NullHandler implements MethodAuthorizationDeniedHandler {
+
+		@Override
+		public Object handleDeniedInvocation(MethodInvocation methodInvocation,
+				AuthorizationResult authorizationResult) {
+			return null;
+		}
+
+	}
+
+	public static final class NoDefaultConstructorHandler implements MethodAuthorizationDeniedHandler {
+
+		private NoDefaultConstructorHandler(Object parameter) {
+
+		}
+
+		@Override
+		public Object handleDeniedInvocation(MethodInvocation methodInvocation,
+				AuthorizationResult authorizationResult) {
+			return null;
+		}
 
 	}
 

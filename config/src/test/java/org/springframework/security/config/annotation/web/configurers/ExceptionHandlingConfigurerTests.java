@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2018 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,27 +16,32 @@
 
 package org.springframework.security.config.annotation.web.configurers;
 
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
-import org.springframework.security.config.annotation.ObjectPostProcessor;
-import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
+import org.springframework.security.config.ObjectPostProcessor;
+import org.springframework.security.config.annotation.SecurityContextChangedListenerConfig;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
 import org.springframework.security.config.test.SpringTestContext;
 import org.springframework.security.config.test.SpringTestContextExtension;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.core.context.SecurityContextChangedListener;
+import org.springframework.security.core.context.SecurityContextHolderStrategy;
+import org.springframework.security.core.userdetails.PasswordEncodedUser;
 import org.springframework.security.core.userdetails.User;
+import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.AuthenticationEntryPoint;
+import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.ExceptionTranslationFilter;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.accept.ContentNegotiationStrategy;
@@ -47,6 +52,8 @@ import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
+import static org.springframework.security.config.Customizer.withDefaults;
+import static org.springframework.security.config.annotation.SecurityContextChangedListenerArgumentMatchers.setAuthentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -76,7 +83,7 @@ public class ExceptionHandlingConfigurerTests {
 	public void getWhenAcceptHeaderIsApplicationXhtmlXmlThenRespondsWith302() throws Exception {
 		this.spring.register(HttpBasicAndFormLoginEntryPointsConfig.class).autowire();
 		this.mvc.perform(get("/").header(HttpHeaders.ACCEPT, MediaType.APPLICATION_XHTML_XML))
-				.andExpect(status().isFound());
+			.andExpect(status().isFound());
 	}
 
 	// SEC-2199
@@ -119,7 +126,7 @@ public class ExceptionHandlingConfigurerTests {
 	public void getWhenAcceptHeaderIsApplicationAtomXmlThenRespondsWith401() throws Exception {
 		this.spring.register(HttpBasicAndFormLoginEntryPointsConfig.class).autowire();
 		this.mvc.perform(get("/").header(HttpHeaders.ACCEPT, MediaType.APPLICATION_ATOM_XML))
-				.andExpect(status().isUnauthorized());
+			.andExpect(status().isUnauthorized());
 	}
 
 	// SEC-2199
@@ -127,7 +134,7 @@ public class ExceptionHandlingConfigurerTests {
 	public void getWhenAcceptHeaderIsApplicationFormUrlEncodedThenRespondsWith401() throws Exception {
 		this.spring.register(HttpBasicAndFormLoginEntryPointsConfig.class).autowire();
 		this.mvc.perform(get("/").header(HttpHeaders.ACCEPT, MediaType.APPLICATION_FORM_URLENCODED))
-				.andExpect(status().isUnauthorized());
+			.andExpect(status().isUnauthorized());
 	}
 
 	// SEC-2199
@@ -135,7 +142,7 @@ public class ExceptionHandlingConfigurerTests {
 	public void getWhenAcceptHeaderIsApplicationJsonThenRespondsWith401() throws Exception {
 		this.spring.register(HttpBasicAndFormLoginEntryPointsConfig.class).autowire();
 		this.mvc.perform(get("/").header(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON))
-				.andExpect(status().isUnauthorized());
+			.andExpect(status().isUnauthorized());
 	}
 
 	// SEC-2199
@@ -143,7 +150,7 @@ public class ExceptionHandlingConfigurerTests {
 	public void getWhenAcceptHeaderIsApplicationOctetStreamThenRespondsWith401() throws Exception {
 		this.spring.register(HttpBasicAndFormLoginEntryPointsConfig.class).autowire();
 		this.mvc.perform(get("/").header(HttpHeaders.ACCEPT, MediaType.APPLICATION_OCTET_STREAM))
-				.andExpect(status().isUnauthorized());
+			.andExpect(status().isUnauthorized());
 	}
 
 	// SEC-2199
@@ -151,7 +158,7 @@ public class ExceptionHandlingConfigurerTests {
 	public void getWhenAcceptHeaderIsMultipartFormDataThenRespondsWith401() throws Exception {
 		this.spring.register(HttpBasicAndFormLoginEntryPointsConfig.class).autowire();
 		this.mvc.perform(get("/").header(HttpHeaders.ACCEPT, MediaType.MULTIPART_FORM_DATA))
-				.andExpect(status().isUnauthorized());
+			.andExpect(status().isUnauthorized());
 	}
 
 	// SEC-2199
@@ -171,32 +178,44 @@ public class ExceptionHandlingConfigurerTests {
 	@Test
 	public void getWhenAcceptIsChromeThenRespondsWith302() throws Exception {
 		this.spring.register(DefaultSecurityConfig.class).autowire();
-		this.mvc.perform(get("/").header(HttpHeaders.ACCEPT,
-				"text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8"))
-				.andExpect(status().isFound());
+		this.mvc
+			.perform(get("/").header(HttpHeaders.ACCEPT,
+					"text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8"))
+			.andExpect(status().isFound());
 	}
 
 	@Test
 	public void getWhenAcceptIsTextPlainAndXRequestedWithIsXHRThenRespondsWith401() throws Exception {
 		this.spring.register(HttpBasicAndFormLoginEntryPointsConfig.class).autowire();
 		this.mvc.perform(get("/").header("Accept", MediaType.TEXT_PLAIN).header("X-Requested-With", "XMLHttpRequest"))
-				.andExpect(status().isUnauthorized());
+			.andExpect(status().isUnauthorized());
 	}
 
 	@Test
 	public void getWhenCustomContentNegotiationStrategyThenStrategyIsUsed() throws Exception {
 		this.spring.register(OverrideContentNegotiationStrategySharedObjectConfig.class, DefaultSecurityConfig.class)
-				.autowire();
+			.autowire();
 		this.mvc.perform(get("/"));
 		verify(OverrideContentNegotiationStrategySharedObjectConfig.CNS, atLeastOnce())
-				.resolveMediaTypes(any(NativeWebRequest.class));
+			.resolveMediaTypes(any(NativeWebRequest.class));
+	}
+
+	@Test
+	public void getWhenCustomSecurityContextHolderStrategyThenUsed() throws Exception {
+		this.spring.register(SecurityContextChangedListenerConfig.class, DefaultSecurityConfig.class).autowire();
+		this.mvc.perform(get("/"));
+		SecurityContextHolderStrategy strategy = this.spring.getContext().getBean(SecurityContextHolderStrategy.class);
+		verify(strategy, atLeastOnce()).getContext();
+		SecurityContextChangedListener listener = this.spring.getContext()
+			.getBean(SecurityContextChangedListener.class);
+		verify(listener).securityContextChanged(setAuthentication(AnonymousAuthenticationToken.class));
 	}
 
 	@Test
 	public void getWhenUsingDefaultsAndUnauthenticatedThenRedirectsToLogin() throws Exception {
 		this.spring.register(DefaultHttpConfig.class).autowire();
 		this.mvc.perform(get("/").header(HttpHeaders.ACCEPT, "bogus/type"))
-				.andExpect(redirectedUrl("http://localhost/login"));
+			.andExpect(redirectedUrl("http://localhost/login"));
 	}
 
 	@Test
@@ -213,16 +232,18 @@ public class ExceptionHandlingConfigurerTests {
 				any(HttpServletResponse.class), any(AuthenticationException.class));
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class ObjectPostProcessorConfig extends WebSecurityConfigurerAdapter {
+	static class ObjectPostProcessorConfig {
 
 		static ObjectPostProcessor<Object> objectPostProcessor = spy(ReflectingObjectPostProcessor.class);
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.exceptionHandling();
+				.exceptionHandling(withDefaults());
+			return http.build();
 			// @formatter:on
 		}
 
@@ -242,6 +263,7 @@ public class ExceptionHandlingConfigurerTests {
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
 	static class DefaultSecurityConfig {
 
@@ -257,31 +279,32 @@ public class ExceptionHandlingConfigurerTests {
 			// @formatter:off
 		}
 	}
+	@Configuration
 	@EnableWebSecurity
-	static class HttpBasicAndFormLoginEntryPointsConfig extends WebSecurityConfigurerAdapter {
-		@Override
-		protected void configure(AuthenticationManagerBuilder auth) throws Exception {
-			auth
-				.inMemoryAuthentication()
-					.withUser("user").password("password").roles("USER");
+	static class HttpBasicAndFormLoginEntryPointsConfig {
+
+		@Bean
+		UserDetailsService userDetailsService() {
+			return new InMemoryUserDetailsManager(PasswordEncodedUser.user());
 		}
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.authorizeRequests()
-					.anyRequest().authenticated()
-					.and()
-				.httpBasic()
-					.and()
-				.formLogin();
+				.authorizeHttpRequests((requests) -> requests
+					.anyRequest().authenticated())
+				.httpBasic(withDefaults())
+				.formLogin(withDefaults());
 			// @formatter:on
+			return http.build();
 		}
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class OverrideContentNegotiationStrategySharedObjectConfig extends WebSecurityConfigurerAdapter {
+	static class OverrideContentNegotiationStrategySharedObjectConfig {
 
 		static ContentNegotiationStrategy CNS = mock(ContentNegotiationStrategy.class);
 
@@ -292,44 +315,46 @@ public class ExceptionHandlingConfigurerTests {
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class DefaultHttpConfig extends WebSecurityConfigurerAdapter {
+	static class DefaultHttpConfig {
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class BasicAuthenticationEntryPointBeforeFormLoginConfig extends WebSecurityConfigurerAdapter {
+	static class BasicAuthenticationEntryPointBeforeFormLoginConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.authorizeRequests()
-					.anyRequest().authenticated()
-					.and()
-				.httpBasic()
-					.and()
-				.formLogin();
+				.authorizeHttpRequests((requests) -> requests
+					.anyRequest().authenticated())
+				.httpBasic(withDefaults())
+				.formLogin(withDefaults());
+			return http.build();
 			// @formatter:on
 		}
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class InvokeTwiceDoesNotOverrideConfig extends WebSecurityConfigurerAdapter {
+	static class InvokeTwiceDoesNotOverrideConfig {
 
 		static AuthenticationEntryPoint AEP = mock(AuthenticationEntryPoint.class);
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.authorizeRequests()
-					.anyRequest().authenticated()
-					.and()
-				.exceptionHandling()
-					.authenticationEntryPoint(AEP).and()
-				.exceptionHandling();
+				.authorizeHttpRequests((requests) -> requests
+					.anyRequest().authenticated())
+				.exceptionHandling((handling) -> handling
+					.authenticationEntryPoint(AEP))
+				.exceptionHandling(withDefaults());
+			return http.build();
 			// @formatter:on
 		}
 

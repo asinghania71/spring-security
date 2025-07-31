@@ -18,9 +18,8 @@ package org.springframework.security.access.annotation;
 
 import java.util.Collection;
 
-import javax.annotation.security.PermitAll;
-import javax.annotation.security.RolesAllowed;
-
+import jakarta.annotation.security.PermitAll;
+import jakarta.annotation.security.RolesAllowed;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -63,27 +62,27 @@ public class Jsr250MethodSecurityMetadataSourceTests {
 	public void permitAllMethodHasPermitAllAttribute() throws Exception {
 		ConfigAttribute[] accessAttributes = findAttributes("permitAllMethod");
 		assertThat(accessAttributes).hasSize(1);
-		assertThat(accessAttributes[0].toString()).isEqualTo("javax.annotation.security.PermitAll");
+		assertThat(accessAttributes[0].toString()).isEqualTo("jakarta.annotation.security.PermitAll");
 	}
 
 	@Test
 	public void noRoleMethodHasNoAttributes() throws Exception {
 		Collection<ConfigAttribute> accessAttributes = this.mds
-				.findAttributes(this.a.getClass().getMethod("noRoleMethod"), null);
+			.findAttributes(this.a.getClass().getMethod("noRoleMethod"), null);
 		assertThat(accessAttributes).isNull();
 	}
 
 	@Test
 	public void classRoleIsAppliedToNoRoleMethod() throws Exception {
 		Collection<ConfigAttribute> accessAttributes = this.mds
-				.findAttributes(this.userAllowed.getClass().getMethod("noRoleMethod"), null);
+			.findAttributes(this.userAllowed.getClass().getMethod("noRoleMethod"), null);
 		assertThat(accessAttributes).isNull();
 	}
 
 	@Test
 	public void methodRoleOverridesClassRole() throws Exception {
 		Collection<ConfigAttribute> accessAttributes = this.mds
-				.findAttributes(this.userAllowed.getClass().getMethod("adminMethod"), null);
+			.findAttributes(this.userAllowed.getClass().getMethod("adminMethod"), null);
 		assertThat(accessAttributes).hasSize(1);
 		assertThat(accessAttributes.toArray()[0].toString()).isEqualTo("ROLE_ADMIN");
 	}

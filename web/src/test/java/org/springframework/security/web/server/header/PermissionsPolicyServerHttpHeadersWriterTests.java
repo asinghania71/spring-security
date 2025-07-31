@@ -49,7 +49,7 @@ public class PermissionsPolicyServerHttpHeadersWriterTests {
 	public void writeHeadersWhenUsingDefaultsThenDoesNotWrite() {
 		this.writer.writeHttpHeaders(this.exchange);
 		HttpHeaders headers = this.exchange.getResponse().getHeaders();
-		assertThat(headers).isEmpty();
+		assertThat(headers.headerNames()).isEmpty();
 	}
 
 	@Test
@@ -57,20 +57,21 @@ public class PermissionsPolicyServerHttpHeadersWriterTests {
 		this.writer.setPolicy(DEFAULT_POLICY_DIRECTIVES);
 		this.writer.writeHttpHeaders(this.exchange);
 		HttpHeaders headers = this.exchange.getResponse().getHeaders();
-		assertThat(headers).hasSize(1);
+		assertThat(headers.headerNames()).hasSize(1);
 		assertThat(headers.get(PermissionsPolicyServerHttpHeadersWriter.PERMISSIONS_POLICY))
-				.containsOnly(DEFAULT_POLICY_DIRECTIVES);
+			.containsOnly(DEFAULT_POLICY_DIRECTIVES);
 	}
 
 	@Test
 	public void writeHeadersWhenAlreadyWrittenThenWritesHeader() {
 		this.writer.setPolicy(DEFAULT_POLICY_DIRECTIVES);
 		String headerValue = "camera=(self)";
-		this.exchange.getResponse().getHeaders().set(PermissionsPolicyServerHttpHeadersWriter.PERMISSIONS_POLICY,
-				headerValue);
+		this.exchange.getResponse()
+			.getHeaders()
+			.set(PermissionsPolicyServerHttpHeadersWriter.PERMISSIONS_POLICY, headerValue);
 		this.writer.writeHttpHeaders(this.exchange);
 		HttpHeaders headers = this.exchange.getResponse().getHeaders();
-		assertThat(headers).hasSize(1);
+		assertThat(headers.headerNames()).hasSize(1);
 		assertThat(headers.get(PermissionsPolicyServerHttpHeadersWriter.PERMISSIONS_POLICY)).containsOnly(headerValue);
 	}
 

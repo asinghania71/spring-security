@@ -18,22 +18,26 @@ package org.springframework.security.taglibs.authz;
 
 import java.io.IOException;
 
-import javax.servlet.jsp.JspException;
-import javax.servlet.jsp.PageContext;
-import javax.servlet.jsp.tagext.Tag;
-import javax.servlet.jsp.tagext.TagSupport;
+import jakarta.servlet.ServletContext;
+import jakarta.servlet.jsp.JspException;
+import jakarta.servlet.jsp.PageContext;
+import jakarta.servlet.jsp.tagext.Tag;
+import jakarta.servlet.jsp.tagext.TagSupport;
 
 import org.springframework.beans.BeanWrapperImpl;
 import org.springframework.beans.BeansException;
+import org.springframework.context.ApplicationContext;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.context.SecurityContextHolderStrategy;
+import org.springframework.security.web.context.support.SecurityWebApplicationContextUtils;
 import org.springframework.security.web.util.TextEscapeUtils;
 import org.springframework.web.util.TagUtils;
 
 /**
- * An {@link javax.servlet.jsp.tagext.Tag} implementation that allows convenient access to
- * the current <code>Authentication</code> object.
+ * An {@link jakarta.servlet.jsp.tagext.Tag} implementation that allows convenient access
+ * to the current <code>Authentication</code> object.
  * <p>
  * Whilst JSPs can access the <code>SecurityContext</code> directly, this tag avoids
  * handling <code>null</code> conditions.
@@ -41,6 +45,9 @@ import org.springframework.web.util.TagUtils;
  * @author Thomas Champagne
  */
 public class AuthenticationTag extends TagSupport {
+
+	private SecurityContextHolderStrategy securityContextHolderStrategy = SecurityContextHolder
+		.getContextHolderStrategy();
 
 	private String var;
 
@@ -76,6 +83,18 @@ public class AuthenticationTag extends TagSupport {
 		this.scopeSpecified = true;
 	}
 
+	public void setPageContext(PageContext pageContext) {
+		super.setPageContext(pageContext);
+		ServletContext servletContext = pageContext.getServletContext();
+		ApplicationContext context = SecurityWebApplicationContextUtils
+			.findRequiredWebApplicationContext(servletContext);
+		String[] names = context.getBeanNamesForType(SecurityContextHolderStrategy.class);
+		if (names.length == 1) {
+			SecurityContextHolderStrategy strategy = context.getBean(SecurityContextHolderStrategy.class);
+			this.securityContextHolderStrategy = strategy;
+		}
+	}
+
 	@Override
 	public int doStartTag() throws JspException {
 		return super.doStartTag();
@@ -86,12 +105,11 @@ public class AuthenticationTag extends TagSupport {
 		Object result = null;
 		// determine the value by...
 		if (this.property != null) {
-			if ((SecurityContextHolder.getContext() == null)
-					|| !(SecurityContextHolder.getContext() instanceof SecurityContext)
-					|| (SecurityContextHolder.getContext().getAuthentication() == null)) {
+			SecurityContext context = this.securityContextHolderStrategy.getContext();
+			if ((context == null) || !(context instanceof SecurityContext) || (context.getAuthentication() == null)) {
 				return Tag.EVAL_PAGE;
 			}
-			Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+			Authentication auth = context.getAuthentication();
 			if (auth.getPrincipal() == null) {
 				return Tag.EVAL_PAGE;
 			}

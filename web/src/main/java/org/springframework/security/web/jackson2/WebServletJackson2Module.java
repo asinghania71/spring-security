@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-2016 the original author or authors.
+ * Copyright 2015-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,23 +16,23 @@
 
 package org.springframework.security.web.jackson2;
 
-import javax.servlet.http.Cookie;
-
 import com.fasterxml.jackson.core.Version;
 import com.fasterxml.jackson.databind.module.SimpleModule;
+import jakarta.servlet.http.Cookie;
 
 import org.springframework.security.jackson2.SecurityJackson2Modules;
 import org.springframework.security.web.authentication.WebAuthenticationDetails;
+import org.springframework.security.web.authentication.switchuser.SwitchUserGrantedAuthority;
 import org.springframework.security.web.savedrequest.DefaultSavedRequest;
 import org.springframework.security.web.savedrequest.SavedCookie;
 
 /**
- * Jackson module for spring-security-web related to servlet. This module register
- * {@link CookieMixin}, {@link SavedCookieMixin}, {@link DefaultSavedRequestMixin} and
- * {@link WebAuthenticationDetailsMixin}. If no default typing enabled by default then
- * it'll enable it because typing info is needed to properly serialize/deserialize
- * objects. In order to use this module just add this module into your ObjectMapper
- * configuration.
+ * Jackson module for spring-security-web related to servlet. This module registers
+ * {@link CookieMixin}, {@link SavedCookieMixin}, {@link DefaultSavedRequestMixin},
+ * {@link WebAuthenticationDetailsMixin}, and {@link SwitchUserGrantedAuthorityMixIn}. If
+ * no default typing is enabled by default then it will be enabled, because typing info is
+ * needed to properly serialize/deserialize objects. In order to use this module just add
+ * this module into your ObjectMapper configuration.
  *
  * <pre>
  *     ObjectMapper mapper = new ObjectMapper();
@@ -44,6 +44,7 @@ import org.springframework.security.web.savedrequest.SavedCookie;
  * @since 5.1
  * @see SecurityJackson2Modules
  */
+@SuppressWarnings("serial")
 public class WebServletJackson2Module extends SimpleModule {
 
 	public WebServletJackson2Module() {
@@ -57,6 +58,7 @@ public class WebServletJackson2Module extends SimpleModule {
 		context.setMixInAnnotations(SavedCookie.class, SavedCookieMixin.class);
 		context.setMixInAnnotations(DefaultSavedRequest.class, DefaultSavedRequestMixin.class);
 		context.setMixInAnnotations(WebAuthenticationDetails.class, WebAuthenticationDetailsMixin.class);
+		context.setMixInAnnotations(SwitchUserGrantedAuthority.class, SwitchUserGrantedAuthorityMixIn.class);
 	}
 
 }

@@ -31,22 +31,28 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.AuthorityUtils;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.context.SecurityContextHolderStrategy;
+import org.springframework.security.core.context.SecurityContextImpl;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
-import org.springframework.security.ldap.ApacheDsContainerConfig;
 import org.springframework.security.ldap.DefaultLdapUsernameToDnMapper;
 import org.springframework.security.ldap.SpringSecurityLdapTemplate;
+import org.springframework.security.ldap.UnboundIdContainerConfig;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
 /**
  * @author Luke Taylor
  * @author Eddú Meléndez
+ * @author Roman Zabaluev
  */
 @ExtendWith(SpringExtension.class)
-@ContextConfiguration(classes = ApacheDsContainerConfig.class)
+@ContextConfiguration(classes = UnboundIdContainerConfig.class)
 public class LdapUserDetailsManagerTests {
 
 	@Autowired
@@ -54,6 +60,8 @@ public class LdapUserDetailsManagerTests {
 
 	private static final List<GrantedAuthority> TEST_AUTHORITIES = AuthorityUtils.createAuthorityList("ROLE_CLOWNS",
 			"ROLE_ACROBATS");
+
+	private static final String DEFAULT_ROLE_PREFIX = "ROLE_";
 
 	private LdapUserDetailsManager mgr;
 
@@ -177,7 +185,7 @@ public class LdapUserDetailsManagerTests {
 		assertThatExceptionOfType(UsernameNotFoundException.class).isThrownBy(() -> this.mgr.loadUserByUsername("don"));
 
 		// Check that no authorities are left
-		assertThat(this.mgr.getUserAuthorities(this.mgr.usernameMapper.buildDn("don"), "don")).hasSize(0);
+		assertThat(this.mgr.getUserAuthorities(this.mgr.usernameMapper.buildLdapName("don"), "don")).hasSize(0);
 	}
 
 	@Test
@@ -192,13 +200,38 @@ public class LdapUserDetailsManagerTests {
 
 		this.mgr.createUser(p.createUserDetails());
 
-		SecurityContextHolder.getContext().setAuthentication(
-				new UsernamePasswordAuthenticationToken("johnyossarian", "yossarianspassword", TEST_AUTHORITIES));
+		SecurityContextHolder.getContext()
+			.setAuthentication(UsernamePasswordAuthenticationToken.authenticated("johnyossarian", "yossarianspassword",
+					TEST_AUTHORITIES));
 
 		this.mgr.changePassword("yossarianspassword", "yossariansnewpassword");
 
 		assertThat(this.template.compare("uid=johnyossarian,ou=test people", "userPassword", "yossariansnewpassword"))
-				.isTrue();
+			.isTrue();
+	}
+
+	@Test
+	public void testPasswordChangeUsesCustomSecurityContextHolderStrategy() {
+		InetOrgPerson.Essence p = new InetOrgPerson.Essence();
+		p.setDn("whocares");
+		p.setCn(new String[] { "John Yossarian" });
+		p.setSn("Yossarian");
+		p.setUid("johnyossarian");
+		p.setPassword("yossarianspassword");
+		p.setAuthorities(TEST_AUTHORITIES);
+
+		this.mgr.createUser(p.createUserDetails());
+
+		SecurityContextHolderStrategy strategy = mock(SecurityContextHolderStrategy.class);
+		given(strategy.getContext()).willReturn(new SecurityContextImpl(UsernamePasswordAuthenticationToken
+			.authenticated("johnyossarian", "yossarianspassword", TEST_AUTHORITIES)));
+		this.mgr.setSecurityContextHolderStrategy(strategy);
+
+		this.mgr.changePassword("yossarianspassword", "yossariansnewpassword");
+
+		assertThat(this.template.compare("uid=johnyossarian,ou=test people", "userPassword", "yossariansnewpassword"))
+			.isTrue();
+		verify(strategy).getContext();
 	}
 
 	@Test
@@ -211,10 +244,42 @@ public class LdapUserDetailsManagerTests {
 		p.setPassword("yossarianspassword");
 		p.setAuthorities(TEST_AUTHORITIES);
 		this.mgr.createUser(p.createUserDetails());
-		SecurityContextHolder.getContext().setAuthentication(
-				new UsernamePasswordAuthenticationToken("johnyossarian", "yossarianspassword", TEST_AUTHORITIES));
+		SecurityContextHolder.getContext()
+			.setAuthentication(UsernamePasswordAuthenticationToken.authenticated("johnyossarian", "yossarianspassword",
+					TEST_AUTHORITIES));
 		assertThatExceptionOfType(BadCredentialsException.class)
-				.isThrownBy(() -> this.mgr.changePassword("wrongpassword", "yossariansnewpassword"));
+			.isThrownBy(() -> this.mgr.changePassword("wrongpassword", "yossariansnewpassword"));
+	}
+
+	@Test
+	public void testRoleNamesStartWithDefaultRolePrefix() {
+		this.mgr.setUsernameMapper(new DefaultLdapUsernameToDnMapper("ou=people", "uid"));
+		this.mgr.setGroupSearchBase("ou=groups");
+		LdapUserDetails bob = (LdapUserDetails) this.mgr.loadUserByUsername("bob");
+
+		assertThat(bob.getAuthorities()).isNotEmpty();
+
+		bob.getAuthorities()
+			.stream()
+			.map(GrantedAuthority::getAuthority)
+			.forEach((authority) -> assertThat(authority).startsWith(DEFAULT_ROLE_PREFIX));
+	}
+
+	@Test
+	public void testRoleNamesStartWithCustomRolePrefix() {
+		String customPrefix = "GROUP_";
+		this.mgr.setRolePrefix(customPrefix);
+
+		this.mgr.setUsernameMapper(new DefaultLdapUsernameToDnMapper("ou=people", "uid"));
+		this.mgr.setGroupSearchBase("ou=groups");
+		LdapUserDetails bob = (LdapUserDetails) this.mgr.loadUserByUsername("bob");
+
+		assertThat(bob.getAuthorities()).isNotEmpty();
+
+		bob.getAuthorities()
+			.stream()
+			.map(GrantedAuthority::getAuthority)
+			.forEach((authority) -> assertThat(authority).startsWith(customPrefix));
 	}
 
 }

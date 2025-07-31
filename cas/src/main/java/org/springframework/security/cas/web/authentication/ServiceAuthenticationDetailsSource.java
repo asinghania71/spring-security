@@ -1,5 +1,5 @@
 /*
- * Copyright 2011-2016 the original author or authors.
+ * Copyright 2011-2025 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,10 +19,11 @@ package org.springframework.security.cas.web.authentication;
 import java.net.MalformedURLException;
 import java.util.regex.Pattern;
 
-import javax.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletRequest;
 
 import org.springframework.security.authentication.AuthenticationDetailsSource;
 import org.springframework.security.cas.ServiceProperties;
+import org.springframework.security.cas.authentication.ServiceAuthenticationDetails;
 import org.springframework.util.Assert;
 
 /**

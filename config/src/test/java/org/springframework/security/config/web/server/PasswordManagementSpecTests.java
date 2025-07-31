@@ -19,6 +19,7 @@ package org.springframework.security.config.web.server;
 import org.apache.http.HttpHeaders;
 import org.junit.jupiter.api.Test;
 
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.reactive.ServerHttpSecurityConfigurationBuilder;
 import org.springframework.security.config.web.server.ServerHttpSecurity.PasswordManagementSpec;
 import org.springframework.security.test.web.reactive.server.WebTestClientBuilder;
@@ -37,11 +38,16 @@ public class PasswordManagementSpecTests {
 
 	@Test
 	public void whenChangePasswordPageNotSetThenDefaultChangePasswordPageUsed() {
-		this.http.passwordManagement();
+		this.http.passwordManagement(Customizer.withDefaults());
 
 		WebTestClient client = buildClient();
-		client.get().uri("/.well-known/change-password").exchange().expectStatus().isFound().expectHeader()
-				.valueEquals(HttpHeaders.LOCATION, "/change-password");
+		client.get()
+			.uri("/.well-known/change-password")
+			.exchange()
+			.expectStatus()
+			.isFound()
+			.expectHeader()
+			.valueEquals(HttpHeaders.LOCATION, "/change-password");
 	}
 
 	@Test
@@ -50,8 +56,13 @@ public class PasswordManagementSpecTests {
 				(passwordManagement) -> passwordManagement.changePasswordPage("/custom-change-password-page"));
 
 		WebTestClient client = buildClient();
-		client.get().uri("/.well-known/change-password").exchange().expectStatus().isFound().expectHeader()
-				.valueEquals(HttpHeaders.LOCATION, "/custom-change-password-page");
+		client.get()
+			.uri("/.well-known/change-password")
+			.exchange()
+			.expectStatus()
+			.isFound()
+			.expectHeader()
+			.valueEquals(HttpHeaders.LOCATION, "/custom-change-password-page");
 	}
 
 	private WebTestClient buildClient() {
@@ -60,20 +71,23 @@ public class PasswordManagementSpecTests {
 
 	@Test
 	public void whenSettingNullChangePasswordPage() {
-		assertThatIllegalArgumentException().isThrownBy(() -> this.http.passwordManagement().changePasswordPage(null))
-				.withMessage("changePasswordPage cannot be empty");
+		assertThatIllegalArgumentException()
+			.isThrownBy(() -> this.http.passwordManagement((password) -> password.changePasswordPage(null)))
+			.withMessage("changePasswordPage cannot be empty");
 	}
 
 	@Test
 	public void whenSettingEmptyChangePasswordPage() {
-		assertThatIllegalArgumentException().isThrownBy(() -> this.http.passwordManagement().changePasswordPage(""))
-				.withMessage("changePasswordPage cannot be empty");
+		assertThatIllegalArgumentException()
+			.isThrownBy(() -> this.http.passwordManagement((password) -> password.changePasswordPage("")))
+			.withMessage("changePasswordPage cannot be empty");
 	}
 
 	@Test
 	public void whenSettingBlankChangePasswordPage() {
-		assertThatIllegalArgumentException().isThrownBy(() -> this.http.passwordManagement().changePasswordPage(" "))
-				.withMessage("changePasswordPage cannot be empty");
+		assertThatIllegalArgumentException()
+			.isThrownBy(() -> this.http.passwordManagement((password) -> password.changePasswordPage(" ")))
+			.withMessage("changePasswordPage cannot be empty");
 	}
 
 }

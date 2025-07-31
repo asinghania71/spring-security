@@ -44,8 +44,8 @@ public class RunAsManagerImplTests {
 
 	@Test
 	public void testDoesNotReturnAdditionalAuthoritiesIfCalledWithoutARunAsSetting() {
-		UsernamePasswordAuthenticationToken inputToken = new UsernamePasswordAuthenticationToken("Test", "Password",
-				AuthorityUtils.createAuthorityList("ROLE_ONE", "ROLE_TWO"));
+		UsernamePasswordAuthenticationToken inputToken = UsernamePasswordAuthenticationToken.authenticated("Test",
+				"Password", AuthorityUtils.createAuthorityList("ROLE_ONE", "ROLE_TWO"));
 		RunAsManagerImpl runAs = new RunAsManagerImpl();
 		runAs.setKey("my_password");
 		Authentication resultingToken = runAs.buildRunAs(inputToken, new Object(),
@@ -55,8 +55,8 @@ public class RunAsManagerImplTests {
 
 	@Test
 	public void testRespectsRolePrefix() {
-		UsernamePasswordAuthenticationToken inputToken = new UsernamePasswordAuthenticationToken("Test", "Password",
-				AuthorityUtils.createAuthorityList("ONE", "TWO"));
+		UsernamePasswordAuthenticationToken inputToken = UsernamePasswordAuthenticationToken.authenticated("Test",
+				"Password", AuthorityUtils.createAuthorityList("ONE", "TWO"));
 		RunAsManagerImpl runAs = new RunAsManagerImpl();
 		runAs.setKey("my_password");
 		runAs.setRolePrefix("FOOBAR_");
@@ -66,17 +66,17 @@ public class RunAsManagerImplTests {
 		assertThat(result.getPrincipal()).isEqualTo(inputToken.getPrincipal());
 		assertThat(result.getCredentials()).isEqualTo(inputToken.getCredentials());
 		Set<String> authorities = AuthorityUtils.authorityListToSet(result.getAuthorities());
-		assertThat(authorities.contains("FOOBAR_RUN_AS_SOMETHING")).isTrue();
-		assertThat(authorities.contains("ONE")).isTrue();
-		assertThat(authorities.contains("TWO")).isTrue();
+		assertThat(authorities).contains("FOOBAR_RUN_AS_SOMETHING");
+		assertThat(authorities).contains("ONE");
+		assertThat(authorities).contains("TWO");
 		RunAsUserToken resultCast = (RunAsUserToken) result;
 		assertThat(resultCast.getKeyHash()).isEqualTo("my_password".hashCode());
 	}
 
 	@Test
 	public void testReturnsAdditionalGrantedAuthorities() {
-		UsernamePasswordAuthenticationToken inputToken = new UsernamePasswordAuthenticationToken("Test", "Password",
-				AuthorityUtils.createAuthorityList("ROLE_ONE", "ROLE_TWO"));
+		UsernamePasswordAuthenticationToken inputToken = UsernamePasswordAuthenticationToken.authenticated("Test",
+				"Password", AuthorityUtils.createAuthorityList("ROLE_ONE", "ROLE_TWO"));
 		RunAsManagerImpl runAs = new RunAsManagerImpl();
 		runAs.setKey("my_password");
 		Authentication result = runAs.buildRunAs(inputToken, new Object(),
@@ -87,9 +87,9 @@ public class RunAsManagerImplTests {
 		assertThat(result.getPrincipal()).isEqualTo(inputToken.getPrincipal());
 		assertThat(result.getCredentials()).isEqualTo(inputToken.getCredentials());
 		Set<String> authorities = AuthorityUtils.authorityListToSet(result.getAuthorities());
-		assertThat(authorities.contains("ROLE_RUN_AS_SOMETHING")).isTrue();
-		assertThat(authorities.contains("ROLE_ONE")).isTrue();
-		assertThat(authorities.contains("ROLE_TWO")).isTrue();
+		assertThat(authorities).contains("ROLE_RUN_AS_SOMETHING");
+		assertThat(authorities).contains("ROLE_ONE");
+		assertThat(authorities).contains("ROLE_TWO");
 		RunAsUserToken resultCast = (RunAsUserToken) result;
 		assertThat(resultCast.getKeyHash()).isEqualTo("my_password".hashCode());
 	}

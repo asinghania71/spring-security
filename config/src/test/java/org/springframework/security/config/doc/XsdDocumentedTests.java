@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2020 the original author or authors.
+ * Copyright 2002-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,12 +30,12 @@ import java.util.TreeMap;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import org.apache.commons.lang.StringUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.security.config.http.SecurityFiltersAssertions;
+import org.springframework.util.StringUtils;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -65,7 +65,7 @@ public class XsdDocumentedTests {
 
 	String schema31xDocumentLocation = "org/springframework/security/config/spring-security-3.1.xsd";
 
-	String schemaDocumentLocation = "org/springframework/security/config/spring-security-5.6.xsd";
+	String schemaDocumentLocation = "org/springframework/security/config/spring-security-7.0.xsd";
 
 	XmlSupport xml = new XmlSupport();
 
@@ -86,7 +86,7 @@ public class XsdDocumentedTests {
 				.flatMap(XmlNode::children)
 				.flatMap(XmlNode::children)
 				.map((node) -> node.attribute("value"))
-				.filter(StringUtils::isNotEmpty)
+				.filter(StringUtils::hasText)
 				.collect(Collectors.toList());
 		// @formatter:on
 		SecurityFiltersAssertions.assertEquals(nodes);
@@ -129,7 +129,7 @@ public class XsdDocumentedTests {
 				.flatMap(XmlNode::children)
 				.flatMap(XmlNode::children)
 				.map((node) -> node.attribute("value"))
-				.filter(StringUtils::isNotEmpty)
+				.filter(StringUtils::hasText)
 				.collect(Collectors.toList());
 		// @formatter:on
 		assertThat(nodes).isEqualTo(expected);
@@ -150,8 +150,9 @@ public class XsdDocumentedTests {
 				.getParentFile()
 				.list((dir, name) -> name.endsWith(".xsd"));
 		// @formatter:on
-		assertThat(schemas.length).isEqualTo(18)
-				.withFailMessage("the count is equal to 18, if not then schemaDocument needs updating");
+		assertThat(schemas.length)
+			.withFailMessage("the count is equal to 28, if not then schemaDocument needs updating")
+			.isEqualTo(28);
 	}
 
 	/**
@@ -257,11 +258,11 @@ public class XsdDocumentedTests {
 			}
 		});
 		assertThat(docAttrNameToChildren)
-				.describedAs(toString(docAttrNameToChildren) + "\n!=\n\n" + toString(schemaAttrNameToChildren))
-				.containsExactlyInAnyOrderEntriesOf(schemaAttrNameToChildren);
+			.describedAs(toString(docAttrNameToChildren) + "\n!=\n\n" + toString(schemaAttrNameToChildren))
+			.containsExactlyInAnyOrderEntriesOf(schemaAttrNameToChildren);
 		assertThat(docAttrNameToParents)
-				.describedAs(toString(docAttrNameToParents) + "\n!=\n\n" + toString(schemaAttrNameToParents))
-				.containsExactlyInAnyOrderEntriesOf(schemaAttrNameToParents);
+			.describedAs(toString(docAttrNameToParents) + "\n!=\n\n" + toString(schemaAttrNameToParents))
+			.containsExactlyInAnyOrderEntriesOf(schemaAttrNameToParents);
 	}
 
 	private String toString(Map<?, ?> map) {

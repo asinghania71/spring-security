@@ -25,7 +25,6 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockServletContext;
-import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.CsrfRequestPostProcessor;
 import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -52,8 +51,7 @@ public class SecurityMockMvcRequestBuildersFormLoginTests {
 	@Test
 	public void defaults() {
 		MockHttpServletRequest request = formLogin().buildRequest(this.servletContext);
-		CsrfToken token = (CsrfToken) request
-				.getAttribute(CsrfRequestPostProcessor.TestCsrfTokenRepository.TOKEN_ATTR_NAME);
+		CsrfToken token = (CsrfToken) request.getAttribute(CsrfToken.class.getName());
 		assertThat(request.getParameter("username")).isEqualTo("user");
 		assertThat(request.getParameter("password")).isEqualTo("password");
 		assertThat(request.getMethod()).isEqualTo("POST");
@@ -64,10 +62,10 @@ public class SecurityMockMvcRequestBuildersFormLoginTests {
 
 	@Test
 	public void custom() {
-		MockHttpServletRequest request = formLogin("/login").user("username", "admin").password("password", "secret")
-				.buildRequest(this.servletContext);
-		CsrfToken token = (CsrfToken) request
-				.getAttribute(CsrfRequestPostProcessor.TestCsrfTokenRepository.TOKEN_ATTR_NAME);
+		MockHttpServletRequest request = formLogin("/login").user("username", "admin")
+			.password("password", "secret")
+			.buildRequest(this.servletContext);
+		CsrfToken token = (CsrfToken) request.getAttribute(CsrfToken.class.getName());
 		assertThat(request.getParameter("username")).isEqualTo("admin");
 		assertThat(request.getParameter("password")).isEqualTo("secret");
 		assertThat(request.getMethod()).isEqualTo("POST");
@@ -78,9 +76,10 @@ public class SecurityMockMvcRequestBuildersFormLoginTests {
 	@Test
 	public void customWithUriVars() {
 		MockHttpServletRequest request = formLogin().loginProcessingUrl("/uri-login/{var1}/{var2}", "val1", "val2")
-				.user("username", "admin").password("password", "secret").buildRequest(this.servletContext);
-		CsrfToken token = (CsrfToken) request
-				.getAttribute(CsrfRequestPostProcessor.TestCsrfTokenRepository.TOKEN_ATTR_NAME);
+			.user("username", "admin")
+			.password("password", "secret")
+			.buildRequest(this.servletContext);
+		CsrfToken token = (CsrfToken) request.getAttribute(CsrfToken.class.getName());
 		assertThat(request.getParameter("username")).isEqualTo("admin");
 		assertThat(request.getParameter("password")).isEqualTo("secret");
 		assertThat(request.getMethod()).isEqualTo("POST");
@@ -98,11 +97,12 @@ public class SecurityMockMvcRequestBuildersFormLoginTests {
 		RequestPostProcessor postProcessor = mock(RequestPostProcessor.class);
 		given(postProcessor.postProcessRequest(any())).willAnswer((i) -> i.getArgument(0));
 		MockMvc mockMvc = MockMvcBuilders.standaloneSetup(new Object())
-				.defaultRequest(MockMvcRequestBuilders.get("/").with(postProcessor)).build();
+			.defaultRequest(MockMvcRequestBuilders.get("/").with(postProcessor))
+			.build();
 		MvcResult mvcResult = mockMvc.perform(formLogin()).andReturn();
 		assertThat(mvcResult.getRequest().getMethod()).isEqualTo(HttpMethod.POST.name());
 		assertThat(mvcResult.getRequest().getHeader("Accept"))
-				.isEqualTo(MediaType.toString(Arrays.asList(MediaType.APPLICATION_FORM_URLENCODED)));
+			.isEqualTo(MediaType.toString(Arrays.asList(MediaType.APPLICATION_FORM_URLENCODED)));
 		assertThat(mvcResult.getRequest().getParameter("username")).isEqualTo("user");
 		assertThat(mvcResult.getRequest().getParameter("password")).isEqualTo("password");
 		assertThat(mvcResult.getRequest().getRequestURI()).isEqualTo("/login");
@@ -113,8 +113,9 @@ public class SecurityMockMvcRequestBuildersFormLoginTests {
 	// gh-3920
 	@Test
 	public void usesAcceptMediaForContentNegotiation() {
-		MockHttpServletRequest request = formLogin("/login").user("username", "admin").password("password", "secret")
-				.buildRequest(this.servletContext);
+		MockHttpServletRequest request = formLogin("/login").user("username", "admin")
+			.password("password", "secret")
+			.buildRequest(this.servletContext);
 		assertThat(request.getHeader("Accept")).isEqualTo(MediaType.APPLICATION_FORM_URLENCODED_VALUE);
 	}
 

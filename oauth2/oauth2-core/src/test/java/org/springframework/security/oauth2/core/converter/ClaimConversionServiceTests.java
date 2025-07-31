@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2019 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,8 +26,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import com.nimbusds.jose.shaded.json.JSONArray;
-import com.nimbusds.jose.shaded.json.JSONObject;
+import net.minidev.json.JSONArray;
+import net.minidev.json.JSONObject;
 import org.assertj.core.util.Lists;
 import org.junit.jupiter.api.Test;
 
@@ -101,16 +101,16 @@ public class ClaimConversionServiceTests {
 	public void convertInstantWhenNumberThenConverts() {
 		Instant instant = Instant.now();
 		assertThat(this.conversionService.convert(instant.getEpochSecond(), Instant.class))
-				.isEqualTo(instant.truncatedTo(ChronoUnit.SECONDS));
+			.isEqualTo(instant.truncatedTo(ChronoUnit.SECONDS));
 	}
 
 	@Test
 	public void convertInstantWhenStringThenConverts() {
 		Instant instant = Instant.now();
 		assertThat(this.conversionService.convert(String.valueOf(instant.getEpochSecond()), Instant.class))
-				.isEqualTo(instant.truncatedTo(ChronoUnit.SECONDS));
+			.isEqualTo(instant.truncatedTo(ChronoUnit.SECONDS));
 		assertThat(this.conversionService.convert(String.valueOf(instant.toString()), Instant.class))
-				.isEqualTo(instant);
+			.isEqualTo(instant);
 	}
 
 	@Test
@@ -155,7 +155,7 @@ public class ClaimConversionServiceTests {
 	@Test
 	public void convertCollectionStringWhenListNumberThenConverts() {
 		assertThat(this.conversionService.convert(Lists.list(1, 2, 3, 4), Collection.class))
-				.isEqualTo(Lists.list("1", "2", "3", "4"));
+			.isEqualTo(Lists.list("1", "2", "3", "4"));
 	}
 
 	@Test
@@ -166,14 +166,14 @@ public class ClaimConversionServiceTests {
 		jsonArray.add("3");
 		jsonArray.add(null);
 		assertThat(this.conversionService.convert(jsonArray, List.class)).isNotInstanceOf(JSONArray.class)
-				.isEqualTo(Lists.list("1", "2", "3"));
+			.isEqualTo(Lists.list("1", "2", "3"));
 	}
 
 	@Test
 	public void convertCollectionStringWhenNotConvertibleThenReturnSingletonList() {
 		String string = "not-convertible-collection";
 		assertThat(this.conversionService.convert(string, Collection.class))
-				.isEqualTo(Collections.singletonList(string));
+			.isEqualTo(Collections.singletonList(string));
 	}
 
 	@Test
@@ -190,7 +190,7 @@ public class ClaimConversionServiceTests {
 	@Test
 	public void convertListStringWhenListNumberThenConverts() {
 		assertThat(this.conversionService.convert(Lists.list(1, 2, 3, 4), List.class))
-				.isEqualTo(Lists.list("1", "2", "3", "4"));
+			.isEqualTo(Lists.list("1", "2", "3", "4"));
 	}
 
 	@Test
@@ -214,7 +214,7 @@ public class ClaimConversionServiceTests {
 			}
 		};
 		assertThat(this.conversionService.convert(mapStringObject, Map.class)).isNotSameAs(mapStringObject)
-				.isEqualTo(mapStringObject);
+			.isEqualTo(mapStringObject);
 	}
 
 	@Test
@@ -249,7 +249,7 @@ public class ClaimConversionServiceTests {
 			}
 		};
 		assertThat(this.conversionService.convert(jsonObject, Map.class)).isNotInstanceOf(JSONObject.class)
-				.isEqualTo(mapStringObject);
+			.isEqualTo(mapStringObject);
 	}
 
 	@Test

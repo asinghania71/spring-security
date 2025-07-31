@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2016 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,30 +16,40 @@
 
 package org.springframework.security.config.annotation.web.builders;
 
-import javax.servlet.http.HttpServletResponse;
+import java.io.IOException;
 
+import io.micrometer.observation.ObservationRegistry;
+import io.micrometer.observation.ObservationTextPublisher;
+import jakarta.servlet.Filter;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpStatus;
 import org.springframework.mock.web.MockFilterChain;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.mock.web.MockServletContext;
-import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
-import org.springframework.security.web.FilterChainProxy;
+import org.springframework.security.config.annotation.web.configuration.WebSecurityCustomizer;
+import org.springframework.security.core.userdetails.PasswordEncodedUser;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.provisioning.InMemoryUserDetailsManager;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.firewall.HttpStatusRequestRejectedHandler;
+import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.context.support.AnnotationConfigWebApplicationContext;
 import org.springframework.web.servlet.config.annotation.EnableWebMvc;
-import org.springframework.web.servlet.config.annotation.PathMatchConfigurer;
-import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.security.config.Customizer.withDefaults;
 
 /**
  * @author Rob Winch
@@ -55,7 +65,7 @@ public class WebSecurityTests {
 	MockFilterChain chain;
 
 	@Autowired
-	FilterChainProxy springSecurityFilterChain;
+	Filter springSecurityFilterChain;
 
 	@BeforeEach
 	public void setup() {
@@ -73,47 +83,31 @@ public class WebSecurityTests {
 	}
 
 	@Test
-	public void ignoringMvcMatcher() throws Exception {
-		loadConfig(MvcMatcherConfig.class, LegacyMvcMatchingConfig.class);
-		this.request.setRequestURI("/path");
+	public void requestRejectedHandlerInvoked() throws ServletException, IOException {
+		loadConfig(DefaultConfig.class);
+		this.request.setServletPath("/spring");
+		this.request.setRequestURI("/spring/\u0019path");
 		this.springSecurityFilterChain.doFilter(this.request, this.response, this.chain);
-		assertThat(this.response.getStatus()).isEqualTo(HttpServletResponse.SC_OK);
-		setup();
-		this.request.setRequestURI("/path.html");
-		this.springSecurityFilterChain.doFilter(this.request, this.response, this.chain);
-		assertThat(this.response.getStatus()).isEqualTo(HttpServletResponse.SC_OK);
-		setup();
-		this.request.setRequestURI("/path/");
-		this.springSecurityFilterChain.doFilter(this.request, this.response, this.chain);
-		assertThat(this.response.getStatus()).isEqualTo(HttpServletResponse.SC_OK);
-		setup();
-		this.request.setRequestURI("/other");
-		this.springSecurityFilterChain.doFilter(this.request, this.response, this.chain);
-		assertThat(this.response.getStatus()).isEqualTo(HttpServletResponse.SC_UNAUTHORIZED);
+		assertThat(this.response.getStatus()).isEqualTo(HttpServletResponse.SC_BAD_REQUEST);
 	}
 
 	@Test
-	public void ignoringMvcMatcherServletPath() throws Exception {
-		loadConfig(MvcMatcherServletPathConfig.class, LegacyMvcMatchingConfig.class);
+	public void customRequestRejectedHandlerInvoked() throws ServletException, IOException {
+		loadConfig(RequestRejectedHandlerConfig.class);
 		this.request.setServletPath("/spring");
-		this.request.setRequestURI("/spring/path");
+		this.request.setRequestURI("/spring/\u0019path");
 		this.springSecurityFilterChain.doFilter(this.request, this.response, this.chain);
-		assertThat(this.response.getStatus()).isEqualTo(HttpServletResponse.SC_OK);
-		setup();
+		assertThat(this.response.getStatus()).isEqualTo(HttpServletResponse.SC_BAD_REQUEST);
+	}
+
+	// gh-12548
+	@Test
+	public void requestRejectedHandlerInvokedWhenOperationalObservationRegistry() throws ServletException, IOException {
+		loadConfig(ObservationRegistryConfig.class);
 		this.request.setServletPath("/spring");
-		this.request.setRequestURI("/spring/path.html");
+		this.request.setRequestURI("/spring/\u0019path");
 		this.springSecurityFilterChain.doFilter(this.request, this.response, this.chain);
-		assertThat(this.response.getStatus()).isEqualTo(HttpServletResponse.SC_OK);
-		setup();
-		this.request.setServletPath("/spring");
-		this.request.setRequestURI("/spring/path/");
-		this.springSecurityFilterChain.doFilter(this.request, this.response, this.chain);
-		assertThat(this.response.getStatus()).isEqualTo(HttpServletResponse.SC_OK);
-		setup();
-		this.request.setServletPath("/other");
-		this.request.setRequestURI("/other/path");
-		this.springSecurityFilterChain.doFilter(this.request, this.response, this.chain);
-		assertThat(this.response.getStatus()).isEqualTo(HttpServletResponse.SC_UNAUTHORIZED);
+		assertThat(this.response.getStatus()).isEqualTo(HttpServletResponse.SC_BAD_REQUEST);
 	}
 
 	public void loadConfig(Class<?>... configs) {
@@ -125,35 +119,34 @@ public class WebSecurityTests {
 	}
 
 	@EnableWebSecurity
+	static class DefaultConfig {
+
+	}
+
+	@EnableWebSecurity
 	@Configuration
 	@EnableWebMvc
-	static class MvcMatcherConfig extends WebSecurityConfigurerAdapter {
+	static class MvcMatcherConfig {
 
-		@Override
-		public void configure(WebSecurity web) {
-			// @formatter:off
-			web
-				.ignoring()
-					.mvcMatchers("/path");
-			// @formatter:on
+		@Bean
+		WebSecurityCustomizer webSecurityCustomizer(PathPatternRequestMatcher.Builder builder) {
+			return (web) -> web.ignoring().requestMatchers(builder.matcher("/path"));
 		}
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.httpBasic().and()
-				.authorizeRequests()
-					.anyRequest().denyAll();
+				.httpBasic(withDefaults())
+				.authorizeHttpRequests((requests) -> requests
+					.anyRequest().denyAll());
 			// @formatter:on
+			return http.build();
 		}
 
-		@Override
-		protected void configure(AuthenticationManagerBuilder auth) throws Exception {
-			// @formatter:off
-			auth
-				.inMemoryAuthentication();
-			// @formatter:on
+		@Bean
+		UserDetailsService userDetailsService() {
+			return new InMemoryUserDetailsManager(PasswordEncodedUser.user());
 		}
 
 		@RestController
@@ -171,34 +164,29 @@ public class WebSecurityTests {
 	@EnableWebSecurity
 	@Configuration
 	@EnableWebMvc
-	static class MvcMatcherServletPathConfig extends WebSecurityConfigurerAdapter {
+	static class MvcMatcherServletPathConfig {
 
-		@Override
-		public void configure(WebSecurity web) {
-			// @formatter:off
-			web
-				.ignoring()
-					.mvcMatchers("/path").servletPath("/spring")
-					.mvcMatchers("/notused");
-			// @formatter:on
+		@Bean
+		WebSecurityCustomizer webSecurityCustomizer(PathPatternRequestMatcher.Builder builder) {
+			return (web) -> web.ignoring()
+				.requestMatchers(builder.basePath("/spring").matcher("/path"))
+				.requestMatchers("/notused");
 		}
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.httpBasic().and()
-				.authorizeRequests()
-					.anyRequest().denyAll();
+				.httpBasic(withDefaults())
+				.authorizeHttpRequests((requests) -> requests
+					.anyRequest().denyAll());
 			// @formatter:on
+			return http.build();
 		}
 
-		@Override
-		protected void configure(AuthenticationManagerBuilder auth) throws Exception {
-			// @formatter:off
-			auth
-				.inMemoryAuthentication();
-			// @formatter:on
+		@Bean
+		UserDetailsService userDetailsService() {
+			return new InMemoryUserDetailsManager(PasswordEncodedUser.user());
 		}
 
 		@RestController
@@ -214,11 +202,26 @@ public class WebSecurityTests {
 	}
 
 	@Configuration
-	static class LegacyMvcMatchingConfig implements WebMvcConfigurer {
+	@EnableWebSecurity
+	static class RequestRejectedHandlerConfig {
 
-		@Override
-		public void configurePathMatch(PathMatchConfigurer configurer) {
-			configurer.setUseSuffixPatternMatch(true);
+		@Bean
+		WebSecurityCustomizer webSecurityCustomizer() {
+			return (web) -> web
+				.requestRejectedHandler(new HttpStatusRequestRejectedHandler(HttpStatus.BAD_REQUEST.value()));
+		}
+
+	}
+
+	@Configuration
+	@EnableWebSecurity
+	static class ObservationRegistryConfig {
+
+		@Bean
+		ObservationRegistry observationRegistry() {
+			ObservationRegistry observationRegistry = ObservationRegistry.create();
+			observationRegistry.observationConfig().observationHandler(new ObservationTextPublisher());
+			return observationRegistry;
 		}
 
 	}

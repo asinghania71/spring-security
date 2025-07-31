@@ -17,17 +17,22 @@
 package org.springframework.security.acls.domain;
 
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.access.hierarchicalroles.NullRoleHierarchy;
+import org.springframework.security.access.hierarchicalroles.RoleHierarchy;
 import org.springframework.security.acls.model.Acl;
 import org.springframework.security.acls.model.Sid;
 import org.springframework.security.acls.model.SidRetrievalStrategy;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.AuthorityUtils;
+import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.context.SecurityContextHolderStrategy;
 import org.springframework.util.Assert;
 
 /**
@@ -46,6 +51,9 @@ import org.springframework.util.Assert;
  */
 public class AclAuthorizationStrategyImpl implements AclAuthorizationStrategy {
 
+	private SecurityContextHolderStrategy securityContextHolderStrategy = SecurityContextHolder
+		.getContextHolderStrategy();
+
 	private final GrantedAuthority gaGeneralChanges;
 
 	private final GrantedAuthority gaModifyAuditing;
@@ -53,6 +61,8 @@ public class AclAuthorizationStrategyImpl implements AclAuthorizationStrategy {
 	private final GrantedAuthority gaTakeOwnership;
 
 	private SidRetrievalStrategy sidRetrievalStrategy = new SidRetrievalStrategyImpl();
+
+	private RoleHierarchy roleHierarchy = new NullRoleHierarchy();
 
 	/**
 	 * Constructor. The only mandatory parameter relates to the system-wide
@@ -81,12 +91,12 @@ public class AclAuthorizationStrategyImpl implements AclAuthorizationStrategy {
 
 	@Override
 	public void securityCheck(Acl acl, int changeType) {
-		if ((SecurityContextHolder.getContext() == null)
-				|| (SecurityContextHolder.getContext().getAuthentication() == null)
-				|| !SecurityContextHolder.getContext().getAuthentication().isAuthenticated()) {
+		SecurityContext context = this.securityContextHolderStrategy.getContext();
+		if ((context == null) || (context.getAuthentication() == null)
+				|| !context.getAuthentication().isAuthenticated()) {
 			throw new AccessDeniedException("Authenticated principal required to operate with ACLs");
 		}
-		Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+		Authentication authentication = context.getAuthentication();
 		// Check if authorized by virtue of ACL ownership
 		Sid currentUser = createCurrentUser(authentication);
 		if (currentUser.equals(acl.getOwner())
@@ -95,7 +105,9 @@ public class AclAuthorizationStrategyImpl implements AclAuthorizationStrategy {
 		}
 
 		// Iterate this principal's authorities to determine right
-		Set<String> authorities = AuthorityUtils.authorityListToSet(authentication.getAuthorities());
+		Collection<? extends GrantedAuthority> reachableGrantedAuthorities = this.roleHierarchy
+			.getReachableGrantedAuthorities(authentication.getAuthorities());
+		Set<String> authorities = AuthorityUtils.authorityListToSet(reachableGrantedAuthorities);
 		if (acl.getOwner() instanceof GrantedAuthoritySid
 				&& authorities.contains(((GrantedAuthoritySid) acl.getOwner()).getGrantedAuthority())) {
 			return;
@@ -144,6 +156,27 @@ public class AclAuthorizationStrategyImpl implements AclAuthorizationStrategy {
 	public void setSidRetrievalStrategy(SidRetrievalStrategy sidRetrievalStrategy) {
 		Assert.notNull(sidRetrievalStrategy, "SidRetrievalStrategy required");
 		this.sidRetrievalStrategy = sidRetrievalStrategy;
+	}
+
+	/**
+	 * Sets the {@link SecurityContextHolderStrategy} to use. The default action is to use
+	 * the {@link SecurityContextHolderStrategy} stored in {@link SecurityContextHolder}.
+	 *
+	 * @since 5.8
+	 */
+	public void setSecurityContextHolderStrategy(SecurityContextHolderStrategy securityContextHolderStrategy) {
+		Assert.notNull(securityContextHolderStrategy, "securityContextHolderStrategy cannot be null");
+		this.securityContextHolderStrategy = securityContextHolderStrategy;
+	}
+
+	/**
+	 * Sets the {@link RoleHierarchy} to use. The default is to use a
+	 * {@link NullRoleHierarchy}
+	 * @since 6.4
+	 */
+	public void setRoleHierarchy(RoleHierarchy roleHierarchy) {
+		Assert.notNull(roleHierarchy, "roleHierarchy cannot be null");
+		this.roleHierarchy = roleHierarchy;
 	}
 
 }

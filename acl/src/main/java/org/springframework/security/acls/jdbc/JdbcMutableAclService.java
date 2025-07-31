@@ -40,6 +40,7 @@ import org.springframework.security.acls.model.ObjectIdentity;
 import org.springframework.security.acls.model.Sid;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.context.SecurityContextHolderStrategy;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.util.Assert;
 
@@ -63,6 +64,9 @@ public class JdbcMutableAclService extends JdbcAclService implements MutableAclS
 	private static final String DEFAULT_INSERT_INTO_ACL_CLASS = "insert into acl_class (class) values (?)";
 
 	private static final String DEFAULT_INSERT_INTO_ACL_CLASS_WITH_ID = "insert into acl_class (class, class_id_type) values (?, ?)";
+
+	private SecurityContextHolderStrategy securityContextHolderStrategy = SecurityContextHolder
+		.getContextHolderStrategy();
 
 	private boolean foreignKeysInDatabase = true;
 
@@ -115,7 +119,7 @@ public class JdbcMutableAclService extends JdbcAclService implements MutableAclS
 
 		// Need to retrieve the current principal, in order to know who "owns" this ACL
 		// (can be changed later on)
-		Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+		Authentication auth = this.securityContextHolderStrategy.getContext().getAuthentication();
 		PrincipalSid sid = new PrincipalSid(auth);
 
 		// Create the acl_object_identity row
@@ -186,8 +190,7 @@ public class JdbcMutableAclService extends JdbcAclService implements MutableAclS
 	 * @return the primary key or null if not found
 	 */
 	protected Long createOrRetrieveClassPrimaryKey(String type, boolean allowCreate, Class idType) {
-		List<Long> classIds = this.jdbcOperations.queryForList(this.selectClassPrimaryKey, new Object[] { type },
-				Long.class);
+		List<Long> classIds = this.jdbcOperations.queryForList(this.selectClassPrimaryKey, Long.class, type);
 
 		if (!classIds.isEmpty()) {
 			return classIds.get(0);
@@ -238,8 +241,8 @@ public class JdbcMutableAclService extends JdbcAclService implements MutableAclS
 	 * @return the primary key or null if not found
 	 */
 	protected Long createOrRetrieveSidPrimaryKey(String sidName, boolean sidIsPrincipal, boolean allowCreate) {
-		List<Long> sidIds = this.jdbcOperations.queryForList(this.selectSidPrimaryKey,
-				new Object[] { sidIsPrincipal, sidName }, Long.class);
+		List<Long> sidIds = this.jdbcOperations.queryForList(this.selectSidPrimaryKey, Long.class, sidIsPrincipal,
+				sidName);
 		if (!sidIds.isEmpty()) {
 			return sidIds.get(0);
 		}
@@ -471,6 +474,17 @@ public class JdbcMutableAclService extends JdbcAclService implements MutableAclS
 				log.debug("Insert class statement has already been overridden, so not overridding the default");
 			}
 		}
+	}
+
+	/**
+	 * Sets the {@link SecurityContextHolderStrategy} to use. The default action is to use
+	 * the {@link SecurityContextHolderStrategy} stored in {@link SecurityContextHolder}.
+	 *
+	 * @since 5.8
+	 */
+	public void setSecurityContextHolderStrategy(SecurityContextHolderStrategy securityContextHolderStrategy) {
+		Assert.notNull(securityContextHolderStrategy, "securityContextHolderStrategy cannot be null");
+		this.securityContextHolderStrategy = securityContextHolderStrategy;
 	}
 
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,13 +18,14 @@ package org.springframework.security.oauth2.client.web;
 
 import java.io.IOException;
 
-import javax.servlet.FilterChain;
-import javax.servlet.ServletException;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 
 import org.springframework.core.log.LogMessage;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.oauth2.client.ClientAuthorizationRequiredException;
 import org.springframework.security.oauth2.client.registration.ClientRegistration;
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
@@ -32,6 +33,7 @@ import org.springframework.security.oauth2.core.AuthorizationGrantType;
 import org.springframework.security.oauth2.core.endpoint.OAuth2AuthorizationRequest;
 import org.springframework.security.web.DefaultRedirectStrategy;
 import org.springframework.security.web.RedirectStrategy;
+import org.springframework.security.web.authentication.AuthenticationFailureHandler;
 import org.springframework.security.web.savedrequest.HttpSessionRequestCache;
 import org.springframework.security.web.savedrequest.RequestCache;
 import org.springframework.security.web.util.ThrowableAnalyzer;
@@ -39,9 +41,8 @@ import org.springframework.util.Assert;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
- * This {@code Filter} initiates the authorization code grant or implicit grant flow by
- * redirecting the End-User's user-agent to the Authorization Server's Authorization
- * Endpoint.
+ * This {@code Filter} initiates the authorization code grant flow by redirecting the
+ * End-User's user-agent to the Authorization Server's Authorization Endpoint.
  *
  * <p>
  * It builds the OAuth 2.0 Authorization Request, which is used as the redirect
@@ -80,22 +81,17 @@ import org.springframework.web.filter.OncePerRequestFilter;
  * @see <a target="_blank" href=
  * "https://tools.ietf.org/html/rfc6749#section-4.1.1">Section 4.1.1 Authorization Request
  * (Authorization Code)</a>
- * @see <a target="_blank" href="https://tools.ietf.org/html/rfc6749#section-4.2">Section
- * 4.2 Implicit Grant</a>
- * @see <a target="_blank" href=
- * "https://tools.ietf.org/html/rfc6749#section-4.2.1">Section 4.2.1 Authorization Request
- * (Implicit)</a>
  */
 public class OAuth2AuthorizationRequestRedirectFilter extends OncePerRequestFilter {
 
 	/**
 	 * The default base {@code URI} used for authorization requests.
 	 */
-	public static final String DEFAULT_AUTHORIZATION_REQUEST_BASE_URI = "/oauth2/authorization";
+	public static final String DEFAULT_AUTHORIZATION_REQUEST_BASE_URI = DefaultOAuth2AuthorizationRequestResolver.DEFAULT_AUTHORIZATION_REQUEST_BASE_URI;
 
 	private final ThrowableAnalyzer throwableAnalyzer = new DefaultThrowableAnalyzer();
 
-	private final RedirectStrategy authorizationRedirectStrategy = new DefaultRedirectStrategy();
+	private RedirectStrategy authorizationRedirectStrategy = new DefaultRedirectStrategy();
 
 	private OAuth2AuthorizationRequestResolver authorizationRequestResolver;
 
@@ -103,13 +99,15 @@ public class OAuth2AuthorizationRequestRedirectFilter extends OncePerRequestFilt
 
 	private RequestCache requestCache = new HttpSessionRequestCache();
 
+	private AuthenticationFailureHandler authenticationFailureHandler = this::unsuccessfulRedirectForAuthorization;
+
 	/**
 	 * Constructs an {@code OAuth2AuthorizationRequestRedirectFilter} using the provided
 	 * parameters.
 	 * @param clientRegistrationRepository the repository of client registrations
 	 */
 	public OAuth2AuthorizationRequestRedirectFilter(ClientRegistrationRepository clientRegistrationRepository) {
-		this(clientRegistrationRepository, DEFAULT_AUTHORIZATION_REQUEST_BASE_URI);
+		this(new DefaultOAuth2AuthorizationRequestResolver(clientRegistrationRepository));
 	}
 
 	/**
@@ -121,10 +119,7 @@ public class OAuth2AuthorizationRequestRedirectFilter extends OncePerRequestFilt
 	 */
 	public OAuth2AuthorizationRequestRedirectFilter(ClientRegistrationRepository clientRegistrationRepository,
 			String authorizationRequestBaseUri) {
-		Assert.notNull(clientRegistrationRepository, "clientRegistrationRepository cannot be null");
-		Assert.hasText(authorizationRequestBaseUri, "authorizationRequestBaseUri cannot be empty");
-		this.authorizationRequestResolver = new DefaultOAuth2AuthorizationRequestResolver(clientRegistrationRepository,
-				authorizationRequestBaseUri);
+		this(new DefaultOAuth2AuthorizationRequestResolver(clientRegistrationRepository, authorizationRequestBaseUri));
 	}
 
 	/**
@@ -137,6 +132,15 @@ public class OAuth2AuthorizationRequestRedirectFilter extends OncePerRequestFilt
 	public OAuth2AuthorizationRequestRedirectFilter(OAuth2AuthorizationRequestResolver authorizationRequestResolver) {
 		Assert.notNull(authorizationRequestResolver, "authorizationRequestResolver cannot be null");
 		this.authorizationRequestResolver = authorizationRequestResolver;
+	}
+
+	/**
+	 * Sets the redirect strategy for Authorization Endpoint redirect URI.
+	 * @param authorizationRedirectStrategy the redirect strategy
+	 */
+	public void setAuthorizationRedirectStrategy(RedirectStrategy authorizationRedirectStrategy) {
+		Assert.notNull(authorizationRedirectStrategy, "authorizationRedirectStrategy cannot be null");
+		this.authorizationRedirectStrategy = authorizationRedirectStrategy;
 	}
 
 	/**
@@ -160,6 +164,18 @@ public class OAuth2AuthorizationRequestRedirectFilter extends OncePerRequestFilt
 		this.requestCache = requestCache;
 	}
 
+	/**
+	 * Sets the {@link AuthenticationFailureHandler} used to handle errors redirecting to
+	 * the Authorization Server's Authorization Endpoint.
+	 * @param authenticationFailureHandler the {@link AuthenticationFailureHandler} used
+	 * to handle errors redirecting to the Authorization Server's Authorization Endpoint
+	 * @since 6.3
+	 */
+	public void setAuthenticationFailureHandler(AuthenticationFailureHandler authenticationFailureHandler) {
+		Assert.notNull(authenticationFailureHandler, "authenticationFailureHandler cannot be null");
+		this.authenticationFailureHandler = authenticationFailureHandler;
+	}
+
 	@Override
 	protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
 			throws ServletException, IOException {
@@ -171,7 +187,8 @@ public class OAuth2AuthorizationRequestRedirectFilter extends OncePerRequestFilt
 			}
 		}
 		catch (Exception ex) {
-			this.unsuccessfulRedirectForAuthorization(request, response, ex);
+			AuthenticationException wrappedException = new OAuth2AuthorizationRequestException(ex);
+			this.authenticationFailureHandler.onAuthenticationFailure(request, response, wrappedException);
 			return;
 		}
 		try {
@@ -184,7 +201,7 @@ public class OAuth2AuthorizationRequestRedirectFilter extends OncePerRequestFilt
 			// Check to see if we need to handle ClientAuthorizationRequiredException
 			Throwable[] causeChain = this.throwableAnalyzer.determineCauseChain(ex);
 			ClientAuthorizationRequiredException authzEx = (ClientAuthorizationRequiredException) this.throwableAnalyzer
-					.getFirstThrowableOfType(ClientAuthorizationRequiredException.class, causeChain);
+				.getFirstThrowableOfType(ClientAuthorizationRequiredException.class, causeChain);
 			if (authzEx != null) {
 				try {
 					OAuth2AuthorizationRequest authorizationRequest = this.authorizationRequestResolver.resolve(request,
@@ -196,7 +213,8 @@ public class OAuth2AuthorizationRequestRedirectFilter extends OncePerRequestFilt
 					this.sendRedirectForAuthorization(request, response, authorizationRequest);
 				}
 				catch (Exception failed) {
-					this.unsuccessfulRedirectForAuthorization(request, response, failed);
+					AuthenticationException wrappedException = new OAuth2AuthorizationRequestException(ex);
+					this.authenticationFailureHandler.onAuthenticationFailure(request, response, wrappedException);
 				}
 				return;
 			}
@@ -220,8 +238,17 @@ public class OAuth2AuthorizationRequestRedirectFilter extends OncePerRequestFilt
 	}
 
 	private void unsuccessfulRedirectForAuthorization(HttpServletRequest request, HttpServletResponse response,
-			Exception ex) throws IOException {
-		this.logger.error(LogMessage.format("Authorization Request failed: %s", ex), ex);
+			AuthenticationException ex) throws IOException {
+		Throwable cause = ex.getCause();
+		LogMessage message = LogMessage.format("Authorization Request failed: %s", cause);
+		if (InvalidClientRegistrationIdException.class.isAssignableFrom(cause.getClass())) {
+			// Log an invalid registrationId at WARN level to allow these errors to be
+			// tuned separately from other errors
+			this.logger.warn(message, ex);
+		}
+		else {
+			this.logger.error(message, ex);
+		}
 		response.sendError(HttpStatus.INTERNAL_SERVER_ERROR.value(),
 				HttpStatus.INTERNAL_SERVER_ERROR.getReasonPhrase());
 	}
@@ -235,6 +262,14 @@ public class OAuth2AuthorizationRequestRedirectFilter extends OncePerRequestFilt
 				ThrowableAnalyzer.verifyThrowableHierarchy(throwable, ServletException.class);
 				return ((ServletException) throwable).getRootCause();
 			});
+		}
+
+	}
+
+	private static final class OAuth2AuthorizationRequestException extends AuthenticationException {
+
+		OAuth2AuthorizationRequestException(Throwable cause) {
+			super(cause.getMessage(), cause);
 		}
 
 	}

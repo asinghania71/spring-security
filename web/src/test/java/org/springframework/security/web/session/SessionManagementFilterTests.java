@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2016 the original author or authors.
+ * Copyright 2002-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,13 +16,15 @@
 
 package org.springframework.security.web.session;
 
-import javax.servlet.FilterChain;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Answers;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.mock.web.MockFilterChain;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
@@ -30,6 +32,7 @@ import org.springframework.security.authentication.AuthenticationTrustResolver;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.web.DefaultRedirectStrategy;
 import org.springframework.security.web.authentication.AuthenticationFailureHandler;
 import org.springframework.security.web.authentication.session.SessionAuthenticationException;
 import org.springframework.security.web.authentication.session.SessionAuthenticationStrategy;
@@ -43,14 +46,16 @@ import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
-import static org.mockito.Mockito.verifyZeroInteractions;
+import static org.mockito.Mockito.withSettings;
 
 /**
  * @author Luke Taylor
  * @author Rob Winch
+ * @author Mark Chesney
  */
 public class SessionManagementFilterTests {
 
+	@BeforeEach
 	@AfterEach
 	public void clearContext() {
 		SecurityContextHolder.clearContext();
@@ -76,7 +81,7 @@ public class SessionManagementFilterTests {
 		HttpServletRequest request = new MockHttpServletRequest();
 		authenticateUser();
 		filter.doFilter(request, new MockHttpServletResponse(), new MockFilterChain());
-		verifyZeroInteractions(strategy);
+		verifyNoMoreInteractions(strategy);
 	}
 
 	@Test
@@ -86,7 +91,7 @@ public class SessionManagementFilterTests {
 		SessionManagementFilter filter = new SessionManagementFilter(repo, strategy);
 		HttpServletRequest request = new MockHttpServletRequest();
 		filter.doFilter(request, new MockHttpServletResponse(), new MockFilterChain());
-		verifyZeroInteractions(strategy);
+		verifyNoMoreInteractions(strategy);
 	}
 
 	@Test
@@ -118,10 +123,10 @@ public class SessionManagementFilterTests {
 		FilterChain fc = mock(FilterChain.class);
 		authenticateUser();
 		SessionAuthenticationException exception = new SessionAuthenticationException("Failure");
-		willThrow(exception).given(strategy).onAuthentication(SecurityContextHolder.getContext().getAuthentication(),
-				request, response);
+		willThrow(exception).given(strategy)
+			.onAuthentication(SecurityContextHolder.getContext().getAuthentication(), request, response);
 		filter.doFilter(request, response, fc);
-		verifyZeroInteractions(fc);
+		verifyNoMoreInteractions(fc);
 		verify(failureHandler).onAuthenticationFailure(request, response, exception);
 	}
 
@@ -146,7 +151,7 @@ public class SessionManagementFilterTests {
 		filter.setInvalidSessionStrategy(iss);
 		FilterChain fc = mock(FilterChain.class);
 		filter.doFilter(request, response, fc);
-		verifyZeroInteractions(fc);
+		verifyNoMoreInteractions(fc);
 		assertThat(response.getRedirectedUrl()).isEqualTo("/timedOut");
 	}
 
@@ -172,13 +177,77 @@ public class SessionManagementFilterTests {
 		filter.setInvalidSessionStrategy(iss);
 		FilterChain fc = mock(FilterChain.class);
 		filter.doFilter(request, response, fc);
-		verifyZeroInteractions(fc);
+		verifyNoMoreInteractions(fc);
 		assertThat(response.getRedirectedUrl()).isEqualTo("/requested");
 	}
 
 	@Test
+	public void responseIsRedirectedToRequestedUrlIfContextPathIsSetAndSessionIsInvalid() throws Exception {
+		// given
+		DefaultRedirectStrategy redirectStrategy = new DefaultRedirectStrategy();
+		redirectStrategy.setContextRelative(true);
+		RequestedUrlRedirectInvalidSessionStrategy invalidSessionStrategy = new RequestedUrlRedirectInvalidSessionStrategy();
+		invalidSessionStrategy.setCreateNewSession(true);
+		invalidSessionStrategy.setRedirectStrategy(redirectStrategy);
+		SecurityContextRepository securityContextRepository = mock(SecurityContextRepository.class);
+		SessionAuthenticationStrategy sessionAuthenticationStrategy = mock(SessionAuthenticationStrategy.class);
+		SessionManagementFilter filter = new SessionManagementFilter(securityContextRepository,
+				sessionAuthenticationStrategy);
+		filter.setInvalidSessionStrategy(invalidSessionStrategy);
+		MockHttpServletRequest request = new MockHttpServletRequest();
+		request.setContextPath("/context");
+		request.setRequestedSessionId("xxx");
+		request.setRequestedSessionIdValid(false);
+		request.setRequestURI("/context/requested");
+		MockHttpServletResponse response = new MockHttpServletResponse();
+		FilterChain chain = mock(FilterChain.class);
+
+		// when
+		filter.doFilter(request, response, chain);
+
+		// then
+		verify(securityContextRepository).containsContext(request);
+		verifyNoMoreInteractions(securityContextRepository, sessionAuthenticationStrategy, chain);
+		assertThat(response.isCommitted()).isTrue();
+		assertThat(response.getRedirectedUrl()).isEqualTo("/context/requested");
+		assertThat(response.getStatus()).isEqualTo(302);
+	}
+
+	@Test
+	public void responseIsRedirectedToRequestedUrlIfStatusCodeIsSetAndSessionIsInvalid() throws Exception {
+		// given
+		DefaultRedirectStrategy redirectStrategy = new DefaultRedirectStrategy();
+		redirectStrategy.setStatusCode(HttpStatus.TEMPORARY_REDIRECT);
+		RequestedUrlRedirectInvalidSessionStrategy invalidSessionStrategy = new RequestedUrlRedirectInvalidSessionStrategy();
+		invalidSessionStrategy.setCreateNewSession(true);
+		invalidSessionStrategy.setRedirectStrategy(redirectStrategy);
+		SecurityContextRepository securityContextRepository = mock(SecurityContextRepository.class);
+		SessionAuthenticationStrategy sessionAuthenticationStrategy = mock(SessionAuthenticationStrategy.class);
+		SessionManagementFilter filter = new SessionManagementFilter(securityContextRepository,
+				sessionAuthenticationStrategy);
+		filter.setInvalidSessionStrategy(invalidSessionStrategy);
+		MockHttpServletRequest request = new MockHttpServletRequest();
+		request.setRequestedSessionId("xxx");
+		request.setRequestedSessionIdValid(false);
+		request.setRequestURI("/requested");
+		MockHttpServletResponse response = new MockHttpServletResponse();
+		FilterChain chain = mock(FilterChain.class);
+
+		// when
+		filter.doFilter(request, response, chain);
+
+		// then
+		verify(securityContextRepository).containsContext(request);
+		verifyNoMoreInteractions(securityContextRepository, sessionAuthenticationStrategy, chain);
+		assertThat(response.isCommitted()).isTrue();
+		assertThat(response.getRedirectedUrl()).isEqualTo("/requested");
+		assertThat(response.getStatus()).isEqualTo(307);
+	}
+
+	@Test
 	public void customAuthenticationTrustResolver() throws Exception {
-		AuthenticationTrustResolver trustResolver = mock(AuthenticationTrustResolver.class);
+		AuthenticationTrustResolver trustResolver = mock(AuthenticationTrustResolver.class,
+				withSettings().defaultAnswer(Answers.CALLS_REAL_METHODS));
 		SecurityContextRepository repo = mock(SecurityContextRepository.class);
 		SessionManagementFilter filter = new SessionManagementFilter(repo);
 		filter.setTrustResolver(trustResolver);
@@ -196,7 +265,8 @@ public class SessionManagementFilterTests {
 	}
 
 	private void authenticateUser() {
-		SecurityContextHolder.getContext().setAuthentication(new TestingAuthenticationToken("user", "pass"));
+		SecurityContextHolder.getContext()
+			.setAuthentication(new TestingAuthenticationToken("user", "pass", "ROLE_USER"));
 	}
 
 }

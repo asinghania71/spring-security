@@ -22,8 +22,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-import javax.servlet.http.HttpServletRequest;
-
+import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.Test;
 
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -112,7 +111,7 @@ public class J2eeBasedPreAuthenticatedWebAuthenticationDetailsSourceTests {
 		assertThat(o instanceof PreAuthenticatedGrantedAuthoritiesWebAuthenticationDetails).withFailMessage(
 				"Returned object not of type PreAuthenticatedGrantedAuthoritiesWebAuthenticationDetails, actual type: "
 						+ o.getClass())
-				.isTrue();
+			.isTrue();
 		PreAuthenticatedGrantedAuthoritiesWebAuthenticationDetails details = (PreAuthenticatedGrantedAuthoritiesWebAuthenticationDetails) o;
 		List<GrantedAuthority> gas = details.getGrantedAuthorities();
 		assertThat(gas).as("Granted authorities should not be null").isNotNull();
@@ -123,7 +122,8 @@ public class J2eeBasedPreAuthenticatedWebAuthenticationDetailsSourceTests {
 			gasRolesSet.add(grantedAuthority.getAuthority());
 		}
 		assertThat(expectedRolesColl.containsAll(gasRolesSet) && gasRolesSet.containsAll(expectedRolesColl))
-				.withFailMessage("Granted Authorities do not match expected roles").isTrue();
+			.withFailMessage("Granted Authorities do not match expected roles")
+			.isTrue();
 	}
 
 	private J2eeBasedPreAuthenticatedWebAuthenticationDetailsSource getJ2eeBasedPreAuthenticatedWebAuthenticationDetailsSource(

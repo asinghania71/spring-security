@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2019 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,15 +20,19 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpHeaders;
-import org.springframework.security.config.annotation.ObjectPostProcessor;
+import org.springframework.security.config.ObjectPostProcessor;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
 import org.springframework.security.config.test.SpringTestContext;
 import org.springframework.security.config.test.SpringTestContextExtension;
+import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.header.HeaderWriterFilter;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -48,32 +52,45 @@ public class HeadersConfigurerEagerHeadersTests {
 
 	@Test
 	public void requestWhenHeadersEagerlyConfiguredThenHeadersAreWritten() throws Exception {
-		this.spring.register(HeadersAtTheBeginningOfRequestConfig.class).autowire();
-		this.mvc.perform(get("/").secure(true)).andExpect(header().string("X-Content-Type-Options", "nosniff"))
-				.andExpect(header().string("X-Frame-Options", "DENY"))
-				.andExpect(header().string("Strict-Transport-Security", "max-age=31536000 ; includeSubDomains"))
-				.andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-cache, no-store, max-age=0, must-revalidate"))
-				.andExpect(header().string(HttpHeaders.EXPIRES, "0"))
-				.andExpect(header().string(HttpHeaders.PRAGMA, "no-cache"))
-				.andExpect(header().string("X-XSS-Protection", "1; mode=block"));
+		this.spring.register(HeadersAtTheBeginningOfRequestConfig.class, HomeController.class).autowire();
+		this.mvc.perform(get("/").secure(true))
+			.andExpect(header().string("X-Content-Type-Options", "nosniff"))
+			.andExpect(header().string("X-Frame-Options", "DENY"))
+			.andExpect(header().string("Strict-Transport-Security", "max-age=31536000 ; includeSubDomains"))
+			.andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-cache, no-store, max-age=0, must-revalidate"))
+			.andExpect(header().string(HttpHeaders.EXPIRES, "0"))
+			.andExpect(header().string(HttpHeaders.PRAGMA, "no-cache"))
+			.andExpect(header().string("X-XSS-Protection", "0"));
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	public static class HeadersAtTheBeginningOfRequestConfig extends WebSecurityConfigurerAdapter {
+	public static class HeadersAtTheBeginningOfRequestConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.headers()
+				.headers((headers) -> headers
 					.addObjectPostProcessor(new ObjectPostProcessor<HeaderWriterFilter>() {
 						@Override
 						public HeaderWriterFilter postProcess(HeaderWriterFilter filter) {
 							filter.setShouldWriteHeadersEagerly(true);
 							return filter;
 						}
-					});
+					}));
+			return http.build();
 			// @formatter:on
+		}
+
+	}
+
+	@RestController
+	private static class HomeController {
+
+		@GetMapping("/")
+		String ok() {
+			return "ok";
 		}
 
 	}

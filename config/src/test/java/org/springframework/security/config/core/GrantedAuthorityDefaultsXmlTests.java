@@ -18,12 +18,11 @@ package org.springframework.security.config.core;
 
 import java.io.IOException;
 
-import javax.servlet.ServletException;
-import javax.servlet.ServletRequest;
-import javax.servlet.ServletResponse;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-
+import jakarta.servlet.ServletException;
+import jakarta.servlet.ServletRequest;
+import jakarta.servlet.ServletResponse;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -78,8 +77,8 @@ public class GrantedAuthorityDefaultsXmlTests {
 	@Test
 	public void doFilter() throws Exception {
 		SecurityContext context = SecurityContextHolder.getContext();
-		this.request.getSession().setAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY,
-				context);
+		this.request.getSession()
+			.setAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY, context);
 		this.springSecurityFilterChain.doFilter(this.request, this.response, this.chain);
 		assertThat(this.response.getStatus()).isEqualTo(HttpServletResponse.SC_OK);
 	}
@@ -88,8 +87,8 @@ public class GrantedAuthorityDefaultsXmlTests {
 	public void doFilterDenied() throws Exception {
 		setup("DENIED");
 		SecurityContext context = SecurityContextHolder.getContext();
-		this.request.getSession().setAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY,
-				context);
+		this.request.getSession()
+			.setAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY, context);
 		this.springSecurityFilterChain.doFilter(this.request, this.response, this.chain);
 		assertThat(this.response.getStatus()).isEqualTo(HttpServletResponse.SC_FORBIDDEN);
 	}
@@ -120,8 +119,8 @@ public class GrantedAuthorityDefaultsXmlTests {
 	@Test
 	public void doFilterIsUserInRole() throws Exception {
 		SecurityContext context = SecurityContextHolder.getContext();
-		this.request.getSession().setAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY,
-				context);
+		this.request.getSession()
+			.setAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY, context);
 		this.chain = new MockFilterChain() {
 			@Override
 			public void doFilter(ServletRequest request, ServletResponse response)

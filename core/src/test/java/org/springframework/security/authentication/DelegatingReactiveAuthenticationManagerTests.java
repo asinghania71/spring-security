@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2018 the original author or authors.
+ * Copyright 2002-2025 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@ import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.AuthenticationException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -61,7 +62,7 @@ public class DelegatingReactiveAuthenticationManagerTests {
 		// delay to try and force delegate2 to finish (i.e. make sure we didn't use
 		// flatMap)
 		given(this.delegate1.authenticate(any()))
-				.willReturn(Mono.just(this.authentication).delayElement(Duration.ofMillis(100)));
+			.willReturn(Mono.just(this.authentication).delayElement(Duration.ofMillis(100)));
 		DelegatingReactiveAuthenticationManager manager = new DelegatingReactiveAuthenticationManager(this.delegate1,
 				this.delegate2);
 		StepVerifier.create(manager.authenticate(this.authentication)).expectNext(this.authentication).verifyComplete();
@@ -72,8 +73,57 @@ public class DelegatingReactiveAuthenticationManagerTests {
 		given(this.delegate1.authenticate(any())).willReturn(Mono.error(new BadCredentialsException("Test")));
 		DelegatingReactiveAuthenticationManager manager = new DelegatingReactiveAuthenticationManager(this.delegate1,
 				this.delegate2);
-		StepVerifier.create(manager.authenticate(this.authentication)).expectError(BadCredentialsException.class)
-				.verify();
+		StepVerifier.create(manager.authenticate(this.authentication))
+			.expectError(BadCredentialsException.class)
+			.verify();
+	}
+
+	@Test
+	public void authenticateWhenContinueOnErrorAndFirstBadCredentialsThenTriesSecond() {
+		given(this.delegate1.authenticate(any())).willReturn(Mono.error(new BadCredentialsException("Test")));
+		given(this.delegate2.authenticate(any())).willReturn(Mono.just(this.authentication));
+
+		DelegatingReactiveAuthenticationManager manager = managerWithContinueOnError();
+
+		assertThat(manager.authenticate(this.authentication).block()).isEqualTo(this.authentication);
+	}
+
+	@Test
+	public void authenticateWhenContinueOnErrorAndBothDelegatesBadCredentialsThenError() {
+		given(this.delegate1.authenticate(any())).willReturn(Mono.error(new BadCredentialsException("Test")));
+		given(this.delegate2.authenticate(any())).willReturn(Mono.error(new BadCredentialsException("Test")));
+
+		DelegatingReactiveAuthenticationManager manager = managerWithContinueOnError();
+
+		StepVerifier.create(manager.authenticate(this.authentication))
+			.expectError(BadCredentialsException.class)
+			.verify();
+	}
+
+	@Test
+	public void authenticateWhenContinueOnErrorAndDelegate1NotEmptyThenReturnsNotEmpty() {
+		given(this.delegate1.authenticate(any())).willReturn(Mono.just(this.authentication));
+
+		DelegatingReactiveAuthenticationManager manager = managerWithContinueOnError();
+
+		assertThat(manager.authenticate(this.authentication).block()).isEqualTo(this.authentication);
+	}
+
+	@Test
+	void whenAccountStatusExceptionThenAuthenticationRequestIsIncluded() {
+		AuthenticationException expected = new LockedException("");
+		given(this.delegate1.authenticate(any())).willReturn(Mono.error(expected));
+		ReactiveAuthenticationManager manager = new DelegatingReactiveAuthenticationManager(this.delegate1);
+		StepVerifier.create(manager.authenticate(this.authentication)).expectError(LockedException.class).verify();
+		assertThat(expected.getAuthenticationRequest()).isEqualTo(this.authentication);
+	}
+
+	private DelegatingReactiveAuthenticationManager managerWithContinueOnError() {
+		DelegatingReactiveAuthenticationManager manager = new DelegatingReactiveAuthenticationManager(this.delegate1,
+				this.delegate2);
+		manager.setContinueOnError(true);
+
+		return manager;
 	}
 
 }

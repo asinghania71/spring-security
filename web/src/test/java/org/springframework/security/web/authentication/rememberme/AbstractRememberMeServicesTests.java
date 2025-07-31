@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2020 the original author or authors.
+ * Copyright 2002-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,10 +16,9 @@
 
 package org.springframework.security.web.authentication.rememberme;
 
-import javax.servlet.http.Cookie;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -64,7 +63,7 @@ public class AbstractRememberMeServicesTests {
 	@Test
 	public void nonBase64CookieShouldBeDetected() {
 		assertThatExceptionOfType(InvalidCookieException.class)
-				.isThrownBy(() -> new MockRememberMeServices(this.uds).decodeCookie("nonBase64CookieValue%"));
+			.isThrownBy(() -> new MockRememberMeServices(this.uds).decodeCookie("nonBase64CookieValue%"));
 	}
 
 	@Test
@@ -287,7 +286,7 @@ public class AbstractRememberMeServicesTests {
 		MockRememberMeServices services = new MockRememberMeServices(this.uds);
 		MockHttpServletRequest request = new MockHttpServletRequest();
 		MockHttpServletResponse response = new MockHttpServletResponse();
-		Authentication auth = new UsernamePasswordAuthenticationToken("joe", "password");
+		Authentication auth = UsernamePasswordAuthenticationToken.unauthenticated("joe", "password");
 		// No parameter set
 		services.loginSuccess(request, response, auth);
 		assertThat(services.loginSuccessCalled).isFalse();
@@ -363,39 +362,6 @@ public class AbstractRememberMeServicesTests {
 		assertThat(cookie.isHttpOnly()).isTrue();
 	}
 
-	// SEC-2791
-	@Test
-	public void setCookieMaxAge0VersionSet() {
-		MockRememberMeServices services = new MockRememberMeServices();
-		MockHttpServletRequest request = new MockHttpServletRequest();
-		MockHttpServletResponse response = new MockHttpServletResponse();
-		services.setCookie(new String[] { "value" }, 0, request, response);
-		Cookie cookie = response.getCookie(AbstractRememberMeServices.SPRING_SECURITY_REMEMBER_ME_COOKIE_KEY);
-		assertThat(cookie.getVersion()).isEqualTo(1);
-	}
-
-	// SEC-2791
-	@Test
-	public void setCookieMaxAgeNegativeVersionSet() {
-		MockRememberMeServices services = new MockRememberMeServices();
-		MockHttpServletRequest request = new MockHttpServletRequest();
-		MockHttpServletResponse response = new MockHttpServletResponse();
-		services.setCookie(new String[] { "value" }, -1, request, response);
-		Cookie cookie = response.getCookie(AbstractRememberMeServices.SPRING_SECURITY_REMEMBER_ME_COOKIE_KEY);
-		assertThat(cookie.getVersion()).isEqualTo(1);
-	}
-
-	// SEC-2791
-	@Test
-	public void setCookieMaxAge1VersionSet() {
-		MockRememberMeServices services = new MockRememberMeServices();
-		MockHttpServletRequest request = new MockHttpServletRequest();
-		MockHttpServletResponse response = new MockHttpServletResponse();
-		services.setCookie(new String[] { "value" }, 1, request, response);
-		Cookie cookie = response.getCookie(AbstractRememberMeServices.SPRING_SECURITY_REMEMBER_ME_COOKIE_KEY);
-		assertThat(cookie.getVersion()).isZero();
-	}
-
 	@Test
 	public void setCookieDomainValue() {
 		MockRememberMeServices services = new MockRememberMeServices();
@@ -423,6 +389,17 @@ public class AbstractRememberMeServicesTests {
 		String code = "code";
 		services.messages.getMessage(code);
 		verify(source).getMessage(eq(code), any(), any());
+	}
+
+	@Test
+	public void setCookieCustomAttribute() {
+		MockHttpServletRequest request = new MockHttpServletRequest();
+		MockHttpServletResponse response = new MockHttpServletResponse();
+		MockRememberMeServices services = new MockRememberMeServices(this.uds);
+		services.setCookieCustomizer((cookie) -> cookie.setAttribute("attr1", "value1"));
+		services.setCookie(new String[] { "mycookie" }, 1000, request, response);
+		Cookie cookie = response.getCookie(AbstractRememberMeServices.SPRING_SECURITY_REMEMBER_ME_COOKIE_KEY);
+		assertThat(cookie.getAttribute("attr1")).isEqualTo("value1");
 	}
 
 	private Cookie[] createLoginCookie(String cookieToken) {

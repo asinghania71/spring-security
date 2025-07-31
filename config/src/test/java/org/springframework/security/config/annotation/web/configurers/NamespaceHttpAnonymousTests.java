@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2019 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,19 +22,23 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
-import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
 import org.springframework.security.config.test.SpringTestContext;
 import org.springframework.security.config.test.SpringTestContextExtension;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.PasswordEncodedUser;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.provisioning.InMemoryUserDetailsManager;
+import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.config.annotation.EnableWebMvc;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -86,94 +90,98 @@ public class NamespaceHttpAnonymousTests {
 		this.mvc.perform(get("/principal")).andExpect(content().string("AnonymousUsernameConfig"));
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class AnonymousConfig extends WebSecurityConfigurerAdapter {
+	@EnableWebMvc
+	static class AnonymousConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.authorizeRequests()
-					.antMatchers("/type").anonymous()
-					.anyRequest().denyAll();
+				.authorizeHttpRequests((requests) -> requests
+					.requestMatchers("/type").anonymous()
+					.anyRequest().denyAll());
+			return http.build();
 			// @formatter:on
 		}
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class AnonymousDisabledConfig extends WebSecurityConfigurerAdapter {
+	static class AnonymousDisabledConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.authorizeRequests()
-					.anyRequest().permitAll()
-					.and()
-				.anonymous().disable();
+				.authorizeHttpRequests((requests) -> requests.anyRequest().anonymous())
+				.anonymous((anonymous) -> anonymous.disable());
 			// @formatter:on
+			return http.build();
 		}
 
-		@Override
-		protected void configure(AuthenticationManagerBuilder auth) throws Exception {
+		@Bean
+		UserDetailsService userDetailsService() {
+			return new InMemoryUserDetailsManager(PasswordEncodedUser.user(), PasswordEncodedUser.admin());
+		}
+
+	}
+
+	@Configuration
+	@EnableWebSecurity
+	@EnableWebMvc
+	static class AnonymousGrantedAuthorityConfig {
+
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
-			auth
-				.inMemoryAuthentication()
-					.withUser(PasswordEncodedUser.user())
-					.withUser(PasswordEncodedUser.admin());
+			http
+				.authorizeHttpRequests((requests) -> requests
+					.requestMatchers("/type").hasRole("ANON")
+					.anyRequest().denyAll())
+				.anonymous((anonymous) -> anonymous
+					.authorities("ROLE_ANON"));
+			return http.build();
 			// @formatter:on
 		}
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class AnonymousGrantedAuthorityConfig extends WebSecurityConfigurerAdapter {
+	@EnableWebMvc
+	static class AnonymousKeyConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.authorizeRequests()
-					.antMatchers("/type").hasRole("ANON")
-					.anyRequest().denyAll()
-					.and()
-				.anonymous()
-					.authorities("ROLE_ANON");
+				.authorizeHttpRequests((requests) -> requests
+					.requestMatchers("/key").anonymous()
+					.anyRequest().denyAll())
+				.anonymous((anonymous) -> anonymous.key("AnonymousKeyConfig"));
+			return http.build();
 			// @formatter:on
 		}
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class AnonymousKeyConfig extends WebSecurityConfigurerAdapter {
+	@EnableWebMvc
+	static class AnonymousUsernameConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.authorizeRequests()
-					.antMatchers("/key").anonymous()
-					.anyRequest().denyAll()
-					.and()
-				.anonymous().key("AnonymousKeyConfig");
-			// @formatter:on
-		}
-
-	}
-
-	@EnableWebSecurity
-	static class AnonymousUsernameConfig extends WebSecurityConfigurerAdapter {
-
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
-			// @formatter:off
-			http
-				.authorizeRequests()
-					.antMatchers("/principal").anonymous()
-					.anyRequest().denyAll()
-					.and()
-				.anonymous().principal("AnonymousUsernameConfig");
+				.authorizeHttpRequests((requests) -> requests
+					.requestMatchers("/principal").anonymous()
+					.anyRequest().denyAll())
+				.anonymous((anonymous) -> anonymous.principal("AnonymousUsernameConfig"));
+			return http.build();
 			// @formatter:on
 		}
 
@@ -198,9 +206,10 @@ public class NamespaceHttpAnonymousTests {
 		}
 
 		Optional<AnonymousAuthenticationToken> anonymousToken() {
-			return Optional.of(SecurityContextHolder.getContext()).map(SecurityContext::getAuthentication)
-					.filter((a) -> a instanceof AnonymousAuthenticationToken)
-					.map(AnonymousAuthenticationToken.class::cast);
+			return Optional.of(SecurityContextHolder.getContext())
+				.map(SecurityContext::getAuthentication)
+				.filter((a) -> a instanceof AnonymousAuthenticationToken)
+				.map(AnonymousAuthenticationToken.class::cast);
 		}
 
 	}

@@ -2,7 +2,7 @@
 = WebFlux Security
 
 Spring Security's WebFlux support relies on a `WebFilter` and works the same for Spring WebFlux and Spring WebFlux.Fn.
-You can find a few sample applications that demonstrate the code below:
+A few sample applications demonstrate the code:
 
 * Hello WebFlux {gh-samples-url}/reactive/webflux/java/hello-security[hellowebflux]
 * Hello WebFlux.Fn {gh-samples-url}/reactive/webflux-fn/hello-security[hellowebfluxfn]
@@ -11,7 +11,7 @@ You can find a few sample applications that demonstrate the code below:
 
 == Minimal WebFlux Security Configuration
 
-You can find a minimal WebFlux Security configuration below:
+The following listing shows a minimal WebFlux Security configuration:
 
 .Minimal WebFlux Security Configuration
 [tabs]
@@ -20,7 +20,7 @@ Java::
 +
 [source,java,role="primary"]
 -----
-
+@Configuration
 @EnableWebFluxSecurity
 public class HelloWebfluxSecurityConfig {
 
@@ -40,6 +40,7 @@ Kotlin::
 +
 [source,kotlin,role="secondary"]
 -----
+@Configuration
 @EnableWebFluxSecurity
 class HelloWebfluxSecurityConfig {
 
@@ -56,11 +57,11 @@ class HelloWebfluxSecurityConfig {
 -----
 ======
 
-This configuration provides form and http basic authentication, sets up authorization to require an authenticated user for accessing any page, sets up a default log in page and a default log out page, sets up security related HTTP headers, CSRF protection, and more.
+This configuration provides form and HTTP basic authentication, sets up authorization to require an authenticated user for accessing any page, sets up a default login page and a default logout page, sets up security related HTTP headers, adds CSRF protection, and more.
 
 == Explicit WebFlux Security Configuration
 
-You can find an explicit version of the minimal WebFlux Security configuration below:
+The following page shows an explicit version of the minimal WebFlux Security configuration:
 
 .Explicit WebFlux Security Configuration
 [tabs]
@@ -86,7 +87,7 @@ public class HelloWebfluxSecurityConfig {
 	@Bean
 	public SecurityWebFilterChain springSecurityFilterChain(ServerHttpSecurity http) {
 		http
-			.authorizeExchange(exchanges -> exchanges
+			.authorizeExchange((authorize) -> authorize
 			    .anyExchange().authenticated()
 			)
 			.httpBasic(withDefaults())
@@ -100,6 +101,8 @@ Kotlin::
 +
 [source,kotlin,role="secondary"]
 -----
+import org.springframework.security.config.web.server.invoke
+
 @Configuration
 @EnableWebFluxSecurity
 class HelloWebfluxSecurityConfig {
@@ -128,17 +131,20 @@ class HelloWebfluxSecurityConfig {
 -----
 ======
 
-This configuration explicitly sets up all the same things as our minimal configuration.
-From here you can easily make the changes to the defaults.
+[NOTE]
+Make sure to import the `org.springframework.security.config.web.server.invoke` function to enable the Kotlin DSL in your class, as the IDE will not always auto-import the method, causing compilation issues.
 
-You can find more examples of explicit configuration in unit tests, by searching https://github.com/spring-projects/spring-security/search?q=path%3Aconfig%2Fsrc%2Ftest%2F+EnableWebFluxSecurity[EnableWebFluxSecurity in the `config/src/test/` directory].
+This configuration explicitly sets up all the same things as our minimal configuration.
+From here, you can more easily make changes to the defaults.
+
+You can find more examples of explicit configuration in unit tests, by searching for https://github.com/spring-projects/spring-security/search?q=path%3Aconfig%2Fsrc%2Ftest%2F+EnableWebFluxSecurity[`EnableWebFluxSecurity` in the `config/src/test/` directory].
 
 [[jc-webflux-multiple-filter-chains]]
 === Multiple Chains Support
 
-You can configure multiple `SecurityWebFilterChain` instances to separate configuration by ``RequestMatcher``s.
+You can configure multiple `SecurityWebFilterChain` instances to separate configuration by `RequestMatcher` instances.
 
-For example, you can isolate configuration for URLs that start with `/api`, like so:
+For example, you can isolate configuration for URLs that start with `/api`:
 
 [tabs]
 ======
@@ -155,7 +161,7 @@ static class MultiSecurityHttpConfig {
     SecurityWebFilterChain apiHttpSecurity(ServerHttpSecurity http) {
         http
             .securityMatcher(new PathPatternParserServerWebExchangeMatcher("/api/**"))      <2>
-            .authorizeExchange((exchanges) -> exchanges
+            .authorizeExchange((authorize) -> authorize
                 .anyExchange().authenticated()
             )
             .oauth2ResourceServer(OAuth2ResourceServerSpec::jwt);                           <3>
@@ -165,7 +171,7 @@ static class MultiSecurityHttpConfig {
     @Bean
     SecurityWebFilterChain webHttpSecurity(ServerHttpSecurity http) {                       <4>
         http
-            .authorizeExchange((exchanges) -> exchanges
+            .authorizeExchange((authorize) -> authorize
                 .anyExchange().authenticated()
             )
             .httpBasic(withDefaults());                                                     <5>
@@ -185,6 +191,8 @@ Kotlin::
 +
 [source,kotlin,role="secondary"]
 ----
+import org.springframework.security.config.web.server.invoke
+
 @Configuration
 @EnableWebFluxSecurity
 open class MultiSecurityHttpConfig {
@@ -228,9 +236,9 @@ open class MultiSecurityHttpConfig {
 <4> Create another instance of `SecurityWebFilterChain` with lower precedence to match all other URLs
 <5> Specify the authentication mechanisms that will be used for the rest of the application
 
-Spring Security will select one `SecurityWebFilterChain` `@Bean` for each request.
-It will match the requests in order by the `securityMatcher` definition.
+Spring Security selects one `SecurityWebFilterChain` `@Bean` for each request.
+It matches the requests in order by the `securityMatcher` definition.
 
-In this case, that means that if the URL path starts with `/api`, then Spring Security will use `apiHttpSecurity`.
-If the URL does not start with `/api` then Spring Security will default to `webHttpSecurity`, which has an implied `securityMatcher` that matches any request.
+In this case, that means that, if the URL path starts with `/api`, Spring Security uses `apiHttpSecurity`.
+If the URL does not start with `/api`, Spring Security defaults to `webHttpSecurity`, which has an implied `securityMatcher` that matches any request.
 

@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ package org.springframework.security.config.web.server
 import org.springframework.security.authentication.ReactiveAuthenticationManager
 import org.springframework.security.oauth2.client.registration.ReactiveClientRegistrationRepository
 import org.springframework.security.web.server.SecurityWebFilterChain
+import org.springframework.security.web.server.context.ServerSecurityContextRepository
 import org.springframework.security.web.server.util.matcher.ServerWebExchangeMatcher
 import org.springframework.web.server.ServerWebExchange
 import org.springframework.web.server.WebFilter
@@ -29,6 +30,7 @@ import org.springframework.web.server.WebFilter
  * Example:
  *
  * ```
+ * @Configuration
  * @EnableWebFluxSecurity
  * class SecurityConfig {
  *
@@ -64,6 +66,7 @@ operator fun ServerHttpSecurity.invoke(httpConfiguration: ServerHttpSecurityDsl.
 class ServerHttpSecurityDsl(private val http: ServerHttpSecurity, private val init: ServerHttpSecurityDsl.() -> Unit) {
 
     var authenticationManager: ReactiveAuthenticationManager? = null
+    var securityContextRepository: ServerSecurityContextRepository? = null
 
     /**
      * Allows configuring the [ServerHttpSecurity] to only be invoked when matching the
@@ -72,6 +75,7 @@ class ServerHttpSecurityDsl(private val http: ServerHttpSecurity, private val in
      * Example:
      *
      * ```
+     * @Configuration
      * @EnableWebFluxSecurity
      * class SecurityConfig {
      *
@@ -100,6 +104,7 @@ class ServerHttpSecurityDsl(private val http: ServerHttpSecurity, private val in
      * Example:
      *
      * ```
+     * @Configuration
      * @EnableWebFluxSecurity
      * class SecurityConfig {
      *
@@ -125,6 +130,7 @@ class ServerHttpSecurityDsl(private val http: ServerHttpSecurity, private val in
      * Example:
      *
      * ```
+     * @Configuration
      * @EnableWebFluxSecurity
      * class SecurityConfig {
      *
@@ -150,6 +156,7 @@ class ServerHttpSecurityDsl(private val http: ServerHttpSecurity, private val in
      * Example:
      *
      * ```
+     * @Configuration
      * @EnableWebFluxSecurity
      * class SecurityConfig {
      *
@@ -175,6 +182,7 @@ class ServerHttpSecurityDsl(private val http: ServerHttpSecurity, private val in
      * Example:
      *
      * ```
+     * @Configuration
      * @EnableWebFluxSecurity
      * class SecurityConfig {
      *
@@ -204,6 +212,7 @@ class ServerHttpSecurityDsl(private val http: ServerHttpSecurity, private val in
      * Example:
      *
      * ```
+     * @Configuration
      * @EnableWebFluxSecurity
      * class SecurityConfig {
      *
@@ -234,6 +243,7 @@ class ServerHttpSecurityDsl(private val http: ServerHttpSecurity, private val in
      * Example:
      *
      * ```
+     * @Configuration
      * @EnableWebFluxSecurity
      * class SecurityConfig {
      *
@@ -261,6 +271,7 @@ class ServerHttpSecurityDsl(private val http: ServerHttpSecurity, private val in
      * Example:
      *
      * ```
+     * @Configuration
      * @EnableWebFluxSecurity
      * class SecurityConfig {
      *
@@ -291,6 +302,7 @@ class ServerHttpSecurityDsl(private val http: ServerHttpSecurity, private val in
      * Example:
      *
      * ```
+     * @Configuration
      * @EnableWebFluxSecurity
      * class SecurityConfig {
      *
@@ -325,6 +337,7 @@ class ServerHttpSecurityDsl(private val http: ServerHttpSecurity, private val in
      * Example:
      *
      * ```
+     * @Configuration
      * @EnableWebFluxSecurity
      * class SecurityConfig {
      *
@@ -354,6 +367,7 @@ class ServerHttpSecurityDsl(private val http: ServerHttpSecurity, private val in
      * Example:
      *
      * ```
+     * @Configuration
      * @EnableWebFluxSecurity
      * class SecurityConfig {
      *
@@ -385,6 +399,7 @@ class ServerHttpSecurityDsl(private val http: ServerHttpSecurity, private val in
      * Example:
      *
      * ```
+     * @Configuration
      * @EnableWebFluxSecurity
      * class SecurityConfig {
      *
@@ -414,6 +429,7 @@ class ServerHttpSecurityDsl(private val http: ServerHttpSecurity, private val in
      * Example:
      *
      * ```
+     * @Configuration
      * @EnableWebFluxSecurity
      * class SecurityConfig {
      *
@@ -441,6 +457,7 @@ class ServerHttpSecurityDsl(private val http: ServerHttpSecurity, private val in
      * Example:
      *
      * ```
+     * @Configuration
      * @EnableWebFluxSecurity
      * class SecurityConfig {
      *
@@ -467,6 +484,7 @@ class ServerHttpSecurityDsl(private val http: ServerHttpSecurity, private val in
      * Example:
      *
      * ```
+     * @Configuration
      * @EnableWebFluxSecurity
      * class SecurityConfig {
      *
@@ -493,6 +511,7 @@ class ServerHttpSecurityDsl(private val http: ServerHttpSecurity, private val in
      * Example:
      *
      * ```
+     * @Configuration
      * @EnableWebFluxSecurity
      * class SecurityConfig {
      *
@@ -521,6 +540,7 @@ class ServerHttpSecurityDsl(private val http: ServerHttpSecurity, private val in
      * Example:
      *
      * ```
+     * @Configuration
      * @EnableWebFluxSecurity
      * class SecurityConfig {
      *
@@ -551,6 +571,7 @@ class ServerHttpSecurityDsl(private val http: ServerHttpSecurity, private val in
      * Example:
      *
      * ```
+     * @Configuration
      * @EnableWebFluxSecurity
      * class SecurityConfig {
      *
@@ -579,6 +600,7 @@ class ServerHttpSecurityDsl(private val http: ServerHttpSecurity, private val in
      * Example:
      *
      * ```
+     * @Configuration
      * @EnableWebFluxSecurity
      * class SecurityConfig {
      *
@@ -607,6 +629,7 @@ class ServerHttpSecurityDsl(private val http: ServerHttpSecurity, private val in
      * Example:
      *
      * ```
+     * @Configuration
      * @EnableWebFluxSecurity
      * class SecurityConfig {
      *
@@ -630,11 +653,104 @@ class ServerHttpSecurityDsl(private val http: ServerHttpSecurity, private val in
     }
 
     /**
+     * Configures logout support using an OpenID Connect 1.0 Provider.
+     * A [ReactiveClientRegistrationRepository] is required and must be registered as a Bean or
+     * configured via [ServerOidcLogoutDsl.clientRegistrationRepository].
+     *
+     * Example:
+     *
+     * ```
+     * @Configuration
+     * @EnableWebFluxSecurity
+     * class SecurityConfig {
+     *
+     *  @Bean
+     *  fun springWebFilterChain(http: ServerHttpSecurity): SecurityWebFilterChain {
+     *      return http {
+     *          oauth2Login { }
+     *          oidcLogout {
+     *              backChannel { }
+     *          }
+     *       }
+     *   }
+     * }
+     * ```
+     *
+     * @param oidcLogoutConfiguration custom configuration to configure the OIDC 1.0 Logout
+     * @see [ServerOidcLogoutDsl]
+     */
+    fun oidcLogout(oidcLogoutConfiguration: ServerOidcLogoutDsl.() -> Unit) {
+        val oidcLogoutCustomizer = ServerOidcLogoutDsl().apply(oidcLogoutConfiguration).get()
+        this.http.oidcLogout(oidcLogoutCustomizer)
+    }
+
+    /**
+     * Configures Session Management support.
+     *
+     * Example:
+     *
+     * ```
+     * @Configuration
+     * @EnableWebFluxSecurity
+     * open class SecurityConfig {
+     *
+     *  @Bean
+     *  open fun springWebFilterChain(http: ServerHttpSecurity): SecurityWebFilterChain {
+     *      return http {
+     *          sessionManagement {
+     *              sessionConcurrency { }
+     *          }
+     *       }
+     *   }
+     * }
+     * ```
+     *
+     * @param sessionManagementConfig custom configuration to configure the Session Management
+     * @since 6.3
+     * @see [ServerSessionManagementDsl]
+     */
+    fun sessionManagement(sessionManagementConfig: ServerSessionManagementDsl.() -> Unit) {
+        val sessionManagementCustomizer = ServerSessionManagementDsl().apply(sessionManagementConfig).get()
+        this.http.sessionManagement(sessionManagementCustomizer)
+    }
+
+    /**
+     * Configures One-Time Token Login support.
+     *
+     * Example:
+     *
+     * ```
+     * @Configuration
+     * @EnableWebFluxSecurity
+     * open class SecurityConfig {
+     *
+     *  @Bean
+     *  open fun springWebFilterChain(http: ServerHttpSecurity): SecurityWebFilterChain {
+     *      return http {
+     *          oneTimeTokenLogin {
+     *              tokenGenerationSuccessHandler = MyMagicLinkServerOneTimeTokenGenerationSuccessHandler()
+     *          }
+     *       }
+     *   }
+     * }
+     * ```
+     *
+     * @param oneTimeTokenLoginConfiguration custom configuration to configure the One-Time Token Login
+     * @since 6.4
+     * @see [ServerOneTimeTokenLoginDsl]
+     */
+    fun oneTimeTokenLogin(oneTimeTokenLoginConfiguration: ServerOneTimeTokenLoginDsl.()-> Unit){
+        val oneTimeTokenLoginCustomizer = ServerOneTimeTokenLoginDsl().apply(oneTimeTokenLoginConfiguration).get()
+        this.http.oneTimeTokenLogin(oneTimeTokenLoginCustomizer)
+    }
+
+    /**
      * Apply all configurations to the provided [ServerHttpSecurity]
      */
     internal fun build(): SecurityWebFilterChain {
         init()
         authenticationManager?.also { this.http.authenticationManager(authenticationManager) }
+        securityContextRepository?.also { this.http.securityContextRepository(securityContextRepository) }
         return this.http.build()
     }
 }

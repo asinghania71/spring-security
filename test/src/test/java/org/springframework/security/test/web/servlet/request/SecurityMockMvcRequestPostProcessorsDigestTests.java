@@ -18,10 +18,9 @@ package org.springframework.security.test.web.servlet.request;
 
 import java.io.IOException;
 
-import javax.servlet.ServletException;
-import javax.servlet.ServletRequest;
-import javax.servlet.ServletResponse;
-
+import jakarta.servlet.ServletException;
+import jakarta.servlet.ServletRequest;
+import jakarta.servlet.ServletResponse;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -88,7 +87,7 @@ public class SecurityMockMvcRequestPostProcessorsDigestTests {
 		String username = "custom";
 		this.password = "secret";
 		MockHttpServletRequest postProcessedRequest = digest(username).password(this.password)
-				.postProcessRequest(this.request);
+			.postProcessRequest(this.request);
 		assertThat(extractUser()).isEqualTo(username);
 	}
 
@@ -97,7 +96,7 @@ public class SecurityMockMvcRequestPostProcessorsDigestTests {
 		String username = "admin";
 		this.entryPoint.setRealmName("Custom");
 		MockHttpServletRequest postProcessedRequest = digest(username).realm(this.entryPoint.getRealmName())
-				.postProcessRequest(this.request);
+			.postProcessRequest(this.request);
 		assertThat(extractUser()).isEqualTo(username);
 	}
 
@@ -105,7 +104,7 @@ public class SecurityMockMvcRequestPostProcessorsDigestTests {
 	public void digestWithFilterFails() throws Exception {
 		String username = "admin";
 		MockHttpServletRequest postProcessedRequest = digest(username).realm("Invalid")
-				.postProcessRequest(this.request);
+			.postProcessRequest(this.request);
 		assertThat(extractUser()).isNull();
 	}
 

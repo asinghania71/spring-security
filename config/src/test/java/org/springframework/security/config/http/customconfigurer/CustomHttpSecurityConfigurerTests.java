@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2018 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,8 +18,7 @@ package org.springframework.security.config.http.customconfigurer;
 
 import java.util.Properties;
 
-import javax.servlet.http.HttpServletResponse;
-
+import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -29,13 +28,15 @@ import org.springframework.beans.factory.config.PropertyPlaceholderConfigurer;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.mock.web.MockFilterChain;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
 import org.springframework.security.web.FilterChainProxy;
+import org.springframework.security.web.SecurityFilterChain;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -59,7 +60,7 @@ public class CustomHttpSecurityConfigurerTests {
 
 	@BeforeEach
 	public void setup() {
-		this.request = new MockHttpServletRequest("GET", "");
+		this.request = new MockHttpServletRequest();
 		this.response = new MockHttpServletResponse();
 		this.chain = new MockFilterChain();
 		this.request.setMethod("GET");
@@ -75,7 +76,7 @@ public class CustomHttpSecurityConfigurerTests {
 	@Test
 	public void customConfiguerPermitAll() throws Exception {
 		loadContext(Config.class);
-		this.request.setPathInfo("/public/something");
+		this.request.setRequestURI("/public/something");
 		this.springSecurityFilterChain.doFilter(this.request, this.response, this.chain);
 		assertThat(this.response.getStatus()).isEqualTo(HttpServletResponse.SC_OK);
 	}
@@ -83,7 +84,7 @@ public class CustomHttpSecurityConfigurerTests {
 	@Test
 	public void customConfiguerFormLogin() throws Exception {
 		loadContext(Config.class);
-		this.request.setPathInfo("/requires-authentication");
+		this.request.setRequestURI("/requires-authentication");
 		this.springSecurityFilterChain.doFilter(this.request, this.response, this.chain);
 		assertThat(this.response.getRedirectedUrl()).endsWith("/custom");
 	}
@@ -91,7 +92,7 @@ public class CustomHttpSecurityConfigurerTests {
 	@Test
 	public void customConfiguerCustomizeDisablesCsrf() throws Exception {
 		loadContext(ConfigCustomize.class);
-		this.request.setPathInfo("/public/something");
+		this.request.setRequestURI("/public/something");
 		this.request.setMethod("POST");
 		this.springSecurityFilterChain.doFilter(this.request, this.response, this.chain);
 		assertThat(this.response.getStatus()).isEqualTo(HttpServletResponse.SC_OK);
@@ -100,7 +101,7 @@ public class CustomHttpSecurityConfigurerTests {
 	@Test
 	public void customConfiguerCustomizeFormLogin() throws Exception {
 		loadContext(ConfigCustomize.class);
-		this.request.setPathInfo("/requires-authentication");
+		this.request.setRequestURI("/requires-authentication");
 		this.springSecurityFilterChain.doFilter(this.request, this.response, this.chain);
 		assertThat(this.response.getRedirectedUrl()).endsWith("/other");
 	}
@@ -110,15 +111,17 @@ public class CustomHttpSecurityConfigurerTests {
 		context.getAutowireCapableBeanFactory().autowireBean(this);
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class Config extends WebSecurityConfigurerAdapter {
+	static class Config {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
 				.apply(CustomConfigurer.customConfigurer())
 					.loginPage("/custom");
+			return http.build();
 			// @formatter:on
 		}
 
@@ -134,18 +137,19 @@ public class CustomHttpSecurityConfigurerTests {
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class ConfigCustomize extends WebSecurityConfigurerAdapter {
+	static class ConfigCustomize {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.apply(CustomConfigurer.customConfigurer())
-					.and()
-				.csrf().disable()
-				.formLogin()
-					.loginPage("/other");
+				.with(CustomConfigurer.customConfigurer(), Customizer.withDefaults())
+				.csrf((csrf) -> csrf.disable())
+				.formLogin((login) -> login
+					.loginPage("/other"));
+			return http.build();
 			// @formatter:on
 		}
 

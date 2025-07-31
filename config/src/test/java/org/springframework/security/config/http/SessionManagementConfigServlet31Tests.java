@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2013 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,7 @@
 
 package org.springframework.security.config.http;
 
-import javax.servlet.Filter;
-
+import jakarta.servlet.Filter;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -27,10 +26,7 @@ import org.springframework.mock.web.MockFilterChain;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.config.util.InMemoryXmlApplicationContext;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextImpl;
-import org.springframework.security.web.context.HttpRequestResponseHolder;
-import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
+import org.springframework.security.web.servlet.TestMockHttpServletRequests;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -62,7 +58,7 @@ public class SessionManagementConfigServlet31Tests {
 
 	@BeforeEach
 	public void setup() {
-		this.request = new MockHttpServletRequest("GET", "");
+		this.request = new MockHttpServletRequest();
 		this.response = new MockHttpServletResponse();
 		this.chain = new MockFilterChain();
 	}
@@ -76,16 +72,16 @@ public class SessionManagementConfigServlet31Tests {
 
 	@Test
 	public void changeSessionIdThenPreserveParameters() throws Exception {
-		MockHttpServletRequest request = new MockHttpServletRequest("GET", "");
+		MockHttpServletRequest request = TestMockHttpServletRequests.post("/login")
+			.param("username", "user")
+			.param("password", "password")
+			.build();
 		request.getSession();
-		request.setServletPath("/login");
-		request.setMethod("POST");
-		request.setParameter("username", "user");
-		request.setParameter("password", "password");
 		request.getSession().setAttribute("attribute1", "value1");
 		String id = request.getSession().getId();
 		// @formatter:off
 		loadContext("<http>\n"
+				+ "        <intercept-url pattern=\"/**\" access=\"authenticated\"/>\n"
 				+ "        <form-login/>\n"
 				+ "        <session-management/>\n"
 				+ "        <csrf disabled='true'/>\n"
@@ -99,15 +95,15 @@ public class SessionManagementConfigServlet31Tests {
 
 	@Test
 	public void changeSessionId() throws Exception {
-		MockHttpServletRequest request = new MockHttpServletRequest("GET", "");
+		MockHttpServletRequest request = TestMockHttpServletRequests.post("/login")
+			.param("username", "user")
+			.param("password", "password")
+			.build();
 		request.getSession();
-		request.setServletPath("/login");
-		request.setMethod("POST");
-		request.setParameter("username", "user");
-		request.setParameter("password", "password");
 		String id = request.getSession().getId();
 		// @formatter:off
 		loadContext("<http>\n"
+				+ "        <intercept-url pattern=\"/**\" access=\"authenticated\"/>\n"
 				+ "        <form-login/>\n"
 				+ "        <session-management session-fixation-protection='changeSessionId'/>\n"
 				+ "        <csrf disabled='true'/>\n"
@@ -121,15 +117,6 @@ public class SessionManagementConfigServlet31Tests {
 	private void loadContext(String context) {
 		this.context = new InMemoryXmlApplicationContext(context);
 		this.springSecurityFilterChain = this.context.getBean("springSecurityFilterChain", Filter.class);
-	}
-
-	private void login(Authentication auth) {
-		HttpSessionSecurityContextRepository repo = new HttpSessionSecurityContextRepository();
-		HttpRequestResponseHolder requestResponseHolder = new HttpRequestResponseHolder(this.request, this.response);
-		repo.loadContext(requestResponseHolder);
-		SecurityContextImpl securityContextImpl = new SecurityContextImpl();
-		securityContextImpl.setAuthentication(auth);
-		repo.saveContext(securityContextImpl, requestResponseHolder.getRequest(), requestResponseHolder.getResponse());
 	}
 
 }

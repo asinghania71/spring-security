@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2025 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,18 +22,24 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import org.aopalliance.intercept.MethodInvocation;
 
-import org.springframework.aop.support.AopUtils;
 import org.springframework.core.MethodClassKey;
 import org.springframework.lang.NonNull;
+import org.springframework.security.access.expression.method.DefaultMethodSecurityExpressionHandler;
+import org.springframework.security.access.expression.method.MethodSecurityExpressionHandler;
+import org.springframework.security.core.annotation.AnnotationTemplateExpressionDefaults;
+import org.springframework.util.Assert;
 
 /**
  * For internal use only, as this contract is likely to change
  *
  * @author Evgeniy Cheban
+ * @author DingHao
  */
 abstract class AbstractExpressionAttributeRegistry<T extends ExpressionAttribute> {
 
 	private final Map<MethodClassKey, T> cachedAttributes = new ConcurrentHashMap<>();
+
+	private MethodSecurityExpressionHandler expressionHandler = new DefaultMethodSecurityExpressionHandler();
 
 	/**
 	 * Returns an {@link ExpressionAttribute} for the {@link MethodInvocation}.
@@ -43,7 +49,7 @@ abstract class AbstractExpressionAttributeRegistry<T extends ExpressionAttribute
 	final T getAttribute(MethodInvocation mi) {
 		Method method = mi.getMethod();
 		Object target = mi.getThis();
-		Class<?> targetClass = (target != null) ? AopUtils.getTargetClass(target) : null;
+		Class<?> targetClass = (target != null) ? target.getClass() : null;
 		return getAttribute(method, targetClass);
 	}
 
@@ -59,6 +65,21 @@ abstract class AbstractExpressionAttributeRegistry<T extends ExpressionAttribute
 	}
 
 	/**
+	 * Returns the {@link MethodSecurityExpressionHandler}.
+	 * @return the {@link MethodSecurityExpressionHandler} to use
+	 */
+	MethodSecurityExpressionHandler getExpressionHandler() {
+		return this.expressionHandler;
+	}
+
+	void setExpressionHandler(MethodSecurityExpressionHandler expressionHandler) {
+		Assert.notNull(expressionHandler, "expressionHandler cannot be null");
+		this.expressionHandler = expressionHandler;
+	}
+
+	abstract void setTemplateDefaults(AnnotationTemplateExpressionDefaults adapter);
+
+	/**
 	 * Subclasses should implement this method to provide the non-null
 	 * {@link ExpressionAttribute} for the method and the target class.
 	 * @param method the method
@@ -67,5 +88,9 @@ abstract class AbstractExpressionAttributeRegistry<T extends ExpressionAttribute
 	 */
 	@NonNull
 	abstract T resolveAttribute(Method method, Class<?> targetClass);
+
+	Class<?> targetClass(Method method, Class<?> targetClass) {
+		return (targetClass != null) ? targetClass : method.getDeclaringClass();
+	}
 
 }

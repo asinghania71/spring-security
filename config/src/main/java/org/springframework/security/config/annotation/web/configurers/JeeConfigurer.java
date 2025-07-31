@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2013 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,9 +19,10 @@ package org.springframework.security.config.annotation.web.configurers;
 import java.util.HashSet;
 import java.util.Set;
 
-import javax.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletRequest;
 
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.HttpSecurityBuilder;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.core.authority.mapping.SimpleMappableAttributesRetriever;
@@ -77,7 +78,7 @@ public final class JeeConfigurer<H extends HttpSecurityBuilder<H>> extends Abstr
 
 	/**
 	 * Creates a new instance
-	 * @see HttpSecurity#jee()
+	 * @see HttpSecurity#jee(Customizer)
 	 */
 	public JeeConfigurer() {
 	}
@@ -192,13 +193,14 @@ public final class JeeConfigurer<H extends HttpSecurityBuilder<H>> extends Abstr
 		PreAuthenticatedAuthenticationProvider authenticationProvider = new PreAuthenticatedAuthenticationProvider();
 		authenticationProvider.setPreAuthenticatedUserDetailsService(getUserDetailsService());
 		authenticationProvider = postProcess(authenticationProvider);
-		http.authenticationProvider(authenticationProvider).setSharedObject(AuthenticationEntryPoint.class,
-				new Http403ForbiddenEntryPoint());
+		http.authenticationProvider(authenticationProvider)
+			.setSharedObject(AuthenticationEntryPoint.class, new Http403ForbiddenEntryPoint());
 	}
 
 	@Override
 	public void configure(H http) {
-		J2eePreAuthenticatedProcessingFilter filter = getFilter(http.getSharedObject(AuthenticationManager.class));
+		J2eePreAuthenticatedProcessingFilter filter = getFilter(http.getSharedObject(AuthenticationManager.class),
+				http);
 		http.addFilter(filter);
 	}
 
@@ -208,12 +210,14 @@ public final class JeeConfigurer<H extends HttpSecurityBuilder<H>> extends Abstr
 	 * @param authenticationManager the {@link AuthenticationManager} to use.
 	 * @return the {@link J2eePreAuthenticatedProcessingFilter} to use.
 	 */
-	private J2eePreAuthenticatedProcessingFilter getFilter(AuthenticationManager authenticationManager) {
+	private J2eePreAuthenticatedProcessingFilter getFilter(AuthenticationManager authenticationManager, H http) {
 		if (this.j2eePreAuthenticatedProcessingFilter == null) {
 			this.j2eePreAuthenticatedProcessingFilter = new J2eePreAuthenticatedProcessingFilter();
 			this.j2eePreAuthenticatedProcessingFilter.setAuthenticationManager(authenticationManager);
 			this.j2eePreAuthenticatedProcessingFilter
-					.setAuthenticationDetailsSource(createWebAuthenticationDetailsSource());
+				.setAuthenticationDetailsSource(createWebAuthenticationDetailsSource());
+			this.j2eePreAuthenticatedProcessingFilter
+				.setSecurityContextHolderStrategy(getSecurityContextHolderStrategy());
 			this.j2eePreAuthenticatedProcessingFilter = postProcess(this.j2eePreAuthenticatedProcessingFilter);
 		}
 

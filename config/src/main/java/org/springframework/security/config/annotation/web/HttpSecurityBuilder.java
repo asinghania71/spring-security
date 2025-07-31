@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2020 the original author or authors.
+ * Copyright 2002-2025 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,17 +16,18 @@
 
 package org.springframework.security.config.annotation.web;
 
-import javax.servlet.Filter;
+import jakarta.servlet.Filter;
 
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.config.annotation.SecurityBuilder;
 import org.springframework.security.config.annotation.SecurityConfigurer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.core.userdetails.UserDetailsService;
-import org.springframework.security.openid.OpenIDAuthenticationFilter;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.DefaultSecurityFilterChain;
 import org.springframework.security.web.access.ExceptionTranslationFilter;
 import org.springframework.security.web.access.channel.ChannelProcessingFilter;
+import org.springframework.security.web.access.intercept.AuthorizationFilter;
 import org.springframework.security.web.access.intercept.FilterSecurityInterceptor;
 import org.springframework.security.web.authentication.AnonymousAuthenticationFilter;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
@@ -37,12 +38,19 @@ import org.springframework.security.web.authentication.rememberme.RememberMeAuth
 import org.springframework.security.web.authentication.switchuser.SwitchUserFilter;
 import org.springframework.security.web.authentication.www.BasicAuthenticationFilter;
 import org.springframework.security.web.authentication.www.DigestAuthenticationFilter;
+import org.springframework.security.web.context.SecurityContextHolderFilter;
 import org.springframework.security.web.context.SecurityContextPersistenceFilter;
+import org.springframework.security.web.context.request.async.WebAsyncManagerIntegrationFilter;
+import org.springframework.security.web.csrf.CsrfFilter;
+import org.springframework.security.web.header.HeaderWriterFilter;
 import org.springframework.security.web.jaasapi.JaasApiIntegrationFilter;
 import org.springframework.security.web.savedrequest.RequestCacheAwareFilter;
 import org.springframework.security.web.servletapi.SecurityContextHolderAwareRequestFilter;
 import org.springframework.security.web.session.ConcurrentSessionFilter;
+import org.springframework.security.web.session.DisableEncodeUrlFilter;
+import org.springframework.security.web.session.ForceEagerSessionCreationFilter;
 import org.springframework.security.web.session.SessionManagementFilter;
+import org.springframework.web.filter.CorsFilter;
 
 /**
  * @param <H>
@@ -124,29 +132,43 @@ public interface HttpSecurityBuilder<H extends HttpSecurityBuilder<H>>
 	 * The ordering of the Filters is:
 	 *
 	 * <ul>
+	 * <li>{@link DisableEncodeUrlFilter}</li>
+	 * <li>{@link ForceEagerSessionCreationFilter}</li>
 	 * <li>{@link ChannelProcessingFilter}</li>
+	 * <li>{@link org.springframework.security.web.transport.HttpsRedirectFilter}</li>
+	 * <li>{@link WebAsyncManagerIntegrationFilter}</li>
+	 * <li>{@link SecurityContextHolderFilter}</li>
 	 * <li>{@link SecurityContextPersistenceFilter}</li>
+	 * <li>{@link HeaderWriterFilter}</li>
+	 * <li>{@link CorsFilter}</li>
+	 * <li>{@link CsrfFilter}</li>
 	 * <li>{@link LogoutFilter}</li>
+	 * <li>{@link org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestRedirectFilter}</li>
+	 * <li>{@link org.springframework.security.saml2.provider.service.web.Saml2WebSsoAuthenticationRequestFilter}</li>
 	 * <li>{@link X509AuthenticationFilter}</li>
 	 * <li>{@link AbstractPreAuthenticatedProcessingFilter}</li>
 	 * <li><a href="
 	 * {@docRoot}/org/springframework/security/cas/web/CasAuthenticationFilter.html">CasAuthenticationFilter</a></li>
+	 * <li>{@link org.springframework.security.oauth2.client.web.OAuth2LoginAuthenticationFilter}</li>
+	 * <li>{@link org.springframework.security.saml2.provider.service.web.authentication.Saml2WebSsoAuthenticationFilter}</li>
 	 * <li>{@link UsernamePasswordAuthenticationFilter}</li>
-	 * <li>{@link OpenIDAuthenticationFilter}</li>
 	 * <li>{@link org.springframework.security.web.authentication.ui.DefaultLoginPageGeneratingFilter}</li>
 	 * <li>{@link org.springframework.security.web.authentication.ui.DefaultLogoutPageGeneratingFilter}</li>
 	 * <li>{@link ConcurrentSessionFilter}</li>
 	 * <li>{@link DigestAuthenticationFilter}</li>
-	 * <li>{@link org.springframework.security.oauth2.server.resource.web.BearerTokenAuthenticationFilter}</li>
+	 * <li>{@link BearerTokenAuthenticationFilter}</li>
 	 * <li>{@link BasicAuthenticationFilter}</li>
+	 * <li>{@link org.springframework.security.web.authentication.AuthenticationFilter}</li>
 	 * <li>{@link RequestCacheAwareFilter}</li>
 	 * <li>{@link SecurityContextHolderAwareRequestFilter}</li>
 	 * <li>{@link JaasApiIntegrationFilter}</li>
 	 * <li>{@link RememberMeAuthenticationFilter}</li>
 	 * <li>{@link AnonymousAuthenticationFilter}</li>
+	 * <li>{@link org.springframework.security.oauth2.client.web.OAuth2AuthorizationCodeGrantFilter}</li>
 	 * <li>{@link SessionManagementFilter}</li>
 	 * <li>{@link ExceptionTranslationFilter}</li>
 	 * <li>{@link FilterSecurityInterceptor}</li>
+	 * <li>{@link AuthorizationFilter}</li>
 	 * <li>{@link SwitchUserFilter}</li>
 	 * </ul>
 	 * @param filter the {@link Filter} to add

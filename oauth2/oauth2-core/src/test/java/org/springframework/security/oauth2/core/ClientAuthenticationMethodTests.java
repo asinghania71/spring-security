@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2025 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,13 @@
 
 package org.springframework.security.oauth2.core;
 
+import java.util.stream.Stream;
+
+import org.junit.jupiter.api.DynamicTest;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestFactory;
+
+import org.springframework.util.StringUtils;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
@@ -34,18 +40,8 @@ public class ClientAuthenticationMethodTests {
 	}
 
 	@Test
-	public void getValueWhenAuthenticationMethodBasicThenReturnBasic() {
-		assertThat(ClientAuthenticationMethod.BASIC.getValue()).isEqualTo("basic");
-	}
-
-	@Test
 	public void getValueWhenAuthenticationMethodClientSecretBasicThenReturnClientSecretBasic() {
 		assertThat(ClientAuthenticationMethod.CLIENT_SECRET_BASIC.getValue()).isEqualTo("client_secret_basic");
-	}
-
-	@Test
-	public void getValueWhenAuthenticationMethodPostThenReturnPost() {
-		assertThat(ClientAuthenticationMethod.POST.getValue()).isEqualTo("post");
 	}
 
 	@Test
@@ -66,6 +62,36 @@ public class ClientAuthenticationMethodTests {
 	@Test
 	public void getValueWhenAuthenticationMethodNoneThenReturnNone() {
 		assertThat(ClientAuthenticationMethod.NONE.getValue()).isEqualTo("none");
+	}
+
+	@Test
+	public void getValueWhenAuthenticationMethodTlsClientAuthThenReturnTlsClientAuth() {
+		assertThat(ClientAuthenticationMethod.TLS_CLIENT_AUTH.getValue()).isEqualTo("tls_client_auth");
+	}
+
+	@Test
+	public void getValueWhenAuthenticationMethodSelfSignedTlsClientAuthThenReturnSelfSignedTlsClientAuth() {
+		assertThat(ClientAuthenticationMethod.SELF_SIGNED_TLS_CLIENT_AUTH.getValue())
+			.isEqualTo("self_signed_tls_client_auth");
+	}
+
+	@Test
+	public void valueOfWhenAnyAuthenticationMethodThenConstructs() {
+		String string = new String("any");
+		ClientAuthenticationMethod method = ClientAuthenticationMethod.valueOf(string);
+		assertThat(method.getValue()).isSameAs(string);
+	}
+
+	@TestFactory
+	Stream<DynamicTest> valueOfWhenMatchesStaticThenReturnsStatic() {
+		return Stream.of(ClientAuthenticationMethod.methods())
+			.map((method) -> DynamicTest.dynamicTest(testName(method.getValue()),
+					() -> assertThat(ClientAuthenticationMethod.valueOf(method.getValue())).isSameAs(method)));
+	}
+
+	String testName(String method) {
+		String methodName = StringUtils.capitalize(method.replaceAll("_", ""));
+		return "valueOfWhen" + methodName + "ThenReturnsStatic" + methodName;
 	}
 
 }

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  ~ Copyright 2002-2020 the original author or authors.
+  ~ Copyright 2002-2022 the original author or authors.
   ~
   ~ Licensed under the Apache License, Version 2.0 (the "License");
   ~ you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@
 
 	<http auto-config="true">
 		<oauth2-client authorized-client-repository-ref="authorizedClientRepository" />
+		<intercept-url pattern="/**" access="authenticated"/>
 	</http>
 
 	<mvc:annotation-driven />
@@ -42,9 +43,7 @@
 							 provider-id="google"/>
 	</client-registrations>
 
-	<b:bean id="authorizedClientRepository" class="org.mockito.Mockito" factory-method="mock">
-		<b:constructor-arg value="org.springframework.security.oauth2.client.web.OAuth2AuthorizedClientRepository"/>
-	</b:bean>
+	<b:bean id="authorizedClientRepository" class="org.springframework.security.oauth2.client.web.HttpSessionOAuth2AuthorizedClientRepository"/>
 
 	<b:bean name="authorizedClientController" class="org.springframework.security.config.http.OAuth2ClientBeanDefinitionParserTests.AuthorizedClientController" />
 

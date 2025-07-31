@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2025 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,9 +18,6 @@ package org.springframework.security.web.server.authorization;
 
 import reactor.core.publisher.Mono;
 
-import org.springframework.context.MessageSource;
-import org.springframework.context.MessageSourceAware;
-import org.springframework.context.support.MessageSourceAccessor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
@@ -29,7 +26,6 @@ import org.springframework.security.authentication.AuthenticationTrustResolverIm
 import org.springframework.security.authentication.InsufficientAuthenticationException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
-import org.springframework.security.core.SpringSecurityMessageSource;
 import org.springframework.security.web.server.ServerAuthenticationEntryPoint;
 import org.springframework.security.web.server.authentication.HttpBasicServerAuthenticationEntryPoint;
 import org.springframework.util.Assert;
@@ -42,7 +38,7 @@ import org.springframework.web.server.WebFilterChain;
  * @author César Revert
  * @since 5.0
  */
-public class ExceptionTranslationWebFilter implements WebFilter, MessageSourceAware {
+public class ExceptionTranslationWebFilter implements WebFilter {
 
 	private ServerAuthenticationEntryPoint authenticationEntryPoint = new HttpBasicServerAuthenticationEntryPoint();
 
@@ -51,18 +47,22 @@ public class ExceptionTranslationWebFilter implements WebFilter, MessageSourceAw
 
 	private AuthenticationTrustResolver authenticationTrustResolver = new AuthenticationTrustResolverImpl();
 
-	protected MessageSourceAccessor messages = SpringSecurityMessageSource.getAccessor();
-
 	@Override
 	public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
-		return chain.filter(exchange).onErrorResume(AccessDeniedException.class, (denied) -> exchange.getPrincipal()
-				.filter((principal) -> (!(principal instanceof Authentication) || (principal instanceof Authentication
-						&& !(this.authenticationTrustResolver.isAnonymous((Authentication) principal)))))
-				.switchIfEmpty(commenceAuthentication(exchange,
-						new InsufficientAuthenticationException(
-								this.messages.getMessage("ExceptionTranslationWebFilter.insufficientAuthentication",
-										"Full authentication is required to access this resource"))))
-				.flatMap((principal) -> this.accessDeniedHandler.handle(exchange, denied)).then());
+		return chain.filter(exchange)
+			.onErrorResume(AccessDeniedException.class,
+					(denied) -> exchange.getPrincipal()
+						.switchIfEmpty(Mono.defer(() -> commenceAuthentication(exchange, null)))
+						.flatMap((principal) -> {
+							if (!(principal instanceof Authentication authentication)) {
+								return this.accessDeniedHandler.handle(exchange, denied);
+							}
+							if (this.authenticationTrustResolver.isAuthenticated(authentication)) {
+								return this.accessDeniedHandler.handle(exchange, denied);
+							}
+							return commenceAuthentication(exchange, authentication);
+						})
+						.then());
 	}
 
 	/**
@@ -97,19 +97,14 @@ public class ExceptionTranslationWebFilter implements WebFilter, MessageSourceAw
 		this.authenticationTrustResolver = authenticationTrustResolver;
 	}
 
-	/**
-	 * @since 5.5
-	 */
-	@Override
-	public void setMessageSource(MessageSource messageSource) {
-		Assert.notNull(messageSource, "messageSource cannot be null");
-		this.messages = new MessageSourceAccessor(messageSource);
-	}
-
-	private <T> Mono<T> commenceAuthentication(ServerWebExchange exchange, AuthenticationException denied) {
-		return this.authenticationEntryPoint
-				.commence(exchange, new AuthenticationCredentialsNotFoundException("Not Authenticated", denied))
-				.then(Mono.empty());
+	private <T> Mono<T> commenceAuthentication(ServerWebExchange exchange, Authentication authentication) {
+		AuthenticationException cause = new InsufficientAuthenticationException(
+				"Full authentication is required to access this resource");
+		AuthenticationException ex = new AuthenticationCredentialsNotFoundException("Not Authenticated", cause);
+		if (authentication != null) {
+			ex.setAuthenticationRequest(authentication);
+		}
+		return this.authenticationEntryPoint.commence(exchange, ex).then(Mono.empty());
 	}
 
 }

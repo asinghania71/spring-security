@@ -67,14 +67,14 @@ public class OAuth2LoginAuthenticationWebFilterTests {
 	private ClientRegistration.Builder registration = TestClientRegistrations.clientRegistration();
 
 	private OAuth2AuthorizationResponse.Builder authorizationResponseBldr = OAuth2AuthorizationResponse.success("code")
-			.state("state");
+		.state("state");
 
 	@BeforeEach
 	public void setup() {
 		this.filter = new OAuth2LoginAuthenticationWebFilter(this.authenticationManager,
 				this.authorizedClientRepository);
 		this.webFilterExchange = new WebFilterExchange(MockServerWebExchange.from(MockServerHttpRequest.get("/")),
-				new DefaultWebFilterChain((exchange) -> exchange.getResponse().setComplete()));
+				new DefaultWebFilterChain((exchange) -> exchange.getResponse().setComplete(), Collections.emptyList()));
 		given(this.authorizedClientRepository.saveAuthorizedClient(any(), any(), any())).willReturn(Mono.empty());
 	}
 

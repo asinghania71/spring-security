@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2016 the original author or authors.
+ * Copyright 2002-2025 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,8 @@ import java.util.List;
 import org.springframework.beans.factory.BeanCreationException;
 import org.springframework.security.access.ConfigAttribute;
 import org.springframework.security.access.SecurityConfig;
+import org.springframework.security.authorization.AuthorizationManager;
+import org.springframework.security.core.annotation.SecurityAnnotationScanner;
 import org.springframework.security.web.access.channel.ChannelDecisionManagerImpl;
 
 /**
@@ -29,7 +31,14 @@ import org.springframework.security.web.access.channel.ChannelDecisionManagerImp
  *
  * @author Luke Taylor
  * @since 3.0
+ * @deprecated In modern Spring Security APIs, each API manages its own configuration
+ * context. As such there is no direct replacement for this interface. In the case of
+ * method security, please see {@link SecurityAnnotationScanner} and
+ * {@link AuthorizationManager}. In the case of channel security, please see
+ * {@code HttpsRedirectFilter}. In the case of web security, please see
+ * {@link AuthorizationManager}.
  */
+@Deprecated
 public final class ChannelAttributeFactory {
 
 	private static final String OPT_REQUIRES_HTTP = "http";
@@ -42,19 +51,12 @@ public final class ChannelAttributeFactory {
 	}
 
 	public static List<ConfigAttribute> createChannelAttributes(String requiredChannel) {
-		String channelConfigAttribute;
-		if (requiredChannel.equals(OPT_REQUIRES_HTTPS)) {
-			channelConfigAttribute = "REQUIRES_SECURE_CHANNEL";
-		}
-		else if (requiredChannel.equals(OPT_REQUIRES_HTTP)) {
-			channelConfigAttribute = "REQUIRES_INSECURE_CHANNEL";
-		}
-		else if (requiredChannel.equals(OPT_ANY_CHANNEL)) {
-			channelConfigAttribute = ChannelDecisionManagerImpl.ANY_CHANNEL;
-		}
-		else {
-			throw new BeanCreationException("Unknown channel attribute " + requiredChannel);
-		}
+		String channelConfigAttribute = switch (requiredChannel) {
+			case OPT_REQUIRES_HTTPS -> "REQUIRES_SECURE_CHANNEL";
+			case OPT_REQUIRES_HTTP -> "REQUIRES_INSECURE_CHANNEL";
+			case OPT_ANY_CHANNEL -> ChannelDecisionManagerImpl.ANY_CHANNEL;
+			default -> throw new BeanCreationException("Unknown channel attribute " + requiredChannel);
+		};
 		return SecurityConfig.createList(channelConfigAttribute);
 	}
 

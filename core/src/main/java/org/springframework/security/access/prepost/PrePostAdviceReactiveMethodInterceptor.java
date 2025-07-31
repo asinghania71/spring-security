@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,8 +19,6 @@ package org.springframework.security.access.prepost;
 import java.lang.reflect.Method;
 import java.util.Collection;
 
-import kotlin.coroutines.Continuation;
-import kotlinx.coroutines.reactive.AwaitKt;
 import kotlinx.coroutines.reactive.ReactiveFlowKt;
 import org.aopalliance.intercept.MethodInterceptor;
 import org.aopalliance.intercept.MethodInvocation;
@@ -29,7 +27,6 @@ import reactor.core.Exceptions;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-import org.springframework.core.CoroutinesUtils;
 import org.springframework.core.KotlinDetector;
 import org.springframework.core.MethodParameter;
 import org.springframework.core.ReactiveAdapter;
@@ -52,7 +49,12 @@ import org.springframework.util.Assert;
  * @author Rob Winch
  * @author Eleftheria Stein
  * @since 5.0
+ * @deprecated Use
+ * {@link org.springframework.security.authorization.method.AuthorizationManagerBeforeReactiveMethodInterceptor}
+ * or
+ * {@link org.springframework.security.authorization.method.AuthorizationManagerAfterReactiveMethodInterceptor}
  */
+@Deprecated
 public class PrePostAdviceReactiveMethodInterceptor implements MethodInterceptor {
 
 	private Authentication anonymous = new AnonymousAuthenticationToken("key", "anonymous",
@@ -92,7 +94,7 @@ public class PrePostAdviceReactiveMethodInterceptor implements MethodInterceptor
 
 		boolean isSuspendingFunction = KotlinDetector.isSuspendingFunction(method);
 		boolean hasFlowReturnType = COROUTINES_FLOW_CLASS_NAME
-				.equals(new MethodParameter(method, RETURN_TYPE_METHOD_PARAMETER_INDEX).getParameterType().getName());
+			.equals(new MethodParameter(method, RETURN_TYPE_METHOD_PARAMETER_INDEX).getParameterType().getName());
 		boolean hasReactiveReturnType = Publisher.class.isAssignableFrom(returnType) || isSuspendingFunction
 				|| hasFlowReturnType;
 
@@ -114,41 +116,30 @@ public class PrePostAdviceReactiveMethodInterceptor implements MethodInterceptor
 		PostInvocationAttribute attr = findPostInvocationAttribute(attributes);
 		if (Mono.class.isAssignableFrom(returnType)) {
 			return toInvoke.flatMap((auth) -> PrePostAdviceReactiveMethodInterceptor.<Mono<?>>proceed(invocation)
-					.map((r) -> (attr != null) ? this.postAdvice.after(auth, invocation, attr, r) : r));
+				.map((r) -> (attr != null) ? this.postAdvice.after(auth, invocation, attr, r) : r));
 		}
 		if (Flux.class.isAssignableFrom(returnType)) {
 			return toInvoke.flatMapMany((auth) -> PrePostAdviceReactiveMethodInterceptor.<Flux<?>>proceed(invocation)
-					.map((r) -> (attr != null) ? this.postAdvice.after(auth, invocation, attr, r) : r));
+				.map((r) -> (attr != null) ? this.postAdvice.after(auth, invocation, attr, r) : r));
 		}
 		if (hasFlowReturnType) {
-			Flux<?> response;
 			if (isSuspendingFunction) {
-				response = toInvoke.flatMapMany((auth) -> Flux
-						.from(CoroutinesUtils.invokeSuspendingFunction(invocation.getMethod(), invocation.getThis(),
-								invocation.getArguments()))
+				return toInvoke
+					.flatMapMany((auth) -> Flux.from(PrePostAdviceReactiveMethodInterceptor.proceed(invocation))
 						.map((r) -> (attr != null) ? this.postAdvice.after(auth, invocation, attr, r) : r));
 			}
 			else {
 				ReactiveAdapter adapter = ReactiveAdapterRegistry.getSharedInstance().getAdapter(returnType);
 				Assert.state(adapter != null, () -> "The returnType " + returnType + " on " + method
 						+ " must have a org.springframework.core.ReactiveAdapter registered");
-				response = toInvoke.flatMapMany((auth) -> Flux
-						.from(adapter.toPublisher(PrePostAdviceReactiveMethodInterceptor.flowProceed(invocation)))
-						.map((r) -> (attr != null) ? this.postAdvice.after(auth, invocation, attr, r) : r));
-			}
-			return KotlinDelegate.asFlow(response);
-		}
-		if (isSuspendingFunction) {
-			Mono<?> response = toInvoke.flatMap((auth) -> Mono
-					.from(CoroutinesUtils.invokeSuspendingFunction(invocation.getMethod(), invocation.getThis(),
-							invocation.getArguments()))
+				Flux<?> response = toInvoke.flatMapMany((auth) -> Flux
+					.from(adapter.toPublisher(PrePostAdviceReactiveMethodInterceptor.flowProceed(invocation)))
 					.map((r) -> (attr != null) ? this.postAdvice.after(auth, invocation, attr, r) : r));
-			return KotlinDelegate.awaitSingleOrNull(response,
-					invocation.getArguments()[invocation.getArguments().length - 1]);
+				return KotlinDelegate.asFlow(response);
+			}
 		}
-		return toInvoke.flatMapMany(
-				(auth) -> Flux.from(PrePostAdviceReactiveMethodInterceptor.<Publisher<?>>proceed(invocation))
-						.map((r) -> (attr != null) ? this.postAdvice.after(auth, invocation, attr, r) : r));
+		return toInvoke.flatMap((auth) -> Mono.from(PrePostAdviceReactiveMethodInterceptor.proceed(invocation))
+			.map((r) -> (attr != null) ? this.postAdvice.after(auth, invocation, attr, r) : r));
 	}
 
 	private static <T extends Publisher<?>> T proceed(final MethodInvocation invocation) {
@@ -194,10 +185,6 @@ public class PrePostAdviceReactiveMethodInterceptor implements MethodInterceptor
 
 		private static Object asFlow(Publisher<?> publisher) {
 			return ReactiveFlowKt.asFlow(publisher);
-		}
-
-		private static Object awaitSingleOrNull(Publisher<?> publisher, Object continuation) {
-			return AwaitKt.awaitSingleOrNull(publisher, (Continuation<Object>) continuation);
 		}
 
 	}

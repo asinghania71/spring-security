@@ -52,6 +52,15 @@ public class IntegrationTestPlugin implements Plugin<Project> {
 			// ensure we don't add if no tests to avoid adding Gretty
 			return
 		}
+		project.sourceSets {
+			integrationTest {
+				java.srcDir project.file('src/integration-test/java')
+				resources.srcDir project.file('src/integration-test/resources')
+				compileClasspath = project.sourceSets.main.output + project.sourceSets.test.output + project.configurations.integrationTestCompileClasspath
+				runtimeClasspath = output + compileClasspath + project.configurations.integrationTestRuntimeClasspath
+			}
+		}
+
 		project.configurations {
 			integrationTestCompile {
 				extendsFrom testImplementation
@@ -59,14 +68,11 @@ public class IntegrationTestPlugin implements Plugin<Project> {
 			integrationTestRuntime {
 				extendsFrom integrationTestCompile, testRuntime, testRuntimeOnly
 			}
-		}
-
-		project.sourceSets {
-			integrationTest {
-				java.srcDir project.file('src/integration-test/java')
-				resources.srcDir project.file('src/integration-test/resources')
-				compileClasspath = project.sourceSets.main.output + project.sourceSets.test.output + project.configurations.integrationTestCompile
-				runtimeClasspath = output + compileClasspath + project.configurations.integrationTestRuntime
+			integrationTestCompileClasspath {
+				extendsFrom integrationTestCompile
+			}
+			integrationTestRuntimeClasspath {
+				extendsFrom integrationTestRuntime
 			}
 		}
 
@@ -85,7 +91,7 @@ public class IntegrationTestPlugin implements Plugin<Project> {
 			project.idea {
 				module {
 					testSourceDirs += project.file('src/integration-test/java')
-					scopes.TEST.plus += [ project.configurations.integrationTestCompile ]
+					scopes.TEST.plus += [ project.configurations.integrationTestCompileClasspath ]
 				}
 			}
 		}
@@ -115,7 +121,7 @@ public class IntegrationTestPlugin implements Plugin<Project> {
 
 		project.plugins.withType(EclipsePlugin) {
 			project.eclipse.classpath {
-				plusConfigurations += [ project.configurations.integrationTestCompile ]
+				plusConfigurations += [ project.configurations.integrationTestCompileClasspath ]
 			}
 		}
 	}

@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2019 the original author or authors.
+ * Copyright 2002-2025 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -75,7 +75,7 @@ public class ReactiveOAuth2AuthorizedClientProviderBuilderTests {
 	@Test
 	public void providerWhenNullThenThrowIllegalArgumentException() {
 		assertThatIllegalArgumentException()
-				.isThrownBy(() -> ReactiveOAuth2AuthorizedClientProviderBuilder.builder().provider(null));
+			.isThrownBy(() -> ReactiveOAuth2AuthorizedClientProviderBuilder.builder().provider(null));
 	}
 
 	@Test
@@ -91,7 +91,7 @@ public class ReactiveOAuth2AuthorizedClientProviderBuilderTests {
 				.build();
 		// @formatter:on
 		assertThatExceptionOfType(ClientAuthorizationRequiredException.class)
-				.isThrownBy(() -> authorizedClientProvider.authorize(authorizationContext).block());
+			.isThrownBy(() -> authorizedClientProvider.authorize(authorizationContext).block());
 	}
 
 	@Test
@@ -146,31 +146,6 @@ public class ReactiveOAuth2AuthorizedClientProviderBuilderTests {
 	}
 
 	@Test
-	public void buildWhenPasswordProviderThenProviderAuthorizes() throws Exception {
-		String accessTokenSuccessResponse = "{\n" + "	\"access_token\": \"access-token-1234\",\n"
-				+ "   \"token_type\": \"bearer\",\n" + "   \"expires_in\": \"3600\"\n" + "}\n";
-		this.server.enqueue(jsonResponse(accessTokenSuccessResponse));
-		ReactiveOAuth2AuthorizedClientProvider authorizedClientProvider = ReactiveOAuth2AuthorizedClientProviderBuilder
-				.builder().password().build();
-		// @formatter:off
-		OAuth2AuthorizationContext authorizationContext = OAuth2AuthorizationContext
-				.withClientRegistration(
-						this.clientRegistrationBuilder.authorizationGrantType(AuthorizationGrantType.PASSWORD).build())
-				.principal(this.principal)
-				.attribute(OAuth2AuthorizationContext.USERNAME_ATTRIBUTE_NAME, "username")
-				.attribute(OAuth2AuthorizationContext.PASSWORD_ATTRIBUTE_NAME, "password")
-				.build();
-		OAuth2AuthorizedClient authorizedClient = authorizedClientProvider.authorize(authorizationContext)
-				.block();
-		// @formatter:on
-		assertThat(authorizedClient).isNotNull();
-		assertThat(this.server.getRequestCount()).isEqualTo(1);
-		RecordedRequest recordedRequest = this.server.takeRequest();
-		String formParameters = recordedRequest.getBody().readUtf8();
-		assertThat(formParameters).contains("grant_type=password");
-	}
-
-	@Test
 	public void buildWhenAllProvidersThenProvidersAuthorize() throws Exception {
 		String accessTokenSuccessResponse = "{\n" + "	\"access_token\": \"access-token-1234\",\n"
 				+ "   \"token_type\": \"bearer\",\n" + "   \"expires_in\": \"3600\"\n" + "}\n";
@@ -178,7 +153,11 @@ public class ReactiveOAuth2AuthorizedClientProviderBuilderTests {
 		this.server.enqueue(jsonResponse(accessTokenSuccessResponse));
 		this.server.enqueue(jsonResponse(accessTokenSuccessResponse));
 		ReactiveOAuth2AuthorizedClientProvider authorizedClientProvider = ReactiveOAuth2AuthorizedClientProviderBuilder
-				.builder().authorizationCode().refreshToken().clientCredentials().password().build();
+			.builder()
+			.authorizationCode()
+			.refreshToken()
+			.clientCredentials()
+			.build();
 		// authorization_code
 		// @formatter:off
 		OAuth2AuthorizationContext authorizationCodeContext = OAuth2AuthorizationContext
@@ -187,12 +166,14 @@ public class ReactiveOAuth2AuthorizedClientProviderBuilderTests {
 				.build();
 		// @formatter:on
 		assertThatExceptionOfType(ClientAuthorizationRequiredException.class)
-				.isThrownBy(() -> authorizedClientProvider.authorize(authorizationCodeContext).block());
+			.isThrownBy(() -> authorizedClientProvider.authorize(authorizationCodeContext).block());
 		// refresh_token
 		OAuth2AuthorizedClient authorizedClient = new OAuth2AuthorizedClient(this.clientRegistrationBuilder.build(),
 				this.principal.getName(), expiredAccessToken(), TestOAuth2RefreshTokens.refreshToken());
 		OAuth2AuthorizationContext refreshTokenContext = OAuth2AuthorizationContext
-				.withAuthorizedClient(authorizedClient).principal(this.principal).build();
+			.withAuthorizedClient(authorizedClient)
+			.principal(this.principal)
+			.build();
 		OAuth2AuthorizedClient reauthorizedClient = authorizedClientProvider.authorize(refreshTokenContext).block();
 		assertThat(reauthorizedClient).isNotNull();
 		assertThat(this.server.getRequestCount()).isEqualTo(1);
@@ -213,22 +194,6 @@ public class ReactiveOAuth2AuthorizedClientProviderBuilderTests {
 		recordedRequest = this.server.takeRequest();
 		formParameters = recordedRequest.getBody().readUtf8();
 		assertThat(formParameters).contains("grant_type=client_credentials");
-		// password
-		// @formatter:off
-		OAuth2AuthorizationContext passwordContext = OAuth2AuthorizationContext
-				.withClientRegistration(
-						this.clientRegistrationBuilder.authorizationGrantType(AuthorizationGrantType.PASSWORD).build())
-				.principal(this.principal)
-				.attribute(OAuth2AuthorizationContext.USERNAME_ATTRIBUTE_NAME, "username")
-				.attribute(OAuth2AuthorizationContext.PASSWORD_ATTRIBUTE_NAME, "password")
-				.build();
-		// @formatter:on
-		authorizedClient = authorizedClientProvider.authorize(passwordContext).block();
-		assertThat(authorizedClient).isNotNull();
-		assertThat(this.server.getRequestCount()).isEqualTo(3);
-		recordedRequest = this.server.takeRequest();
-		formParameters = recordedRequest.getBody().readUtf8();
-		assertThat(formParameters).contains("grant_type=password");
 	}
 
 	@Test

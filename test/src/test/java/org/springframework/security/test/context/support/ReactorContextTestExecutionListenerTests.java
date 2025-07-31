@@ -100,8 +100,8 @@ public class ReactorContextTestExecutionListenerTests {
 		TestSecurityContextHolder.setAuthentication(contextHolder);
 		this.listener.beforeTestMethod(this.testContext);
 		Mono<Authentication> authentication = Mono.just("any")
-				.flatMap((s) -> ReactiveSecurityContextHolder.getContext().map(SecurityContext::getAuthentication))
-				.subscriberContext(ReactiveSecurityContextHolder.withAuthentication(expectedAuthentication));
+			.flatMap((s) -> ReactiveSecurityContextHolder.getContext().map(SecurityContext::getAuthentication))
+			.contextWrite(ReactiveSecurityContextHolder.withAuthentication(expectedAuthentication));
 		StepVerifier.create(authentication).expectNext(expectedAuthentication).verifyComplete();
 	}
 
@@ -114,8 +114,8 @@ public class ReactorContextTestExecutionListenerTests {
 		TestSecurityContextHolder.setAuthentication(contextHolder);
 		this.listener.beforeTestMethod(this.testContext);
 		Mono<Authentication> authentication = Mono.just("any")
-				.flatMap((s) -> ReactiveSecurityContextHolder.getContext().map(SecurityContext::getAuthentication))
-				.subscriberContext(ReactiveSecurityContextHolder.clearContext());
+			.flatMap((s) -> ReactiveSecurityContextHolder.getContext().map(SecurityContext::getAuthentication))
+			.contextWrite(ReactiveSecurityContextHolder.clearContext());
 		StepVerifier.create(authentication).verifyComplete();
 	}
 
@@ -129,7 +129,7 @@ public class ReactorContextTestExecutionListenerTests {
 	public void afterTestMethodWhenSetupThenReactorContextNull() throws Exception {
 		beforeTestMethodWhenAuthenticationThenReactorContextHasAuthentication();
 		this.listener.afterTestMethod(this.testContext);
-		assertThat(Mono.subscriberContext().block().isEmpty()).isTrue();
+		assertThat(Mono.deferContextual(Mono::just).block().isEmpty()).isTrue();
 	}
 
 	@Test
@@ -137,7 +137,7 @@ public class ReactorContextTestExecutionListenerTests {
 		Object obj = new Object();
 		Hooks.onLastOperator("CUSTOM_HOOK", (p) -> Mono.just(obj));
 		this.listener.afterTestMethod(this.testContext);
-		Object result = Mono.subscriberContext().block();
+		Object result = Mono.deferContextual(Mono::just).block();
 		assertThat(result).isEqualTo(obj);
 	}
 
@@ -161,7 +161,7 @@ public class ReactorContextTestExecutionListenerTests {
 
 	public void assertAuthentication(Authentication expected) {
 		Mono<Authentication> authentication = ReactiveSecurityContextHolder.getContext()
-				.map(SecurityContext::getAuthentication);
+			.map(SecurityContext::getAuthentication);
 		StepVerifier.create(authentication).expectNext(expected).verifyComplete();
 	}
 

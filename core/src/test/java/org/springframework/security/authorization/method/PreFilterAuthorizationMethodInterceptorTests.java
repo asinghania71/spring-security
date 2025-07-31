@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,17 +32,26 @@ import org.springframework.security.access.expression.method.MethodSecurityExpre
 import org.springframework.security.access.intercept.method.MockMethodInvocation;
 import org.springframework.security.access.prepost.PreFilter;
 import org.springframework.security.authentication.TestAuthentication;
+import org.springframework.security.authentication.TestingAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.authority.AuthorityUtils;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.context.SecurityContextHolderStrategy;
+import org.springframework.security.core.context.SecurityContextImpl;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
 /**
  * Tests for {@link PreFilterAuthorizationMethodInterceptor}.
  *
  * @author Evgeniy Cheban
+ * @author Gengwu Zhao
  */
 public class PreFilterAuthorizationMethodInterceptorTests {
 
@@ -61,14 +70,14 @@ public class PreFilterAuthorizationMethodInterceptorTests {
 		MethodSecurityExpressionHandler expressionHandler = new DefaultMethodSecurityExpressionHandler();
 		PreFilterAuthorizationMethodInterceptor advice = new PreFilterAuthorizationMethodInterceptor();
 		advice.setExpressionHandler(expressionHandler);
-		assertThat(advice).extracting("expressionHandler").isEqualTo(expressionHandler);
+		assertThat(advice).extracting("registry").extracting("expressionHandler").isEqualTo(expressionHandler);
 	}
 
 	@Test
 	public void setExpressionHandlerWhenNullThenException() {
 		PreFilterAuthorizationMethodInterceptor advice = new PreFilterAuthorizationMethodInterceptor();
 		assertThatIllegalArgumentException().isThrownBy(() -> advice.setExpressionHandler(null))
-				.withMessage("expressionHandler cannot be null");
+			.withMessage("expressionHandler cannot be null");
 	}
 
 	@Test
@@ -76,7 +85,7 @@ public class PreFilterAuthorizationMethodInterceptorTests {
 		PreFilterAuthorizationMethodInterceptor advice = new PreFilterAuthorizationMethodInterceptor();
 		MethodMatcher methodMatcher = advice.getPointcut().getMethodMatcher();
 		assertThat(methodMatcher.matches(NoPreFilterClass.class.getMethod("doSomething"), NoPreFilterClass.class))
-				.isFalse();
+			.isFalse();
 	}
 
 	@Test
@@ -84,7 +93,8 @@ public class PreFilterAuthorizationMethodInterceptorTests {
 		PreFilterAuthorizationMethodInterceptor advice = new PreFilterAuthorizationMethodInterceptor();
 		MethodMatcher methodMatcher = advice.getPointcut().getMethodMatcher();
 		assertThat(methodMatcher.matches(TestClass.class.getMethod("doSomethingListFilterTargetMatch", List.class),
-				TestClass.class)).isTrue();
+				TestClass.class))
+			.isTrue();
 	}
 
 	@Test
@@ -92,8 +102,8 @@ public class PreFilterAuthorizationMethodInterceptorTests {
 		MockMethodInvocation methodInvocation = new MockMethodInvocation(new TestClass(), TestClass.class,
 				"doSomethingListFilterTargetNotMatch", new Class[] { List.class }, new Object[] { new ArrayList<>() });
 		PreFilterAuthorizationMethodInterceptor advice = new PreFilterAuthorizationMethodInterceptor();
-		assertThatIllegalArgumentException().isThrownBy(() -> advice.invoke(methodInvocation)).withMessage(
-				"Filter target was null, or no argument with name 'filterTargetNotMatch' found in method.");
+		assertThatIllegalArgumentException().isThrownBy(() -> advice.invoke(methodInvocation))
+			.withMessage("Filter target was null, or no argument with name 'filterTargetNotMatch' found in method.");
 	}
 
 	@Test
@@ -102,7 +112,7 @@ public class PreFilterAuthorizationMethodInterceptorTests {
 				"doSomethingListFilterTargetMatch", new Class[] { List.class }, new Object[] { null });
 		PreFilterAuthorizationMethodInterceptor advice = new PreFilterAuthorizationMethodInterceptor();
 		assertThatIllegalArgumentException().isThrownBy(() -> advice.invoke(methodInvocation))
-				.withMessage("Filter target was null, or no argument with name 'list' found in method.");
+			.withMessage("Filter target was null, or no argument with name 'list' found in method.");
 	}
 
 	@Test
@@ -124,7 +134,7 @@ public class PreFilterAuthorizationMethodInterceptorTests {
 				"doSomethingListFilterTargetNotProvided", new Class[] { List.class }, new Object[] { null });
 		PreFilterAuthorizationMethodInterceptor advice = new PreFilterAuthorizationMethodInterceptor();
 		assertThatIllegalArgumentException().isThrownBy(() -> advice.invoke(methodInvocation))
-				.withMessage("Filter target was null. Make sure you passing the correct value in the method argument.");
+			.withMessage("Filter target was null. Make sure you passing the correct value in the method argument.");
 	}
 
 	@Test
@@ -146,8 +156,8 @@ public class PreFilterAuthorizationMethodInterceptorTests {
 				"doSomethingArrayFilterTargetNotProvided", new Class[] { String[].class },
 				new Object[] { new String[] {} });
 		PreFilterAuthorizationMethodInterceptor advice = new PreFilterAuthorizationMethodInterceptor();
-		assertThatIllegalStateException().isThrownBy(() -> advice.invoke(methodInvocation)).withMessage(
-				"Pre-filtering on array types is not supported. Using a Collection will solve this problem.");
+		assertThatIllegalStateException().isThrownBy(() -> advice.invoke(methodInvocation))
+			.withMessage("Pre-filtering on array types is not supported. Using a Collection will solve this problem.");
 	}
 
 	@Test
@@ -157,16 +167,7 @@ public class PreFilterAuthorizationMethodInterceptorTests {
 				new Object[] { "", new ArrayList<>() });
 		PreFilterAuthorizationMethodInterceptor advice = new PreFilterAuthorizationMethodInterceptor();
 		assertThatIllegalStateException().isThrownBy(() -> advice.invoke(methodInvocation))
-				.withMessage("Unable to determine the method argument for filtering. Specify the filter target.");
-	}
-
-	@Test
-	public void checkInheritedAnnotationsWhenDuplicatedThenAnnotationConfigurationException() throws Exception {
-		MockMethodInvocation methodInvocation = new MockMethodInvocation(new TestClass(), TestClass.class,
-				"inheritedAnnotations");
-		PreFilterAuthorizationMethodInterceptor advice = new PreFilterAuthorizationMethodInterceptor();
-		assertThatExceptionOfType(AnnotationConfigurationException.class)
-				.isThrownBy(() -> advice.invoke(methodInvocation));
+			.withMessage("Unable to determine the method argument for filtering. Specify the filter target.");
 	}
 
 	@Test
@@ -175,7 +176,51 @@ public class PreFilterAuthorizationMethodInterceptorTests {
 				ConflictingAnnotations.class, "inheritedAnnotations");
 		PreFilterAuthorizationMethodInterceptor advice = new PreFilterAuthorizationMethodInterceptor();
 		assertThatExceptionOfType(AnnotationConfigurationException.class)
-				.isThrownBy(() -> advice.invoke(methodInvocation));
+			.isThrownBy(() -> advice.invoke(methodInvocation));
+	}
+
+	@Test
+	public void preFilterWhenMockSecurityContextHolderStrategyThenUses() throws Throwable {
+		Authentication authentication = new TestingAuthenticationToken("john", "password",
+				AuthorityUtils.createAuthorityList("authority"));
+		SecurityContextHolderStrategy strategy = mockSecurityContextHolderStrategy(
+				new SecurityContextImpl(authentication));
+		List<String> list = new ArrayList<>();
+		list.add("john");
+		list.add("bob");
+		MockMethodInvocation invocation = new MockMethodInvocation(new TestClass(), TestClass.class,
+				"doSomethingArrayFilterAuthentication", new Class[] { List.class }, new Object[] { list });
+		PreFilterAuthorizationMethodInterceptor advice = new PreFilterAuthorizationMethodInterceptor();
+		advice.setSecurityContextHolderStrategy(strategy);
+		advice.invoke(invocation);
+		verify(strategy).getContext();
+	}
+
+	// gh-12877
+	@Test
+	public void preFilterWhenStaticSecurityContextHolderStrategyAfterConstructorThenUses() throws Throwable {
+		Authentication authentication = new TestingAuthenticationToken("john", "password",
+				AuthorityUtils.createAuthorityList("authority"));
+		SecurityContextHolderStrategy strategy = mockSecurityContextHolderStrategy(
+				new SecurityContextImpl(authentication));
+		List<String> list = new ArrayList<>();
+		list.add("john");
+		list.add("bob");
+		MockMethodInvocation invocation = new MockMethodInvocation(new TestClass(), TestClass.class,
+				"doSomethingArrayFilterAuthentication", new Class[] { List.class }, new Object[] { list });
+		PreFilterAuthorizationMethodInterceptor advice = new PreFilterAuthorizationMethodInterceptor();
+		SecurityContextHolderStrategy saved = SecurityContextHolder.getContextHolderStrategy();
+		SecurityContextHolder.setContextHolderStrategy(strategy);
+		advice.invoke(invocation);
+		verify(strategy).getContext();
+		SecurityContextHolder.setContextHolderStrategy(saved);
+	}
+
+	private SecurityContextHolderStrategy mockSecurityContextHolderStrategy(SecurityContextImpl securityContextImpl) {
+
+		SecurityContextHolderStrategy strategy = mock(SecurityContextHolderStrategy.class);
+		given(strategy.getContext()).willReturn(securityContextImpl);
+		return strategy;
 	}
 
 	@PreFilter("filterObject == 'john'")
@@ -205,6 +250,11 @@ public class PreFilterAuthorizationMethodInterceptorTests {
 			return list;
 		}
 
+		@PreFilter(value = "filterObject == authentication.name", filterTarget = "list")
+		public List<String> doSomethingArrayFilterAuthentication(List<String> list) {
+			return list;
+		}
+
 		@Override
 		public void inheritedAnnotations() {
 
@@ -220,12 +270,10 @@ public class PreFilterAuthorizationMethodInterceptorTests {
 
 	}
 
-	public static class ConflictingAnnotations implements InterfaceAnnotationsThree {
+	public static class ConflictingAnnotations implements InterfaceAnnotationsOne, InterfaceAnnotationsTwo {
 
 		@Override
-		@PreFilter("filterObject == 'jack'")
 		public void inheritedAnnotations() {
-
 		}
 
 	}

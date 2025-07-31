@@ -16,8 +16,7 @@
 
 package org.springframework.security.config.http;
 
-import javax.servlet.Filter;
-
+import jakarta.servlet.Filter;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -69,8 +68,9 @@ public class HttpInterceptUrlTests {
 		this.context = context;
 		context.getAutowireCapableBeanFactory().autowireBean(this);
 		Filter springSecurityFilterChain = context.getBean("springSecurityFilterChain", Filter.class);
-		this.mockMvc = MockMvcBuilders.standaloneSetup(new FooController()).addFilters(springSecurityFilterChain)
-				.build();
+		this.mockMvc = MockMvcBuilders.standaloneSetup(new FooController())
+			.addFilters(springSecurityFilterChain)
+			.build();
 	}
 
 	@RestController

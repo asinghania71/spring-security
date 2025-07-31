@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2019 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,15 +26,17 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.core.OAuth2AuthenticatedPrincipal;
 import org.springframework.security.oauth2.core.TestOAuth2AuthenticatedPrincipals;
 import org.springframework.security.oauth2.server.resource.introspection.OpaqueTokenIntrospector;
+import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 import org.springframework.test.context.web.WebAppConfiguration;
@@ -88,9 +90,10 @@ public class SecurityMockMvcRequestPostProcessorsOpaqueTokenTests {
 
 	@Test
 	public void opaqueTokenWhenAttributeSpecifiedThenUserHasAttribute() throws Exception {
-		this.mvc.perform(
-				get("/opaque-token/iss").with(opaqueToken().attributes((a) -> a.put("iss", "https://idp.example.org"))))
-				.andExpect(content().string("https://idp.example.org"));
+		this.mvc
+			.perform(get("/opaque-token/iss")
+				.with(opaqueToken().attributes((a) -> a.put("iss", "https://idp.example.org"))))
+			.andExpect(content().string("https://idp.example.org"));
 	}
 
 	@Test
@@ -106,30 +109,34 @@ public class SecurityMockMvcRequestPostProcessorsOpaqueTokenTests {
 	@Test
 	public void opaqueTokenWhenPrincipalSpecifiedThenLastCalledTakesPrecedence() throws Exception {
 		OAuth2AuthenticatedPrincipal principal = TestOAuth2AuthenticatedPrincipals
-				.active((a) -> a.put("scope", "user"));
-		this.mvc.perform(get("/opaque-token/sub")
+			.active((a) -> a.put("scope", "user"));
+		this.mvc
+			.perform(get("/opaque-token/sub")
 				.with(opaqueToken().attributes((a) -> a.put("sub", "foo")).principal(principal)))
-				.andExpect(status().isOk()).andExpect(content().string((String) principal.getAttribute("sub")));
-		this.mvc.perform(get("/opaque-token/sub")
+			.andExpect(status().isOk())
+			.andExpect(content().string((String) principal.getAttribute("sub")));
+		this.mvc
+			.perform(get("/opaque-token/sub")
 				.with(opaqueToken().principal(principal).attributes((a) -> a.put("sub", "bar"))))
-				.andExpect(content().string("bar"));
+			.andExpect(content().string("bar"));
 	}
 
+	@Configuration
 	@EnableWebSecurity
 	@EnableWebMvc
-	static class OAuth2LoginConfig extends WebSecurityConfigurerAdapter {
+	static class OAuth2LoginConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.authorizeRequests()
-					.mvcMatchers("/admin/**").hasAuthority("SCOPE_admin")
-					.anyRequest().hasAuthority("SCOPE_read")
-					.and()
-				.oauth2ResourceServer()
-					.opaqueToken()
-						.introspector(mock(OpaqueTokenIntrospector.class));
+				.authorizeHttpRequests((requests) -> requests
+					.requestMatchers("/admin/**").hasAuthority("SCOPE_admin")
+					.anyRequest().hasAuthority("SCOPE_read"))
+				.oauth2ResourceServer((server) -> server
+					.opaqueToken((opaqueToken) -> opaqueToken
+						.introspector(mock(OpaqueTokenIntrospector.class))));
+			return http.build();
 			// @formatter:on
 		}
 

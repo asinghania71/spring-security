@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2019 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,8 +25,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.slf4j.LoggerFactory;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
 import org.springframework.security.config.test.SpringTestContext;
 import org.springframework.security.config.test.SpringTestContextExtension;
 import org.springframework.security.web.debug.DebugFilter;
@@ -59,7 +59,6 @@ public class NamespaceDebugTests {
 		Appender<ILoggingEvent> appender = mockAppenderFor("Spring Security Debugger");
 		this.spring.register(DebugWebSecurity.class).autowire();
 		this.mvc.perform(get("/"));
-		assertThat(filterChainClass()).isEqualTo(DebugFilter.class);
 		verify(appender, atLeastOnce()).doAppend(any(ILoggingEvent.class));
 	}
 
@@ -84,13 +83,15 @@ public class NamespaceDebugTests {
 		return this.spring.getContext().getBean("springSecurityFilterChain").getClass();
 	}
 
+	@Configuration
 	@EnableWebSecurity(debug = true)
-	static class DebugWebSecurity extends WebSecurityConfigurerAdapter {
+	static class DebugWebSecurity {
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class NoDebugWebSecurity extends WebSecurityConfigurerAdapter {
+	static class NoDebugWebSecurity {
 
 	}
 

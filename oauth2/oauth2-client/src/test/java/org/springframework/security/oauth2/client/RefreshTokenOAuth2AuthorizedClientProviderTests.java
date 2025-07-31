@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2019 the original author or authors.
+ * Copyright 2002-2025 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,10 +25,12 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.client.endpoint.OAuth2AccessTokenResponseClient;
 import org.springframework.security.oauth2.client.endpoint.OAuth2RefreshTokenGrantRequest;
+import org.springframework.security.oauth2.client.event.OAuth2AuthorizedClientRefreshedEvent;
 import org.springframework.security.oauth2.client.registration.ClientRegistration;
 import org.springframework.security.oauth2.client.registration.TestClientRegistrations;
 import org.springframework.security.oauth2.core.OAuth2AccessToken;
@@ -162,7 +164,8 @@ public class RefreshTokenOAuth2AuthorizedClientProviderTests {
 	@Test
 	public void authorizeWhenAuthorizedAndAccessTokenNotExpiredButClockSkewForcesExpiryThenReauthorize() {
 		OAuth2AccessTokenResponse accessTokenResponse = TestOAuth2AccessTokenResponses.accessTokenResponse()
-				.refreshToken("new-refresh-token").build();
+			.refreshToken("new-refresh-token")
+			.build();
 		given(this.accessTokenResponseClient.getTokenResponse(any())).willReturn(accessTokenResponse);
 		Instant now = Instant.now();
 		Instant issuedAt = now.minus(Duration.ofMinutes(60));
@@ -228,10 +231,10 @@ public class RefreshTokenOAuth2AuthorizedClientProviderTests {
 		// @formatter:on
 		this.authorizedClientProvider.authorize(authorizationContext);
 		ArgumentCaptor<OAuth2RefreshTokenGrantRequest> refreshTokenGrantRequestArgCaptor = ArgumentCaptor
-				.forClass(OAuth2RefreshTokenGrantRequest.class);
+			.forClass(OAuth2RefreshTokenGrantRequest.class);
 		verify(this.accessTokenResponseClient).getTokenResponse(refreshTokenGrantRequestArgCaptor.capture());
 		assertThat(refreshTokenGrantRequestArgCaptor.getValue().getScopes())
-				.isEqualTo(new HashSet<>(Arrays.asList(requestScope)));
+			.isEqualTo(new HashSet<>(Arrays.asList(requestScope)));
 	}
 
 	@Test
@@ -245,9 +248,60 @@ public class RefreshTokenOAuth2AuthorizedClientProviderTests {
 				.build();
 		// @formatter:on
 		assertThatIllegalArgumentException()
-				.isThrownBy(() -> this.authorizedClientProvider.authorize(authorizationContext))
-				.withMessageStartingWith("The context attribute must be of type String[] '"
-						+ OAuth2AuthorizationContext.REQUEST_SCOPE_ATTRIBUTE_NAME + "'");
+			.isThrownBy(() -> this.authorizedClientProvider.authorize(authorizationContext))
+			.withMessageStartingWith("The context attribute must be of type String[] '"
+					+ OAuth2AuthorizationContext.REQUEST_SCOPE_ATTRIBUTE_NAME + "'");
+	}
+
+	@Test
+	public void shouldPublishEventWhenTokenRefreshed() {
+		OAuth2TokenRefreshedAwareEventPublisher eventPublisher = new OAuth2TokenRefreshedAwareEventPublisher();
+		this.authorizedClientProvider.setApplicationEventPublisher(eventPublisher);
+		// @formatter:off
+		OAuth2AccessTokenResponse accessTokenResponse = TestOAuth2AccessTokenResponses
+				.accessTokenResponse()
+				.refreshToken("new-refresh-token")
+				.build();
+		// @formatter:on
+		given(this.accessTokenResponseClient.getTokenResponse(any())).willReturn(accessTokenResponse);
+		// @formatter:off
+		OAuth2AuthorizationContext authorizationContext = OAuth2AuthorizationContext
+				.withAuthorizedClient(this.authorizedClient)
+				.principal(this.principal)
+				.build();
+		// @formatter:on
+		this.authorizedClientProvider.authorize(authorizationContext);
+		assertThat(eventPublisher.flag).isTrue();
+	}
+
+	@Test
+	public void shouldNotPublishEventWhenTokenNotRefreshed() {
+		OAuth2TokenRefreshedAwareEventPublisher eventPublisher = new OAuth2TokenRefreshedAwareEventPublisher();
+		this.authorizedClientProvider.setApplicationEventPublisher(eventPublisher);
+
+		OAuth2AuthorizedClient authorizedClient = new OAuth2AuthorizedClient(this.clientRegistration,
+				this.principal.getName(), TestOAuth2AccessTokens.noScopes(), this.authorizedClient.getRefreshToken());
+		// @formatter:off
+		OAuth2AuthorizationContext authorizationContext = OAuth2AuthorizationContext
+				.withAuthorizedClient(authorizedClient)
+				.principal(this.principal)
+				.build();
+		// @formatter:on
+		this.authorizedClientProvider.authorize(authorizationContext);
+		assertThat(eventPublisher.flag).isFalse();
+	}
+
+	private static class OAuth2TokenRefreshedAwareEventPublisher implements ApplicationEventPublisher {
+
+		Boolean flag = false;
+
+		@Override
+		public void publishEvent(Object event) {
+			if (OAuth2AuthorizedClientRefreshedEvent.class.isAssignableFrom(event.getClass())) {
+				this.flag = true;
+			}
+		}
+
 	}
 
 }

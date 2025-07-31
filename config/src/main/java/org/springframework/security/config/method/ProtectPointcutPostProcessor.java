@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2016 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -63,7 +63,9 @@ import org.springframework.util.StringUtils;
  *
  * @author Ben Alex
  * @since 2.0
+ * @deprecated Use {@code use-authorization-manager} flag instead
  */
+@Deprecated
 final class ProtectPointcutPostProcessor implements BeanPostProcessor {
 
 	private static final Log logger = LogFactory.getLog(ProtectPointcutPostProcessor.class);
@@ -95,8 +97,7 @@ final class ProtectPointcutPostProcessor implements BeanPostProcessor {
 		// supportedPrimitives.add(PointcutPrimitive.AT_ARGS);
 		// supportedPrimitives.add(PointcutPrimitive.AT_TARGET);
 		this.parser = PointcutParser
-				.getPointcutParserSupportingSpecifiedPrimitivesAndUsingContextClassloaderForResolution(
-						supportedPrimitives);
+			.getPointcutParserSupportingSpecifiedPrimitivesAndUsingContextClassloaderForResolution(supportedPrimitives);
 	}
 
 	@Override

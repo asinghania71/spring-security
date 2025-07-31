@@ -19,16 +19,20 @@ package org.springframework.security.web.access.channel;
 import java.io.IOException;
 import java.util.Collection;
 
-import javax.servlet.ServletException;
+import jakarta.servlet.ServletException;
 
 import org.springframework.security.access.ConfigAttribute;
 import org.springframework.security.web.FilterInvocation;
+import org.springframework.security.web.util.matcher.RequestMatcher;
 
 /**
  * Decides whether a web channel provides sufficient security.
  *
  * @author Ben Alex
+ * @deprecated no replacement is planned, though consider using a custom
+ * {@link RequestMatcher} for any sophisticated decision-making
  */
+@Deprecated
 public interface ChannelDecisionManager {
 
 	/**

@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2016 the original author or authors.
+ * Copyright 2002-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,7 +22,6 @@ import java.util.List;
 import java.util.Set;
 
 import org.springframework.core.DefaultParameterNameDiscoverer;
-import org.springframework.core.LocalVariableTableParameterNameDiscoverer;
 import org.springframework.core.ParameterNameDiscoverer;
 import org.springframework.core.PrioritizedParameterNameDiscoverer;
 import org.springframework.util.Assert;
@@ -36,11 +35,6 @@ import org.springframework.util.ClassUtils;
  * <li>Will use an instance of {@link AnnotationParameterNameDiscoverer} with {@link P} as
  * a valid annotation. If, Spring Data is on the classpath will also add Param annotation.
  * </li>
- * <li>If Spring 4 is on the classpath, then DefaultParameterNameDiscoverer is added. This
- * attempts to use JDK 8 information first and falls back to
- * {@link LocalVariableTableParameterNameDiscoverer}.</li>
- * <li>If Spring 4 is not on the classpath, then
- * {@link LocalVariableTableParameterNameDiscoverer} is added directly.</li>
  * </ul>
  *
  * @author Rob Winch
@@ -59,7 +53,7 @@ public class DefaultSecurityParameterNameDiscoverer extends PrioritizedParameter
 	 * instances.
 	 */
 	public DefaultSecurityParameterNameDiscoverer() {
-		this(Collections.<ParameterNameDiscoverer>emptyList());
+		this(Collections.emptyList());
 	}
 
 	/**

@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2017 the original author or authors.
+ * Copyright 2002-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,7 +28,7 @@ import org.springframework.web.server.ServerWebExchange;
  */
 public class XContentTypeOptionsServerHttpHeadersWriter implements ServerHttpHeadersWriter {
 
-	public static final String X_CONTENT_OPTIONS = "X-Content-Options";
+	public static final String X_CONTENT_OPTIONS = "X-Content-Type-Options";
 
 	public static final String NOSNIFF = "nosniff";
 
@@ -36,7 +36,8 @@ public class XContentTypeOptionsServerHttpHeadersWriter implements ServerHttpHea
 	 * The delegate to write all the cache control related headers
 	 */
 	private static final ServerHttpHeadersWriter CONTENT_TYPE_HEADERS = StaticServerHttpHeadersWriter.builder()
-			.header(X_CONTENT_OPTIONS, NOSNIFF).build();
+		.header(X_CONTENT_OPTIONS, NOSNIFF)
+		.build();
 
 	@Override
 	public Mono<Void> writeHttpHeaders(ServerWebExchange exchange) {

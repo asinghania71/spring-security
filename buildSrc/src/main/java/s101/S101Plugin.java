@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -50,7 +50,7 @@ public class S101Plugin implements Plugin<Project> {
 
 	private void configure(JavaExec exec) {
 		exec.setDescription("Runs Structure101 headless analysis, installing and configuring if necessary");
-		exec.dependsOn("check");
+		exec.dependsOn("assemble");
 		Project project = exec.getProject();
 		S101PluginExtension extension = project.getExtensions().getByType(S101PluginExtension.class);
 		exec

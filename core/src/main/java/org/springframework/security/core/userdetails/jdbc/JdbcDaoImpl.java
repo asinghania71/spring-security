@@ -110,6 +110,8 @@ import org.springframework.util.Assert;
  */
 public class JdbcDaoImpl extends JdbcDaoSupport implements UserDetailsService, MessageSourceAware {
 
+	public static final String DEFAULT_USER_SCHEMA_DDL_LOCATION = "org/springframework/security/core/userdetails/jdbc/users.ddl";
+
 	// @formatter:off
 	public static final String DEF_USERS_BY_USERNAME_QUERY = "select username,password,enabled "
 			+ "from users "
@@ -180,7 +182,7 @@ public class JdbcDaoImpl extends JdbcDaoSupport implements UserDetailsService, M
 	@Override
 	public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
 		List<UserDetails> users = loadUsersByUsername(username);
-		if (users.size() == 0) {
+		if (users.isEmpty()) {
 			this.logger.debug("Query returned no results for user '" + username + "'");
 			throw new UsernameNotFoundException(this.messages.getMessage("JdbcDaoImpl.notFound",
 					new Object[] { username }, "Username {0} not found"));
@@ -195,7 +197,7 @@ public class JdbcDaoImpl extends JdbcDaoSupport implements UserDetailsService, M
 		}
 		List<GrantedAuthority> dbAuths = new ArrayList<>(dbAuthsSet);
 		addCustomAuthorities(user.getUsername(), dbAuths);
-		if (dbAuths.size() == 0) {
+		if (dbAuths.isEmpty()) {
 			this.logger.debug("User '" + username + "' has no authorities and will be treated as 'not found'");
 			throw new UsernameNotFoundException(this.messages.getMessage("JdbcDaoImpl.noAuthority",
 					new Object[] { username }, "User {0} has no GrantedAuthority"));
@@ -224,10 +226,10 @@ public class JdbcDaoImpl extends JdbcDaoSupport implements UserDetailsService, M
 	 * @return a list of GrantedAuthority objects for the user
 	 */
 	protected List<GrantedAuthority> loadUserAuthorities(String username) {
-		return getJdbcTemplate().query(this.authoritiesByUsernameQuery, new String[] { username }, (rs, rowNum) -> {
+		return getJdbcTemplate().query(this.authoritiesByUsernameQuery, (rs, rowNum) -> {
 			String roleName = JdbcDaoImpl.this.rolePrefix + rs.getString(2);
 			return new SimpleGrantedAuthority(roleName);
-		});
+		}, username);
 	}
 
 	/**
@@ -236,11 +238,10 @@ public class JdbcDaoImpl extends JdbcDaoSupport implements UserDetailsService, M
 	 * @return a list of GrantedAuthority objects for the user
 	 */
 	protected List<GrantedAuthority> loadGroupAuthorities(String username) {
-		return getJdbcTemplate().query(this.groupAuthoritiesByUsernameQuery, new String[] { username },
-				(rs, rowNum) -> {
-					String roleName = getRolePrefix() + rs.getString(3);
-					return new SimpleGrantedAuthority(roleName);
-				});
+		return getJdbcTemplate().query(this.groupAuthoritiesByUsernameQuery, (rs, rowNum) -> {
+			String roleName = getRolePrefix() + rs.getString(3);
+			return new SimpleGrantedAuthority(roleName);
+		}, username);
 	}
 
 	/**

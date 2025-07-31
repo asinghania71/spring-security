@@ -22,6 +22,7 @@ import org.junit.jupiter.api.extension.ExtendWith
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.context.ApplicationContext
 import org.springframework.context.annotation.Bean
+import org.springframework.context.annotation.Configuration
 import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity
 import org.springframework.security.config.test.SpringTestContext
 import org.springframework.security.config.test.SpringTestContextExtension
@@ -77,6 +78,7 @@ class ServerHttpsRedirectDslTests {
                 .expectStatus().isNotFound
     }
 
+    @Configuration
     @EnableWebFluxSecurity
     @EnableWebFlux
     open class HttpRedirectMatcherConfig {
@@ -116,6 +118,7 @@ class ServerHttpsRedirectDslTests {
                 .expectStatus().isNotFound
     }
 
+    @Configuration
     @EnableWebFluxSecurity
     @EnableWebFlux
     open class HttpRedirectFunctionConfig {
@@ -124,7 +127,7 @@ class ServerHttpsRedirectDslTests {
             return http {
                 redirectToHttps {
                     httpsRedirectWhen {
-                        it.request.headers.containsKey("X-Requires-Https")
+                        it.request.headers.headerNames().contains("X-Requires-Https")
                     }
                 }
             }
@@ -152,6 +155,7 @@ class ServerHttpsRedirectDslTests {
         }
     }
 
+    @Configuration
     @EnableWebFluxSecurity
     @EnableWebFlux
     open class HttpRedirectMatcherAndFunctionConfig {
@@ -161,7 +165,7 @@ class ServerHttpsRedirectDslTests {
                 redirectToHttps {
                     httpsRedirectWhen(PathPatternParserServerWebExchangeMatcher("/secure"))
                     httpsRedirectWhen {
-                        it.request.headers.containsKey("X-Requires-Https")
+                        it.request.headers.headerNames().contains("X-Requires-Https")
                     }
                 }
             }
@@ -183,6 +187,7 @@ class ServerHttpsRedirectDslTests {
         }
     }
 
+    @Configuration
     @EnableWebFluxSecurity
     @EnableWebFlux
     open class PortMapperConfig {

@@ -26,15 +26,16 @@ import java.lang.reflect.Proxy;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
-import javax.servlet.FilterChain;
-import javax.servlet.ServletContext;
-import javax.servlet.ServletRequest;
-import javax.servlet.ServletResponse;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletRequestWrapper;
-import javax.servlet.http.HttpServletResponse;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletContext;
+import jakarta.servlet.ServletRequest;
+import jakarta.servlet.ServletResponse;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletRequestWrapper;
+import jakarta.servlet.http.HttpServletResponse;
 
 import org.springframework.http.HttpHeaders;
 import org.springframework.security.web.util.UrlUtils;
@@ -145,7 +146,7 @@ public class FilterInvocation {
 
 	@Override
 	public String toString() {
-		if (StringUtils.isEmpty(this.request.getMethod())) {
+		if (!StringUtils.hasLength(this.request.getMethod())) {
 			return "filter invocation [" + getRequestUrl() + "]";
 		}
 		else {
@@ -257,12 +258,16 @@ public class FilterInvocation {
 
 		@Override
 		public Enumeration<String> getHeaders(String name) {
-			return Collections.enumeration(this.headers.get(name));
+			List<String> headerList = this.headers.get(name);
+			if (headerList == null) {
+				return Collections.emptyEnumeration();
+			}
+			return Collections.enumeration(headerList);
 		}
 
 		@Override
 		public Enumeration<String> getHeaderNames() {
-			return Collections.enumeration(this.headers.keySet());
+			return Collections.enumeration(this.headers.headerNames());
 		}
 
 		@Override
@@ -331,17 +336,21 @@ public class FilterInvocation {
 				return invokeDefaultMethodForJdk8(proxy, method, args);
 			}
 			return MethodHandles.lookup()
-					.findSpecial(method.getDeclaringClass(), method.getName(),
-							MethodType.methodType(method.getReturnType(), new Class[0]), method.getDeclaringClass())
-					.bindTo(proxy).invokeWithArguments(args);
+				.findSpecial(method.getDeclaringClass(), method.getName(),
+						MethodType.methodType(method.getReturnType(), new Class[0]), method.getDeclaringClass())
+				.bindTo(proxy)
+				.invokeWithArguments(args);
 		}
 
 		private Object invokeDefaultMethodForJdk8(Object proxy, Method method, Object[] args) throws Throwable {
 			Constructor<Lookup> constructor = Lookup.class.getDeclaredConstructor(Class.class);
 			constructor.setAccessible(true);
 			Class<?> clazz = method.getDeclaringClass();
-			return constructor.newInstance(clazz).in(clazz).unreflectSpecial(method, clazz).bindTo(proxy)
-					.invokeWithArguments(args);
+			return constructor.newInstance(clazz)
+				.in(clazz)
+				.unreflectSpecial(method, clazz)
+				.bindTo(proxy)
+				.invokeWithArguments(args);
 		}
 
 		private boolean isJdk8OrEarlier() {

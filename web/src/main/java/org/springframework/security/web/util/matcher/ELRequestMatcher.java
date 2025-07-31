@@ -16,7 +16,7 @@
 
 package org.springframework.security.web.util.matcher;
 
-import javax.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletRequest;
 
 import org.springframework.expression.EvaluationContext;
 import org.springframework.expression.Expression;
@@ -29,7 +29,7 @@ import org.springframework.security.web.authentication.DelegatingAuthenticationE
  *
  * <p>
  * With the default EvaluationContext ({@link ELRequestMatcherContext}) you can use
- * <code>hasIpAdress()</code> and <code>hasHeader()</code>
+ * <code>hasIpAddress()</code> and <code>hasHeader()</code>
  * </p>
  *
  * <p>

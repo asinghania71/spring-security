@@ -16,9 +16,9 @@
 
 package org.springframework.security.saml2.provider.service.web;
 
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-import javax.servlet.http.HttpSession;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpSession;
 
 import org.springframework.security.saml2.provider.service.authentication.AbstractSaml2AuthenticationRequest;
 
@@ -34,7 +34,8 @@ public class HttpSessionSaml2AuthenticationRequestRepository
 		implements Saml2AuthenticationRequestRepository<AbstractSaml2AuthenticationRequest> {
 
 	private static final String DEFAULT_SAML2_AUTHN_REQUEST_ATTR_NAME = HttpSessionSaml2AuthenticationRequestRepository.class
-			.getName().concat(".SAML2_AUTHN_REQUEST");
+		.getName()
+		.concat(".SAML2_AUTHN_REQUEST");
 
 	private String saml2AuthnRequestAttributeName = DEFAULT_SAML2_AUTHN_REQUEST_ATTR_NAME;
 

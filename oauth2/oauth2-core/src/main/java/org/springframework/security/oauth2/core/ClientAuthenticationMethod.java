@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2025 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ package org.springframework.security.oauth2.core;
 
 import java.io.Serializable;
 
+import org.springframework.lang.NonNull;
 import org.springframework.security.core.SpringSecurityCoreVersion;
 import org.springframework.util.Assert;
 
@@ -35,22 +36,10 @@ public final class ClientAuthenticationMethod implements Serializable {
 	private static final long serialVersionUID = SpringSecurityCoreVersion.SERIAL_VERSION_UID;
 
 	/**
-	 * @deprecated Use {@link #CLIENT_SECRET_BASIC}
-	 */
-	@Deprecated
-	public static final ClientAuthenticationMethod BASIC = new ClientAuthenticationMethod("basic");
-
-	/**
 	 * @since 5.5
 	 */
 	public static final ClientAuthenticationMethod CLIENT_SECRET_BASIC = new ClientAuthenticationMethod(
 			"client_secret_basic");
-
-	/**
-	 * @deprecated Use {@link #CLIENT_SECRET_POST}
-	 */
-	@Deprecated
-	public static final ClientAuthenticationMethod POST = new ClientAuthenticationMethod("post");
 
 	/**
 	 * @since 5.5
@@ -74,6 +63,17 @@ public final class ClientAuthenticationMethod implements Serializable {
 	 */
 	public static final ClientAuthenticationMethod NONE = new ClientAuthenticationMethod("none");
 
+	/**
+	 * @since 6.3
+	 */
+	public static final ClientAuthenticationMethod TLS_CLIENT_AUTH = new ClientAuthenticationMethod("tls_client_auth");
+
+	/**
+	 * @since 6.3
+	 */
+	public static final ClientAuthenticationMethod SELF_SIGNED_TLS_CLIENT_AUTH = new ClientAuthenticationMethod(
+			"self_signed_tls_client_auth");
+
 	private final String value;
 
 	/**
@@ -93,6 +93,29 @@ public final class ClientAuthenticationMethod implements Serializable {
 		return this.value;
 	}
 
+	static ClientAuthenticationMethod[] methods() {
+		return new ClientAuthenticationMethod[] { CLIENT_SECRET_BASIC, CLIENT_SECRET_POST, CLIENT_SECRET_JWT,
+				PRIVATE_KEY_JWT, NONE, TLS_CLIENT_AUTH, SELF_SIGNED_TLS_CLIENT_AUTH };
+	}
+
+	/**
+	 * A factory to construct a {@link ClientAuthenticationMethod} based on a string,
+	 * returning any constant value that matches.
+	 * @param method the client authentication method
+	 * @return a {@link ClientAuthenticationMethod}; specifically the corresponding
+	 * constant, if any
+	 * @since 6.5
+	 */
+	@NonNull
+	public static ClientAuthenticationMethod valueOf(String method) {
+		for (ClientAuthenticationMethod m : methods()) {
+			if (m.getValue().equals(method)) {
+				return m;
+			}
+		}
+		return new ClientAuthenticationMethod(method);
+	}
+
 	@Override
 	public boolean equals(Object obj) {
 		if (this == obj) {
@@ -102,12 +125,17 @@ public final class ClientAuthenticationMethod implements Serializable {
 			return false;
 		}
 		ClientAuthenticationMethod that = (ClientAuthenticationMethod) obj;
-		return this.getValue().equalsIgnoreCase(that.getValue());
+		return getValue().equals(that.getValue());
 	}
 
 	@Override
 	public int hashCode() {
-		return this.getValue().hashCode();
+		return getValue().hashCode();
+	}
+
+	@Override
+	public String toString() {
+		return this.value;
 	}
 
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2019 the original author or authors.
+ * Copyright 2002-2025 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -59,13 +59,19 @@ class LogoutBeanDefinitionParser implements BeanDefinitionParser {
 
 	private boolean csrfEnabled;
 
-	LogoutBeanDefinitionParser(String loginPageUrl, String rememberMeServices, BeanMetadataElement csrfLogoutHandler) {
+	private BeanMetadataElement logoutSuccessHandler;
+
+	private BeanMetadataElement authenticationFilterSecurityContextHolderStrategyRef;
+
+	LogoutBeanDefinitionParser(String loginPageUrl, String rememberMeServices, BeanMetadataElement csrfLogoutHandler,
+			BeanMetadataElement authenticationFilterSecurityContextHolderStrategyRef) {
 		this.defaultLogoutUrl = loginPageUrl + "?logout";
 		this.rememberMeServices = rememberMeServices;
 		this.csrfEnabled = csrfLogoutHandler != null;
 		if (this.csrfEnabled) {
 			this.logoutHandlers.add(csrfLogoutHandler);
 		}
+		this.authenticationFilterSecurityContextHolderStrategyRef = authenticationFilterSecurityContextHolderStrategyRef;
 	}
 
 	@Override
@@ -93,11 +99,12 @@ class LogoutBeanDefinitionParser implements BeanDefinitionParser {
 		builder.addPropertyValue("logoutRequestMatcher", getLogoutRequestMatcher(logoutUrl));
 		if (StringUtils.hasText(successHandlerRef)) {
 			if (StringUtils.hasText(logoutSuccessUrl)) {
-				pc.getReaderContext().error(
-						"Use " + ATT_LOGOUT_SUCCESS_URL + " or " + ATT_LOGOUT_HANDLER + ", but not both",
-						pc.extractSource(element));
+				pc.getReaderContext()
+					.error("Use " + ATT_LOGOUT_SUCCESS_URL + " or " + ATT_LOGOUT_HANDLER + ", but not both",
+							pc.extractSource(element));
 			}
 			builder.addConstructorArgReference(successHandlerRef);
+			this.logoutSuccessHandler = new RuntimeBeanReference(successHandlerRef);
 		}
 		else {
 			// Use the logout URL if no handler set
@@ -120,12 +127,14 @@ class LogoutBeanDefinitionParser implements BeanDefinitionParser {
 		}
 		this.logoutHandlers.add(new RootBeanDefinition(LogoutSuccessEventPublishingLogoutHandler.class));
 		builder.addConstructorArgValue(this.logoutHandlers);
+		builder.addPropertyValue("securityContextHolderStrategy",
+				this.authenticationFilterSecurityContextHolderStrategyRef);
 		return builder.getBeanDefinition();
 	}
 
 	private BeanDefinition getLogoutRequestMatcher(String logoutUrl) {
 		BeanDefinitionBuilder matcherBuilder = BeanDefinitionBuilder
-				.rootBeanDefinition("org.springframework.security.web.util.matcher.AntPathRequestMatcher");
+			.rootBeanDefinition(RequestMatcherFactoryBean.class);
 		matcherBuilder.addConstructorArgValue(logoutUrl);
 		if (this.csrfEnabled) {
 			matcherBuilder.addConstructorArgValue("POST");
@@ -135,6 +144,10 @@ class LogoutBeanDefinitionParser implements BeanDefinitionParser {
 
 	ManagedList<BeanMetadataElement> getLogoutHandlers() {
 		return this.logoutHandlers;
+	}
+
+	BeanMetadataElement getLogoutSuccessHandler() {
+		return this.logoutSuccessHandler;
 	}
 
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2018 the original author or authors.
+ * Copyright 2002-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,98 +18,150 @@ package org.springframework.security.config.annotation.web;
 
 import java.util.List;
 
-import javax.servlet.DispatcherType;
-
+import jakarta.servlet.DispatcherType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.core.ResolvableType;
 import org.springframework.http.HttpMethod;
-import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
+import org.springframework.security.config.ObjectPostProcessor;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
 import org.springframework.security.web.util.matcher.DispatcherTypeRequestMatcher;
 import org.springframework.security.web.util.matcher.RegexRequestMatcher;
 import org.springframework.security.web.util.matcher.RequestMatcher;
+import org.springframework.web.context.WebApplicationContext;
+import org.springframework.web.servlet.config.annotation.EnableWebMvc;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.mock;
+import static org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher.pathPattern;
 
 /**
  * Tests for {@link AbstractRequestMatcherRegistry}.
  *
  * @author Joe Grandja
+ * @author Marcus Da Coregio
  */
 public class AbstractRequestMatcherRegistryTests {
 
+	private static final ObjectPostProcessor<Object> NO_OP_OBJECT_POST_PROCESSOR = new ObjectPostProcessor<Object>() {
+		@Override
+		public <O> O postProcess(O object) {
+			return object;
+		}
+	};
+
 	private TestRequestMatcherRegistry matcherRegistry;
+
+	private WebApplicationContext context;
 
 	@BeforeEach
 	public void setUp() {
 		this.matcherRegistry = new TestRequestMatcherRegistry();
+		this.context = mock(WebApplicationContext.class);
+		ObjectProvider<ObjectPostProcessor<Object>> postProcessors = mock(ObjectProvider.class);
+		ResolvableType type = ResolvableType.forClassWithGenerics(ObjectPostProcessor.class, Object.class);
+		ObjectProvider<ObjectPostProcessor<Object>> given = this.context.getBeanProvider(type);
+		given(given).willReturn(postProcessors);
+		given(postProcessors.getObject()).willReturn(NO_OP_OBJECT_POST_PROCESSOR);
+		given(this.context.getBean(PathPatternRequestMatcher.Builder.class))
+			.willReturn(PathPatternRequestMatcher.withDefaults());
+		this.matcherRegistry.setApplicationContext(this.context);
 	}
 
 	@Test
 	public void regexMatchersWhenHttpMethodAndPatternParamsThenReturnRegexRequestMatcherType() {
-		List<RequestMatcher> requestMatchers = this.matcherRegistry.regexMatchers(HttpMethod.GET, "/a.*");
+		List<RequestMatcher> requestMatchers = this.matcherRegistry
+			.requestMatchers(new RegexRequestMatcher("/a.*", HttpMethod.GET.name()));
 		assertThat(requestMatchers).isNotEmpty();
-		assertThat(requestMatchers.size()).isEqualTo(1);
+		assertThat(requestMatchers).hasSize(1);
 		assertThat(requestMatchers.get(0)).isExactlyInstanceOf(RegexRequestMatcher.class);
 	}
 
 	@Test
 	public void regexMatchersWhenPatternParamThenReturnRegexRequestMatcherType() {
-		List<RequestMatcher> requestMatchers = this.matcherRegistry.regexMatchers("/a.*");
+		List<RequestMatcher> requestMatchers = this.matcherRegistry
+			.requestMatchers(new RegexRequestMatcher("/a.*", null));
 		assertThat(requestMatchers).isNotEmpty();
-		assertThat(requestMatchers.size()).isEqualTo(1);
+		assertThat(requestMatchers).hasSize(1);
 		assertThat(requestMatchers.get(0)).isExactlyInstanceOf(RegexRequestMatcher.class);
 	}
 
 	@Test
-	public void antMatchersWhenHttpMethodAndPatternParamsThenReturnAntPathRequestMatcherType() {
-		List<RequestMatcher> requestMatchers = this.matcherRegistry.antMatchers(HttpMethod.GET, "/a.*");
+	public void pathPatternWhenHttpMethodAndPatternParamsThenReturnPathPatternRequestMatcherType() {
+		List<RequestMatcher> requestMatchers = this.matcherRegistry
+			.requestMatchers(pathPattern(HttpMethod.GET, "/a.*"));
 		assertThat(requestMatchers).isNotEmpty();
-		assertThat(requestMatchers.size()).isEqualTo(1);
-		assertThat(requestMatchers.get(0)).isExactlyInstanceOf(AntPathRequestMatcher.class);
+		assertThat(requestMatchers).hasSize(1);
+		assertThat(requestMatchers.get(0)).isExactlyInstanceOf(PathPatternRequestMatcher.class);
 	}
 
 	@Test
-	public void antMatchersWhenPatternParamThenReturnAntPathRequestMatcherType() {
-		List<RequestMatcher> requestMatchers = this.matcherRegistry.antMatchers("/a.*");
+	public void pathPatternWhenPatternParamThenReturnPathPatternRequestMatcherType() {
+		List<RequestMatcher> requestMatchers = this.matcherRegistry.requestMatchers(pathPattern("/a.*"));
 		assertThat(requestMatchers).isNotEmpty();
-		assertThat(requestMatchers.size()).isEqualTo(1);
-		assertThat(requestMatchers.get(0)).isExactlyInstanceOf(AntPathRequestMatcher.class);
+		assertThat(requestMatchers).hasSize(1);
+		assertThat(requestMatchers.get(0)).isExactlyInstanceOf(PathPatternRequestMatcher.class);
 	}
 
 	@Test
-	public void dispatcherTypeMatchersWhenHttpMethodAndPatternParamsThenReturnAntPathRequestMatcherType() {
+	public void dispatcherTypeMatchersWhenHttpMethodAndPatternParamsThenReturnPathPatternRequestMatcherType() {
 		List<RequestMatcher> requestMatchers = this.matcherRegistry.dispatcherTypeMatchers(HttpMethod.GET,
 				DispatcherType.ASYNC);
 		assertThat(requestMatchers).isNotEmpty();
-		assertThat(requestMatchers.size()).isEqualTo(1);
+		assertThat(requestMatchers).hasSize(1);
 		assertThat(requestMatchers.get(0)).isExactlyInstanceOf(DispatcherTypeRequestMatcher.class);
 	}
 
 	@Test
-	public void dispatcherMatchersWhenPatternParamThenReturnAntPathRequestMatcherType() {
+	public void dispatcherMatchersWhenPatternParamThenReturnPathPatternRequestMatcherType() {
 		List<RequestMatcher> requestMatchers = this.matcherRegistry.dispatcherTypeMatchers(DispatcherType.INCLUDE);
 		assertThat(requestMatchers).isNotEmpty();
-		assertThat(requestMatchers.size()).isEqualTo(1);
+		assertThat(requestMatchers).hasSize(1);
 		assertThat(requestMatchers.get(0)).isExactlyInstanceOf(DispatcherTypeRequestMatcher.class);
+	}
+
+	@Test
+	public void requestMatchersWhenPatternAndMvcPresentThenReturnPathPatternRequestMatcherType() {
+		List<RequestMatcher> requestMatchers = this.matcherRegistry.requestMatchers("/path");
+		assertThat(requestMatchers).isNotEmpty();
+		assertThat(requestMatchers).hasSize(1);
+		assertThat(requestMatchers.get(0)).isExactlyInstanceOf(PathPatternRequestMatcher.class);
+	}
+
+	@Test
+	public void requestMatchersWhenHttpMethodAndPatternAndMvcPresentThenReturnPathPatternRequestMatcherType() {
+		List<RequestMatcher> requestMatchers = this.matcherRegistry.requestMatchers(HttpMethod.GET, "/path");
+		assertThat(requestMatchers).isNotEmpty();
+		assertThat(requestMatchers).hasSize(1);
+		assertThat(requestMatchers.get(0)).isExactlyInstanceOf(PathPatternRequestMatcher.class);
+	}
+
+	@Test
+	public void requestMatchersWhenHttpMethodAndMvcPresentThenReturnPathPatternRequestMatcherType() {
+		List<RequestMatcher> requestMatchers = this.matcherRegistry.requestMatchers(HttpMethod.GET);
+		assertThat(requestMatchers).isNotEmpty();
+		assertThat(requestMatchers).hasSize(1);
+		assertThat(requestMatchers.get(0)).isExactlyInstanceOf(PathPatternRequestMatcher.class);
 	}
 
 	private static class TestRequestMatcherRegistry extends AbstractRequestMatcherRegistry<List<RequestMatcher>> {
 
 		@Override
-		public List<RequestMatcher> mvcMatchers(String... mvcPatterns) {
-			return null;
-		}
-
-		@Override
-		public List<RequestMatcher> mvcMatchers(HttpMethod method, String... mvcPatterns) {
-			return null;
-		}
-
-		@Override
 		protected List<RequestMatcher> chainRequestMatchers(List<RequestMatcher> requestMatchers) {
 			return requestMatchers;
 		}
+
+	}
+
+	@Configuration
+	@EnableWebSecurity
+	@EnableWebMvc
+	static class MockMvcConfiguration {
 
 	}
 

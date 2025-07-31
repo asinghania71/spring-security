@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2022 the original author or authors.
+ * Copyright 2002-2025 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,19 +17,27 @@
 package org.springframework.security.web.access.intercept;
 
 import java.io.IOException;
+import java.util.function.Supplier;
 
-import javax.servlet.DispatcherType;
-import javax.servlet.FilterChain;
-import javax.servlet.ServletException;
-import javax.servlet.ServletRequest;
-import javax.servlet.ServletResponse;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
+import jakarta.servlet.DispatcherType;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.ServletRequest;
+import jakarta.servlet.ServletResponse;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
+import org.springframework.security.authorization.AuthorizationDeniedException;
+import org.springframework.security.authorization.AuthorizationEventPublisher;
 import org.springframework.security.authorization.AuthorizationManager;
+import org.springframework.security.authorization.AuthorizationResult;
+import org.springframework.security.authorization.event.AuthorizationDeniedEvent;
+import org.springframework.security.authorization.event.AuthorizationGrantedEvent;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.context.SecurityContextHolderStrategy;
 import org.springframework.util.Assert;
 import org.springframework.web.filter.GenericFilterBean;
 
@@ -42,13 +50,18 @@ import org.springframework.web.filter.GenericFilterBean;
  */
 public class AuthorizationFilter extends GenericFilterBean {
 
+	private SecurityContextHolderStrategy securityContextHolderStrategy = SecurityContextHolder
+		.getContextHolderStrategy();
+
 	private final AuthorizationManager<HttpServletRequest> authorizationManager;
 
-	private boolean observeOncePerRequest = true;
+	private AuthorizationEventPublisher eventPublisher = new NoopAuthorizationEventPublisher();
 
-	private boolean filterErrorDispatch = false;
+	private boolean observeOncePerRequest = false;
 
-	private boolean filterAsyncDispatch = false;
+	private boolean filterErrorDispatch = true;
+
+	private boolean filterAsyncDispatch = true;
 
 	/**
 	 * Creates an instance.
@@ -79,7 +92,11 @@ public class AuthorizationFilter extends GenericFilterBean {
 		String alreadyFilteredAttributeName = getAlreadyFilteredAttributeName();
 		request.setAttribute(alreadyFilteredAttributeName, Boolean.TRUE);
 		try {
-			this.authorizationManager.verify(this::getAuthentication, request);
+			AuthorizationResult result = this.authorizationManager.authorize(this::getAuthentication, request);
+			this.eventPublisher.publishAuthorizationEvent(this::getAuthentication, request, result);
+			if (result != null && !result.isGranted()) {
+				throw new AuthorizationDeniedException("Access Denied", result);
+			}
 			chain.doFilter(request, response);
 		}
 		finally {
@@ -91,10 +108,8 @@ public class AuthorizationFilter extends GenericFilterBean {
 		if (DispatcherType.ERROR.equals(request.getDispatcherType()) && !this.filterErrorDispatch) {
 			return true;
 		}
-		if (DispatcherType.ASYNC.equals(request.getDispatcherType()) && !this.filterAsyncDispatch) {
-			return true;
-		}
-		return false;
+
+		return DispatcherType.ASYNC.equals(request.getDispatcherType()) && !this.filterAsyncDispatch;
 	}
 
 	private boolean isApplied(HttpServletRequest request) {
@@ -109,13 +124,35 @@ public class AuthorizationFilter extends GenericFilterBean {
 		return name + ".APPLIED";
 	}
 
+	/**
+	 * Sets the {@link SecurityContextHolderStrategy} to use. The default action is to use
+	 * the {@link SecurityContextHolderStrategy} stored in {@link SecurityContextHolder}.
+	 *
+	 * @since 5.8
+	 */
+	public void setSecurityContextHolderStrategy(SecurityContextHolderStrategy securityContextHolderStrategy) {
+		Assert.notNull(securityContextHolderStrategy, "securityContextHolderStrategy cannot be null");
+		this.securityContextHolderStrategy = securityContextHolderStrategy;
+	}
+
 	private Authentication getAuthentication() {
-		Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+		Authentication authentication = this.securityContextHolderStrategy.getContext().getAuthentication();
 		if (authentication == null) {
 			throw new AuthenticationCredentialsNotFoundException(
 					"An Authentication object was not found in the SecurityContext");
 		}
 		return authentication;
+	}
+
+	/**
+	 * Use this {@link AuthorizationEventPublisher} to publish
+	 * {@link AuthorizationDeniedEvent}s and {@link AuthorizationGrantedEvent}s.
+	 * @param eventPublisher the {@link ApplicationEventPublisher} to use
+	 * @since 5.7
+	 */
+	public void setAuthorizationEventPublisher(AuthorizationEventPublisher eventPublisher) {
+		Assert.notNull(eventPublisher, "eventPublisher cannot be null");
+		this.eventPublisher = eventPublisher;
 	}
 
 	/**
@@ -126,13 +163,43 @@ public class AuthorizationFilter extends GenericFilterBean {
 		return this.authorizationManager;
 	}
 
+	/**
+	 * Sets whether to filter all dispatcher types.
+	 * @param shouldFilterAllDispatcherTypes should filter all dispatcher types. Default
+	 * is {@code true}
+	 * @since 5.7
+	 * @deprecated Permit access to the {@link jakarta.servlet.DispatcherType} instead.
+	 * <pre>
+	 * &#064;Configuration
+	 * &#064;EnableWebSecurity
+	 * public class SecurityConfig {
+	 *
+	 * 	&#064;Bean
+	 * 	public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+	 * 		http
+	 * 		 	.authorizeHttpRequests((authorize) -&gt; authorize
+	 * 				.dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
+	 * 			 	// ...
+	 * 		 	);
+	 * 		return http.build();
+	 * 	}
+	 * }
+	 * </pre>
+	 */
+	@Deprecated(since = "6.1", forRemoval = true)
+	public void setShouldFilterAllDispatcherTypes(boolean shouldFilterAllDispatcherTypes) {
+		this.observeOncePerRequest = !shouldFilterAllDispatcherTypes;
+		this.filterErrorDispatch = shouldFilterAllDispatcherTypes;
+		this.filterAsyncDispatch = shouldFilterAllDispatcherTypes;
+	}
+
 	public boolean isObserveOncePerRequest() {
 		return this.observeOncePerRequest;
 	}
 
 	/**
 	 * Sets whether this filter apply only once per request. By default, this is
-	 * <code>true</code>, meaning the filter will only execute once per request. Sometimes
+	 * <code>false</code>, meaning the filter will execute on every request. Sometimes
 	 * users may wish it to execute more than once per request, such as when JSP forwards
 	 * are being used and filter security is desired on each included fragment of the HTTP
 	 * request.
@@ -144,7 +211,8 @@ public class AuthorizationFilter extends GenericFilterBean {
 	}
 
 	/**
-	 * If set to true, the filter will be applied to error dispatcher. Defaults to false.
+	 * If set to true, the filter will be applied to error dispatcher. Defaults to
+	 * {@code true}.
 	 * @param filterErrorDispatch whether the filter should be applied to error dispatcher
 	 */
 	public void setFilterErrorDispatch(boolean filterErrorDispatch) {
@@ -153,11 +221,20 @@ public class AuthorizationFilter extends GenericFilterBean {
 
 	/**
 	 * If set to true, the filter will be applied to the async dispatcher. Defaults to
-	 * false.
+	 * {@code true}.
 	 * @param filterAsyncDispatch whether the filter should be applied to async dispatch
 	 */
 	public void setFilterAsyncDispatch(boolean filterAsyncDispatch) {
 		this.filterAsyncDispatch = filterAsyncDispatch;
+	}
+
+	private static class NoopAuthorizationEventPublisher implements AuthorizationEventPublisher {
+
+		@Override
+		public <T> void publishAuthorizationEvent(Supplier<Authentication> authentication, T object,
+				AuthorizationResult result) {
+		}
+
 	}
 
 }

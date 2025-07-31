@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2016 the original author or authors.
+ * Copyright 2002-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,22 +16,16 @@
 
 package org.springframework.security.web.authentication;
 
+import java.io.IOException;
 import java.util.Collections;
-import java.util.Locale;
 
-import javax.servlet.FilterChain;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
 import org.junit.jupiter.api.Test;
 
-import org.springframework.context.support.MessageSourceAccessor;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.authentication.BadCredentialsException;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.AuthenticationException;
-import org.springframework.security.core.SpringSecurityMessageSource;
 import org.springframework.security.web.WebAttributes;
 import org.springframework.security.web.authentication.ui.DefaultLoginPageGeneratingFilter;
 
@@ -116,8 +110,8 @@ public class DefaultLoginPageGeneratingFilterTests {
 		MockHttpServletRequest request = new MockHttpServletRequest("GET", "/login");
 		filter.doFilter(request, response, this.chain);
 		assertThat(response
-				.getContentLength() == response.getContentAsString().getBytes(response.getCharacterEncoding()).length)
-						.isTrue();
+			.getContentLength() == response.getContentAsString().getBytes(response.getCharacterEncoding()).length)
+			.isTrue();
 	}
 
 	@Test
@@ -129,26 +123,6 @@ public class DefaultLoginPageGeneratingFilterTests {
 		request.setQueryString("not");
 		filter.doFilter(request, response, this.chain);
 		assertThat(response.getContentAsString()).isEmpty();
-	}
-
-	@Test
-	public void generatingPageWithOpenIdFilterOnlyIsSuccessFul() throws Exception {
-		DefaultLoginPageGeneratingFilter filter = new DefaultLoginPageGeneratingFilter(new MockProcessingFilter());
-		filter.doFilter(new MockHttpServletRequest("GET", "/login"), new MockHttpServletResponse(), this.chain);
-	}
-
-	/* SEC-1111 */
-	@Test
-	public void handlesNonIso8859CharsInErrorMessage() throws Exception {
-		DefaultLoginPageGeneratingFilter filter = new DefaultLoginPageGeneratingFilter(
-				new UsernamePasswordAuthenticationFilter());
-		MockHttpServletRequest request = new MockHttpServletRequest("GET", "/login");
-		request.addParameter("login_error", "true");
-		MessageSourceAccessor messages = SpringSecurityMessageSource.getAccessor();
-		String message = messages.getMessage("AbstractUserDetailsAuthenticationProvider.badCredentials",
-				"Bad credentials", Locale.KOREA);
-		request.getSession().setAttribute(WebAttributes.AUTHENTICATION_EXCEPTION, new BadCredentialsException(message));
-		filter.doFilter(request, new MockHttpServletResponse(), this.chain);
 	}
 
 	// gh-5394
@@ -163,7 +137,7 @@ public class DefaultLoginPageGeneratingFilterTests {
 		MockHttpServletResponse response = new MockHttpServletResponse();
 		filter.doFilter(new MockHttpServletRequest("GET", "/login"), response, this.chain);
 		assertThat(response.getContentAsString())
-				.contains("<a href=\"/oauth2/authorization/google\">Google &lt; &gt; &quot; &#39; &amp;</a>");
+			.contains("<a href=\"/oauth2/authorization/google\">Google &lt; &gt; &quot; &#39; &amp;</a>");
 	}
 
 	@Test
@@ -177,26 +151,107 @@ public class DefaultLoginPageGeneratingFilterTests {
 		filter.doFilter(new MockHttpServletRequest("GET", "/login"), response, this.chain);
 		assertThat(response.getContentAsString()).contains("Login with SAML 2.0");
 		assertThat(response.getContentAsString())
-				.contains("<a href=\"/saml/sso/google\">Google &lt; &gt; &quot; &#39; &amp;</a>");
-	} // Fake OpenID filter (since it's not in this module
+			.contains("<a href=\"/saml/sso/google\">Google &lt; &gt; &quot; &#39; &amp;</a>");
+	}
 
-	@SuppressWarnings("unused")
-	private static class MockProcessingFilter extends AbstractAuthenticationProcessingFilter {
+	// gh-13768
+	@Test
+	public void generatesWhenExceptionWithEmptyMessageThenInvalidCredentials() throws Exception {
+		DefaultLoginPageGeneratingFilter filter = new DefaultLoginPageGeneratingFilter(
+				new UsernamePasswordAuthenticationFilter());
+		filter.setLoginPageUrl(DefaultLoginPageGeneratingFilter.DEFAULT_LOGIN_PAGE_URL);
+		MockHttpServletRequest request = new MockHttpServletRequest("GET", "/login");
+		request.setQueryString("error");
+		request.getSession().setAttribute(WebAttributes.AUTHENTICATION_EXCEPTION, new BadCredentialsException(null));
+		MockHttpServletResponse response = new MockHttpServletResponse();
+		filter.doFilter(request, response, this.chain);
+		assertThat(response.getContentAsString()).contains("Invalid credentials");
+	}
 
-		MockProcessingFilter() {
-			super("/someurl");
-		}
+	@Test
+	public void generateWhenOneTimeTokenLoginThenOttForm() throws Exception {
+		DefaultLoginPageGeneratingFilter filter = new DefaultLoginPageGeneratingFilter();
+		filter.setLoginPageUrl(DefaultLoginPageGeneratingFilter.DEFAULT_LOGIN_PAGE_URL);
+		filter.setOneTimeTokenEnabled(true);
+		filter.setOneTimeTokenGenerationUrl("/ott/authenticate");
+		MockHttpServletResponse response = new MockHttpServletResponse();
+		filter.doFilter(new MockHttpServletRequest("GET", "/login"), response, this.chain);
+		assertThat(response.getContentAsString()).contains("Request a One-Time Token");
+		assertThat(response.getContentAsString()).contains("""
+				      <form id="ott-form" class="login-form" method="post" action="/ott/authenticate">
+				        <h2>Request a One-Time Token</h2>
 
-		@Override
-		public Authentication attemptAuthentication(HttpServletRequest request, HttpServletResponse response)
-				throws AuthenticationException {
-			return null;
-		}
+				        <p>
+				          <label for="ott-username" class="screenreader">Username</label>
+				          <input type="text" id="ott-username" name="username" placeholder="Username" required>
+				        </p>
 
-		String getClaimedIdentityFieldName() {
-			return "unused";
-		}
+				        <button class="primary" type="submit" form="ott-form">Send Token</button>
+				      </form>
+				""");
+	}
 
+	@Test
+	void generatesThenRenders() throws ServletException, IOException {
+		DefaultLoginPageGeneratingFilter filter = new DefaultLoginPageGeneratingFilter(
+				new UsernamePasswordAuthenticationFilter());
+		filter.setLoginPageUrl(DefaultLoginPageGeneratingFilter.DEFAULT_LOGIN_PAGE_URL);
+		filter.setSaml2LoginEnabled(true);
+		String clientName = "Google < > \" \' &";
+		filter.setSaml2AuthenticationUrlToProviderName(Collections.singletonMap("/saml/sso/google", clientName));
+		filter.setOauth2LoginEnabled(true);
+		clientName = "Google < > \" \' &";
+		filter.setOauth2AuthenticationUrlToClientName(
+				Collections.singletonMap("/oauth2/authorization/google", clientName));
+
+		MockHttpServletRequest request = new MockHttpServletRequest("GET", "/login");
+		request.setQueryString("error");
+		MockHttpServletResponse response = new MockHttpServletResponse();
+		request.getSession()
+			.setAttribute(WebAttributes.AUTHENTICATION_EXCEPTION, new BadCredentialsException("Bad credentials"));
+		filter.doFilter(request, response, this.chain);
+		assertThat(response.getContentAsString()).isEqualTo("""
+				<!DOCTYPE html>
+				<html lang="en">
+				  <head>
+				    <meta charset="utf-8">
+				    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+				    <meta name="description" content="">
+				    <meta name="author" content="">
+				    <title>Please sign in</title>
+				    <link href="/default-ui.css" rel="stylesheet" />
+				  </head>
+				  <body>
+				    <div class="content">
+				      <form class="login-form" method="post" action="null">
+				        <h2>Please sign in</h2>
+				<div class="alert alert-danger" role="alert">Invalid credentials</div>
+				        <p>
+				          <label for="username" class="screenreader">Username</label>
+				          <input type="text" id="username" name="username" placeholder="Username" required autofocus>
+				        </p>
+				        <p>
+				          <label for="password" class="screenreader">Password</label>
+				          <input type="password" id="password" name="password" placeholder="Password" required>
+				        </p>
+
+
+				        <button type="submit" class="primary">Sign in</button>
+				      </form>
+
+				<h2>Login with OAuth 2.0</h2>
+				<div class="alert alert-danger" role="alert">Invalid credentials</div>
+				<table class="table table-striped">
+				  <tr><td><a href="/oauth2/authorization/google">Google &lt; &gt; &quot; &#39; &amp;</a></td></tr>
+				</table>
+				<h2>Login with SAML 2.0</h2>
+				<div class="alert alert-danger" role="alert">Invalid credentials</div>
+				<table class="table table-striped">
+				  <tr><td><a href="/saml/sso/google">Google &lt; &gt; &quot; &#39; &amp;</a></td></tr>
+				</table>
+				    </div>
+				  </body>
+				</html>""");
 	}
 
 }

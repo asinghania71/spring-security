@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2025 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,9 +32,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import javax.annotation.PreDestroy;
-import javax.servlet.http.HttpServletRequest;
-
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.JWSHeader;
 import com.nimbusds.jose.JWSObject;
@@ -42,6 +39,9 @@ import com.nimbusds.jose.Payload;
 import com.nimbusds.jose.crypto.RSASSASigner;
 import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.RSAKey;
+import com.nimbusds.jose.util.JSONObjectUtils;
+import jakarta.annotation.PreDestroy;
+import jakarta.servlet.http.HttpServletRequest;
 import net.minidev.json.JSONObject;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
@@ -51,6 +51,7 @@ import org.hamcrest.core.StringEndsWith;
 import org.hamcrest.core.StringStartsWith;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.verification.VerificationMode;
 
 import org.springframework.beans.factory.BeanCreationException;
 import org.springframework.beans.factory.NoUniqueBeanDefinitionException;
@@ -62,6 +63,7 @@ import org.springframework.context.EnvironmentAware;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.support.GenericApplicationContext;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.core.env.ConfigurableEnvironment;
 import org.springframework.core.env.Environment;
@@ -81,24 +83,29 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.AuthenticationManagerResolver;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.authentication.AuthenticationServiceException;
-import org.springframework.security.config.annotation.ObjectPostProcessor;
+import org.springframework.security.authentication.TestingAuthenticationToken;
+import org.springframework.security.config.Customizer;
+import org.springframework.security.config.ObjectPostProcessor;
+import org.springframework.security.config.annotation.SecurityContextChangedListenerConfig;
 import org.springframework.security.config.annotation.method.configuration.EnableGlobalMethodSecurity;
-import org.springframework.security.config.annotation.web.HttpSecurityBuilder;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.config.test.SpringTestContext;
 import org.springframework.security.config.test.SpringTestContextExtension;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextChangedListener;
+import org.springframework.security.core.context.SecurityContextHolderStrategy;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.oauth2.client.registration.ClientRegistration;
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
 import org.springframework.security.oauth2.client.registration.InMemoryClientRegistrationRepository;
 import org.springframework.security.oauth2.client.registration.TestClientRegistrations;
 import org.springframework.security.oauth2.core.DefaultOAuth2AuthenticatedPrincipal;
+import org.springframework.security.oauth2.core.OAuth2AuthenticatedPrincipal;
 import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
 import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.oauth2.core.OAuth2TokenValidator;
@@ -116,18 +123,21 @@ import org.springframework.security.oauth2.server.resource.authentication.Bearer
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.security.oauth2.server.resource.authentication.JwtIssuerAuthenticationManagerResolver;
-import org.springframework.security.oauth2.server.resource.introspection.NimbusOpaqueTokenIntrospector;
+import org.springframework.security.oauth2.server.resource.introspection.OpaqueTokenAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.introspection.OpaqueTokenIntrospector;
+import org.springframework.security.oauth2.server.resource.introspection.SpringOpaqueTokenIntrospector;
 import org.springframework.security.oauth2.server.resource.web.BearerTokenAuthenticationEntryPoint;
-import org.springframework.security.oauth2.server.resource.web.BearerTokenAuthenticationFilter;
 import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
 import org.springframework.security.oauth2.server.resource.web.DefaultBearerTokenResolver;
 import org.springframework.security.oauth2.server.resource.web.access.BearerTokenAccessDeniedHandler;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationConverter;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.security.web.access.AccessDeniedHandlerImpl;
+import org.springframework.security.web.authentication.AuthenticationConverter;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.ResultMatcher;
@@ -142,6 +152,7 @@ import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.client.RestOperations;
 import org.springframework.web.context.support.GenericWebApplicationContext;
+import org.springframework.web.servlet.config.annotation.EnableWebMvc;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
@@ -152,8 +163,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.springframework.security.config.Customizer.withDefaults;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
@@ -208,7 +219,7 @@ public class OAuth2ResourceServerConfigurerTests {
 	@Test
 	public void getWhenUsingDefaultsWithValidBearerTokenThenAcceptsRequest() throws Exception {
 		this.spring.register(RestOperationsConfig.class, DefaultConfig.class, BasicController.class).autowire();
-		mockRestOperations(jwks("Default"));
+		mockJwksRestOperations(jwks("Default"));
 		String token = this.token("ValidNoScopes");
 		// @formatter:off
 		this.mvc.perform(get("/").with(bearerToken(token)))
@@ -218,9 +229,41 @@ public class OAuth2ResourceServerConfigurerTests {
 	}
 
 	@Test
+	public void getWhenCustomSecurityContextHolderStrategyThenUses() throws Exception {
+		this.spring
+			.register(RestOperationsConfig.class, DefaultConfig.class, BasicController.class,
+					SecurityContextChangedListenerConfig.class)
+			.autowire();
+		mockJwksRestOperations(jwks("Default"));
+		String token = this.token("ValidNoScopes");
+		// @formatter:off
+		this.mvc.perform(get("/").with(bearerToken(token)))
+				.andExpect(status().isOk())
+				.andExpect(content().string("ok"));
+		// @formatter:on
+		verifyBean(SecurityContextHolderStrategy.class, atLeastOnce()).getContext();
+	}
+
+	@Test
+	public void getWhenSecurityContextHolderStrategyThenUses() throws Exception {
+		this.spring
+			.register(RestOperationsConfig.class, DefaultConfig.class, SecurityContextChangedListenerConfig.class,
+					BasicController.class)
+			.autowire();
+		mockJwksRestOperations(jwks("Default"));
+		String token = this.token("ValidNoScopes");
+		// @formatter:off
+		this.mvc.perform(get("/").with(bearerToken(token)))
+				.andExpect(status().isOk())
+				.andExpect(content().string("ok"));
+		// @formatter:on
+		verifyBean(SecurityContextChangedListener.class, atLeastOnce()).securityContextChanged(any());
+	}
+
+	@Test
 	public void getWhenUsingDefaultsInLambdaWithValidBearerTokenThenAcceptsRequest() throws Exception {
 		this.spring.register(RestOperationsConfig.class, DefaultInLambdaConfig.class, BasicController.class).autowire();
-		mockRestOperations(jwks("Default"));
+		mockJwksRestOperations(jwks("Default"));
 		String token = this.token("ValidNoScopes");
 		// @formatter:off
 		this.mvc.perform(get("/").with(bearerToken(token)))
@@ -256,7 +299,7 @@ public class OAuth2ResourceServerConfigurerTests {
 	@Test
 	public void getWhenUsingDefaultsWithExpiredBearerTokenThenInvalidToken() throws Exception {
 		this.spring.register(RestOperationsConfig.class, DefaultConfig.class, BasicController.class).autowire();
-		mockRestOperations(jwks("Default"));
+		mockJwksRestOperations(jwks("Default"));
 		String token = this.token("Expired");
 		// @formatter:off
 		this.mvc.perform(get("/").with(bearerToken(token)))
@@ -300,7 +343,7 @@ public class OAuth2ResourceServerConfigurerTests {
 	@Test
 	public void getWhenUsingDefaultsWithMalformedPayloadThenInvalidToken() throws Exception {
 		this.spring.register(RestOperationsConfig.class, DefaultConfig.class).autowire();
-		mockRestOperations(jwks("Default"));
+		mockJwksRestOperations(jwks("Default"));
 		String token = this.token("MalformedPayload");
 		// @formatter:off
 		this.mvc.perform(get("/").with(bearerToken(token)))
@@ -323,7 +366,7 @@ public class OAuth2ResourceServerConfigurerTests {
 	@Test
 	public void getWhenUsingDefaultsWithBearerTokenBeforeNotBeforeThenInvalidToken() throws Exception {
 		this.spring.register(RestOperationsConfig.class, DefaultConfig.class).autowire();
-		this.mockRestOperations(jwks("Default"));
+		this.mockJwksRestOperations(jwks("Default"));
 		String token = this.token("TooEarly");
 		// @formatter:off
 		this.mvc.perform(get("/").with(bearerToken(token)))
@@ -380,7 +423,7 @@ public class OAuth2ResourceServerConfigurerTests {
 	@Test
 	public void getWhenAnonymousDisabledThenAllows() throws Exception {
 		this.spring.register(RestOperationsConfig.class, AnonymousDisabledConfig.class).autowire();
-		mockRestOperations(jwks("Default"));
+		mockJwksRestOperations(jwks("Default"));
 		String token = token("ValidNoScopes");
 		// @formatter:off
 		this.mvc.perform(get("/authenticated").with(bearerToken(token)))
@@ -401,7 +444,7 @@ public class OAuth2ResourceServerConfigurerTests {
 	@Test
 	public void getWhenUsingDefaultsWithSufficientlyScopedBearerTokenThenAcceptsRequest() throws Exception {
 		this.spring.register(RestOperationsConfig.class, DefaultConfig.class, BasicController.class).autowire();
-		mockRestOperations(jwks("Default"));
+		mockJwksRestOperations(jwks("Default"));
 		String token = this.token("ValidMessageReadScope");
 		// @formatter:off
 		this.mvc.perform(get("/requires-read-scope").with(bearerToken(token)))
@@ -413,7 +456,7 @@ public class OAuth2ResourceServerConfigurerTests {
 	@Test
 	public void getWhenUsingDefaultsWithInsufficientScopeThenInsufficientScopeError() throws Exception {
 		this.spring.register(RestOperationsConfig.class, DefaultConfig.class, BasicController.class).autowire();
-		mockRestOperations(jwks("Default"));
+		mockJwksRestOperations(jwks("Default"));
 		String token = this.token("ValidNoScopes");
 		// @formatter:off
 		this.mvc.perform(get("/requires-read-scope").with(bearerToken(token)))
@@ -425,7 +468,7 @@ public class OAuth2ResourceServerConfigurerTests {
 	@Test
 	public void getWhenUsingDefaultsWithInsufficientScpThenInsufficientScopeError() throws Exception {
 		this.spring.register(RestOperationsConfig.class, DefaultConfig.class, BasicController.class).autowire();
-		mockRestOperations(jwks("Default"));
+		mockJwksRestOperations(jwks("Default"));
 		String token = this.token("ValidMessageWriteScp");
 		// @formatter:off
 		this.mvc.perform(get("/requires-read-scope").with(bearerToken(token)))
@@ -437,7 +480,7 @@ public class OAuth2ResourceServerConfigurerTests {
 	@Test
 	public void getWhenUsingDefaultsAndAuthorizationServerHasNoMatchingKeyThenInvalidToken() throws Exception {
 		this.spring.register(RestOperationsConfig.class, DefaultConfig.class).autowire();
-		mockRestOperations(jwks("Empty"));
+		mockJwksRestOperations(jwks("Empty"));
 		String token = this.token("ValidNoScopes");
 		// @formatter:off
 		this.mvc.perform(get("/").with(bearerToken(token)))
@@ -449,7 +492,7 @@ public class OAuth2ResourceServerConfigurerTests {
 	@Test
 	public void getWhenUsingDefaultsAndAuthorizationServerHasMultipleMatchingKeysThenOk() throws Exception {
 		this.spring.register(RestOperationsConfig.class, DefaultConfig.class, BasicController.class).autowire();
-		mockRestOperations(jwks("TwoKeys"));
+		mockJwksRestOperations(jwks("TwoKeys"));
 		String token = this.token("ValidNoScopes");
 		// @formatter:off
 		this.mvc.perform(get("/authenticated").with(bearerToken(token)))
@@ -461,7 +504,7 @@ public class OAuth2ResourceServerConfigurerTests {
 	@Test
 	public void getWhenUsingDefaultsAndKeyMatchesByKidThenOk() throws Exception {
 		this.spring.register(RestOperationsConfig.class, DefaultConfig.class, BasicController.class).autowire();
-		mockRestOperations(jwks("TwoKeys"));
+		mockJwksRestOperations(jwks("TwoKeys"));
 		String token = this.token("Kid");
 		// @formatter:off
 		this.mvc.perform(get("/authenticated").with(bearerToken(token)))
@@ -473,7 +516,7 @@ public class OAuth2ResourceServerConfigurerTests {
 	@Test
 	public void getWhenUsingMethodSecurityWithValidBearerTokenThenAcceptsRequest() throws Exception {
 		this.spring.register(RestOperationsConfig.class, MethodSecurityConfig.class, BasicController.class).autowire();
-		mockRestOperations(jwks("Default"));
+		mockJwksRestOperations(jwks("Default"));
 		String token = this.token("ValidMessageReadScope");
 		// @formatter:off
 		this.mvc.perform(get("/ms-requires-read-scope").with(bearerToken(token)))
@@ -485,7 +528,7 @@ public class OAuth2ResourceServerConfigurerTests {
 	@Test
 	public void getWhenUsingMethodSecurityWithValidBearerTokenHavingScpAttributeThenAcceptsRequest() throws Exception {
 		this.spring.register(RestOperationsConfig.class, MethodSecurityConfig.class, BasicController.class).autowire();
-		mockRestOperations(jwks("Default"));
+		mockJwksRestOperations(jwks("Default"));
 		String token = this.token("ValidMessageReadScp");
 		// @formatter:off
 		this.mvc.perform(get("/ms-requires-read-scope").with(bearerToken(token)))
@@ -497,7 +540,7 @@ public class OAuth2ResourceServerConfigurerTests {
 	@Test
 	public void getWhenUsingMethodSecurityWithInsufficientScopeThenInsufficientScopeError() throws Exception {
 		this.spring.register(RestOperationsConfig.class, MethodSecurityConfig.class, BasicController.class).autowire();
-		mockRestOperations(jwks("Default"));
+		mockJwksRestOperations(jwks("Default"));
 		String token = this.token("ValidNoScopes");
 		// @formatter:off
 		this.mvc.perform(get("/ms-requires-read-scope").with(bearerToken(token)))
@@ -509,7 +552,7 @@ public class OAuth2ResourceServerConfigurerTests {
 	@Test
 	public void getWhenUsingMethodSecurityWithInsufficientScpThenInsufficientScopeError() throws Exception {
 		this.spring.register(RestOperationsConfig.class, MethodSecurityConfig.class, BasicController.class).autowire();
-		mockRestOperations(jwks("Default"));
+		mockJwksRestOperations(jwks("Default"));
 		String token = this.token("ValidMessageWriteScp");
 		// @formatter:off
 		this.mvc.perform(get("/ms-requires-read-scope").with(bearerToken(token)))
@@ -521,7 +564,7 @@ public class OAuth2ResourceServerConfigurerTests {
 	@Test
 	public void getWhenUsingMethodSecurityWithDenyAllThenInsufficientScopeError() throws Exception {
 		this.spring.register(RestOperationsConfig.class, MethodSecurityConfig.class, BasicController.class).autowire();
-		mockRestOperations(jwks("Default"));
+		mockJwksRestOperations(jwks("Default"));
 		String token = this.token("ValidMessageReadScope");
 		// @formatter:off
 		this.mvc.perform(get("/ms-deny").with(bearerToken(token)))
@@ -533,7 +576,7 @@ public class OAuth2ResourceServerConfigurerTests {
 	@Test
 	public void postWhenUsingDefaultsWithValidBearerTokenAndNoCsrfTokenThenOk() throws Exception {
 		this.spring.register(RestOperationsConfig.class, DefaultConfig.class, BasicController.class).autowire();
-		mockRestOperations(jwks("Default"));
+		mockJwksRestOperations(jwks("Default"));
 		String token = this.token("ValidNoScopes");
 		// @formatter:off
 		this.mvc.perform(post("/authenticated").header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_FORM_URLENCODED_VALUE).with(bearerToken(token)))
@@ -555,7 +598,7 @@ public class OAuth2ResourceServerConfigurerTests {
 	@Test
 	public void postWhenUsingDefaultsWithExpiredBearerTokenAndNoCsrfThenInvalidToken() throws Exception {
 		this.spring.register(RestOperationsConfig.class, DefaultConfig.class).autowire();
-		mockRestOperations(jwks("Default"));
+		mockJwksRestOperations(jwks("Default"));
 		String token = this.token("Expired");
 		// @formatter:off
 		this.mvc.perform(post("/authenticated").header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_FORM_URLENCODED_VALUE).with(bearerToken(token)))
@@ -567,7 +610,7 @@ public class OAuth2ResourceServerConfigurerTests {
 	@Test
 	public void requestWhenDefaultConfiguredThenSessionIsNotCreated() throws Exception {
 		this.spring.register(RestOperationsConfig.class, DefaultConfig.class, BasicController.class).autowire();
-		mockRestOperations(jwks("Default"));
+		mockJwksRestOperations(jwks("Default"));
 		String token = this.token("ValidNoScopes");
 		// @formatter:off
 		MvcResult result = this.mvc.perform(get("/").with(bearerToken(token)))
@@ -580,7 +623,7 @@ public class OAuth2ResourceServerConfigurerTests {
 	@Test
 	public void requestWhenIntrospectionConfiguredThenSessionIsNotCreated() throws Exception {
 		this.spring.register(RestOperationsConfig.class, OpaqueTokenConfig.class, BasicController.class).autowire();
-		mockRestOperations(json("Active"));
+		mockJsonRestOperations(json("Active"));
 		// @formatter:off
 		MvcResult result = this.mvc.perform(get("/authenticated").with(bearerToken("token")))
 				.andExpect(status().isOk())
@@ -604,8 +647,8 @@ public class OAuth2ResourceServerConfigurerTests {
 	@Test
 	public void requestWhenSessionManagementConfiguredThenUserConfigurationOverrides() throws Exception {
 		this.spring.register(RestOperationsConfig.class, AlwaysSessionCreationConfig.class, BasicController.class)
-				.autowire();
-		mockRestOperations(jwks("Default"));
+			.autowire();
+		mockJwksRestOperations(jwks("Default"));
 		String token = this.token("ValidNoScopes");
 		// @formatter:off
 		MvcResult result = this.mvc.perform(get("/").with(bearerToken(token)))
@@ -619,7 +662,7 @@ public class OAuth2ResourceServerConfigurerTests {
 	public void requestWhenBearerTokenResolverAllowsRequestBodyThenEitherHeaderOrRequestBodyIsAccepted()
 			throws Exception {
 		this.spring.register(AllowBearerTokenInRequestBodyConfig.class, JwtDecoderConfig.class, BasicController.class)
-				.autowire();
+			.autowire();
 		JwtDecoder decoder = this.spring.getContext().getBean(JwtDecoder.class);
 		given(decoder.decode(anyString())).willReturn(JWT);
 		// @formatter:off
@@ -636,8 +679,8 @@ public class OAuth2ResourceServerConfigurerTests {
 	public void requestWhenBearerTokenResolverAllowsQueryParameterThenEitherHeaderOrQueryParameterIsAccepted()
 			throws Exception {
 		this.spring
-				.register(AllowBearerTokenAsQueryParameterConfig.class, JwtDecoderConfig.class, BasicController.class)
-				.autowire();
+			.register(AllowBearerTokenAsQueryParameterConfig.class, JwtDecoderConfig.class, BasicController.class)
+			.autowire();
 		JwtDecoder decoder = this.spring.getContext().getBean(JwtDecoder.class);
 		given(decoder.decode(anyString())).willReturn(JWT);
 		// @formatter:off
@@ -654,7 +697,7 @@ public class OAuth2ResourceServerConfigurerTests {
 	public void requestWhenBearerTokenResolverAllowsRequestBodyAndRequestContainsTwoTokensThenInvalidRequest()
 			throws Exception {
 		this.spring.register(AllowBearerTokenInRequestBodyConfig.class, JwtDecoderConfig.class, BasicController.class)
-				.autowire();
+			.autowire();
 		JwtDecoder decoder = this.spring.getContext().getBean(JwtDecoder.class);
 		given(decoder.decode(anyString())).willReturn(JWT);
 		// @formatter:off
@@ -673,8 +716,8 @@ public class OAuth2ResourceServerConfigurerTests {
 	public void requestWhenBearerTokenResolverAllowsQueryParameterAndRequestContainsTwoTokensThenInvalidRequest()
 			throws Exception {
 		this.spring
-				.register(AllowBearerTokenAsQueryParameterConfig.class, JwtDecoderConfig.class, BasicController.class)
-				.autowire();
+			.register(AllowBearerTokenAsQueryParameterConfig.class, JwtDecoderConfig.class, BasicController.class)
+			.autowire();
 		JwtDecoder decoder = this.spring.getContext().getBean(JwtDecoder.class);
 		given(decoder.decode(anyString())).willReturn(JWT);
 		// @formatter:off
@@ -703,9 +746,9 @@ public class OAuth2ResourceServerConfigurerTests {
 	@Test
 	public void getBearerTokenResolverWhenDuplicateResolverBeansThenWiringException() {
 		assertThatExceptionOfType(BeanCreationException.class)
-				.isThrownBy(() -> this.spring
-						.register(MultipleBearerTokenResolverBeansConfig.class, JwtDecoderConfig.class).autowire())
-				.withRootCauseInstanceOf(NoUniqueBeanDefinitionException.class);
+			.isThrownBy(() -> this.spring.register(MultipleBearerTokenResolverBeansConfig.class, JwtDecoderConfig.class)
+				.autowire())
+			.withRootCauseInstanceOf(NoUniqueBeanDefinitionException.class);
 	}
 
 	@Test
@@ -721,20 +764,14 @@ public class OAuth2ResourceServerConfigurerTests {
 	}
 
 	@Test
-	public void getBearerTokenResolverWhenNoResolverSpecifiedThenTheDefaultIsUsed() {
-		ApplicationContext context = this.spring.context(new GenericWebApplicationContext()).getContext();
-		OAuth2ResourceServerConfigurer oauth2 = new OAuth2ResourceServerConfigurer(context);
-		assertThat(oauth2.getBearerTokenResolver()).isInstanceOf(DefaultBearerTokenResolver.class);
-	}
-
-	@Test
 	public void requestWhenCustomAuthenticationDetailsSourceThenUsed() throws Exception {
 		this.spring.register(CustomAuthenticationDetailsSource.class, JwtDecoderConfig.class, BasicController.class)
-				.autowire();
+			.autowire();
 		JwtDecoder decoder = this.spring.getContext().getBean(JwtDecoder.class);
 		given(decoder.decode(anyString())).willReturn(JWT);
-		this.mvc.perform(get("/authenticated").with(bearerToken(JWT_TOKEN))).andExpect(status().isOk())
-				.andExpect(content().string(JWT_SUBJECT));
+		this.mvc.perform(get("/authenticated").with(bearerToken(JWT_TOKEN)))
+			.andExpect(status().isOk())
+			.andExpect(content().string(JWT_SUBJECT));
 		verifyBean(AuthenticationDetailsSource.class).buildDetails(any());
 	}
 
@@ -779,15 +816,16 @@ public class OAuth2ResourceServerConfigurerTests {
 	@Test
 	public void getJwtDecoderWhenConfiguredWithDecoderAndJwkSetUriThenLastOneWins() {
 		ApplicationContext context = mock(ApplicationContext.class);
-		OAuth2ResourceServerConfigurer.JwtConfigurer jwtConfigurer = new OAuth2ResourceServerConfigurer(context).jwt();
 		JwtDecoder decoder = mock(JwtDecoder.class);
-		jwtConfigurer.jwkSetUri(JWK_SET_URI);
-		jwtConfigurer.decoder(decoder);
-		assertThat(jwtConfigurer.getJwtDecoder()).isEqualTo(decoder);
-		jwtConfigurer = new OAuth2ResourceServerConfigurer(context).jwt();
-		jwtConfigurer.decoder(decoder);
-		jwtConfigurer.jwkSetUri(JWK_SET_URI);
-		assertThat(jwtConfigurer.getJwtDecoder()).isInstanceOf(NimbusJwtDecoder.class);
+		new OAuth2ResourceServerConfigurer<HttpSecurity>(context).jwt((jwt) -> {
+			jwt.jwkSetUri(JWK_SET_URI);
+			jwt.decoder(decoder);
+			assertThat(jwt.getJwtDecoder()).isEqualTo(decoder);
+		});
+		new OAuth2ResourceServerConfigurer<HttpSecurity>(context).jwt((jwt) -> {
+			jwt.decoder(decoder).jwkSetUri(JWK_SET_URI);
+			assertThat(jwt.getJwtDecoder()).isInstanceOf(NimbusJwtDecoder.class);
+		});
 	}
 
 	@Test
@@ -796,9 +834,10 @@ public class OAuth2ResourceServerConfigurerTests {
 		JwtDecoder decoder = mock(JwtDecoder.class);
 		ApplicationContext context = mock(ApplicationContext.class);
 		given(context.getBean(JwtDecoder.class)).willReturn(decoderBean);
-		OAuth2ResourceServerConfigurer.JwtConfigurer jwtConfigurer = new OAuth2ResourceServerConfigurer(context).jwt();
-		jwtConfigurer.decoder(decoder);
-		assertThat(jwtConfigurer.getJwtDecoder()).isEqualTo(decoder);
+		new OAuth2ResourceServerConfigurer<HttpSecurity>(context).jwt((jwt) -> {
+			jwt.decoder(decoder);
+			assertThat(jwt.getJwtDecoder()).isEqualTo(decoder);
+		});
 	}
 
 	@Test
@@ -806,10 +845,11 @@ public class OAuth2ResourceServerConfigurerTests {
 		JwtDecoder decoder = mock(JwtDecoder.class);
 		ApplicationContext context = mock(ApplicationContext.class);
 		given(context.getBean(JwtDecoder.class)).willReturn(decoder);
-		OAuth2ResourceServerConfigurer.JwtConfigurer jwtConfigurer = new OAuth2ResourceServerConfigurer(context).jwt();
-		jwtConfigurer.jwkSetUri(JWK_SET_URI);
-		assertThat(jwtConfigurer.getJwtDecoder()).isNotEqualTo(decoder);
-		assertThat(jwtConfigurer.getJwtDecoder()).isInstanceOf(NimbusJwtDecoder.class);
+		new OAuth2ResourceServerConfigurer<HttpSecurity>(context).jwt((jwt) -> {
+			jwt.jwkSetUri(JWK_SET_URI);
+			assertThat(jwt.getJwtDecoder()).isNotEqualTo(decoder);
+			assertThat(jwt.getJwtDecoder()).isInstanceOf(NimbusJwtDecoder.class);
+		});
 	}
 
 	@Test
@@ -820,9 +860,10 @@ public class OAuth2ResourceServerConfigurerTests {
 		context.registerBean("decoderOne", JwtDecoder.class, () -> decoderBean);
 		context.registerBean("decoderTwo", JwtDecoder.class, () -> decoderBean);
 		this.spring.context(context).autowire();
-		OAuth2ResourceServerConfigurer.JwtConfigurer jwtConfigurer = new OAuth2ResourceServerConfigurer(context).jwt();
-		jwtConfigurer.decoder(decoder);
-		assertThat(jwtConfigurer.getJwtDecoder()).isEqualTo(decoder);
+		new OAuth2ResourceServerConfigurer<HttpSecurity>(context).jwt((jwt) -> {
+			jwt.decoder(decoder);
+			assertThat(jwt.getJwtDecoder()).isEqualTo(decoder);
+		});
 	}
 
 	@Test
@@ -832,9 +873,9 @@ public class OAuth2ResourceServerConfigurerTests {
 		context.registerBean("decoderOne", JwtDecoder.class, () -> decoder);
 		context.registerBean("decoderTwo", JwtDecoder.class, () -> decoder);
 		this.spring.context(context).autowire();
-		OAuth2ResourceServerConfigurer.JwtConfigurer jwtConfigurer = new OAuth2ResourceServerConfigurer(context).jwt();
-		assertThatExceptionOfType(NoUniqueBeanDefinitionException.class)
-				.isThrownBy(() -> jwtConfigurer.getJwtDecoder());
+		new OAuth2ResourceServerConfigurer<HttpSecurity>(context)
+			.jwt((jwt) -> assertThatExceptionOfType(NoUniqueBeanDefinitionException.class)
+				.isThrownBy(jwt::getJwtDecoder));
 	}
 
 	@Test
@@ -878,10 +919,11 @@ public class OAuth2ResourceServerConfigurerTests {
 	@Test
 	public void requestWhenCustomJwtValidatorFailsThenCorrespondingErrorMessage() throws Exception {
 		this.spring.register(RestOperationsConfig.class, CustomJwtValidatorConfig.class).autowire();
-		mockRestOperations(jwks("Default"));
+		mockJwksRestOperations(jwks("Default"));
 		String token = this.token("ValidNoScopes");
-		OAuth2TokenValidator<Jwt> jwtValidator = this.spring.getContext().getBean(CustomJwtValidatorConfig.class)
-				.getJwtValidator();
+		OAuth2TokenValidator<Jwt> jwtValidator = this.spring.getContext()
+			.getBean(CustomJwtValidatorConfig.class)
+			.getJwtValidator();
 		OAuth2Error error = new OAuth2Error("custom-error", "custom-description", "custom-uri");
 		given(jwtValidator.validate(any(Jwt.class))).willReturn(OAuth2TokenValidatorResult.failure(error));
 		// @formatter:off
@@ -894,8 +936,8 @@ public class OAuth2ResourceServerConfigurerTests {
 	@Test
 	public void requestWhenClockSkewSetThenTimestampWindowRelaxedAccordingly() throws Exception {
 		this.spring.register(RestOperationsConfig.class, UnexpiredJwtClockSkewConfig.class, BasicController.class)
-				.autowire();
-		mockRestOperations(jwks("Default"));
+			.autowire();
+		mockJwksRestOperations(jwks("Default"));
 		String token = this.token("ExpiresAt4687177990");
 		// @formatter:off
 		this.mvc.perform(get("/").with(bearerToken(token)))
@@ -906,8 +948,8 @@ public class OAuth2ResourceServerConfigurerTests {
 	@Test
 	public void requestWhenClockSkewSetButJwtStillTooLateThenReportsExpired() throws Exception {
 		this.spring.register(RestOperationsConfig.class, ExpiredJwtClockSkewConfig.class, BasicController.class)
-				.autowire();
-		mockRestOperations(jwks("Default"));
+			.autowire();
+		mockJwksRestOperations(jwks("Default"));
 		String token = this.token("ExpiresAt4687177990");
 		// @formatter:off
 		this.mvc.perform(get("/").with(bearerToken(token)))
@@ -918,10 +960,12 @@ public class OAuth2ResourceServerConfigurerTests {
 
 	@Test
 	public void requestWhenJwtAuthenticationConverterConfiguredOnDslThenIsUsed() throws Exception {
-		this.spring.register(JwtDecoderConfig.class, JwtAuthenticationConverterConfiguredOnDsl.class,
-				BasicController.class).autowire();
+		this.spring
+			.register(JwtDecoderConfig.class, JwtAuthenticationConverterConfiguredOnDsl.class, BasicController.class)
+			.autowire();
 		Converter<Jwt, JwtAuthenticationToken> jwtAuthenticationConverter = this.spring.getContext()
-				.getBean(JwtAuthenticationConverterConfiguredOnDsl.class).getJwtAuthenticationConverter();
+			.getBean(JwtAuthenticationConverterConfiguredOnDsl.class)
+			.getJwtAuthenticationConverter();
 		given(jwtAuthenticationConverter.convert(JWT)).willReturn(JWT_AUTHENTICATION_TOKEN);
 		JwtDecoder jwtDecoder = this.spring.getContext().getBean(JwtDecoder.class);
 		given(jwtDecoder.decode(anyString())).willReturn(JWT);
@@ -936,7 +980,7 @@ public class OAuth2ResourceServerConfigurerTests {
 	public void requestWhenJwtAuthenticationConverterCustomizedAuthoritiesThenThoseAuthoritiesArePropagated()
 			throws Exception {
 		this.spring.register(JwtDecoderConfig.class, CustomAuthorityMappingConfig.class, BasicController.class)
-				.autowire();
+			.autowire();
 		JwtDecoder decoder = this.spring.getContext().getBean(JwtDecoder.class);
 		given(decoder.decode(JWT_TOKEN)).willReturn(JWT);
 		// @formatter:off
@@ -982,14 +1026,14 @@ public class OAuth2ResourceServerConfigurerTests {
 		given(bean(JwtDecoder.class).decode(anyString())).willThrow(new BadJwtException("problem"));
 		this.mvc.perform(get("/").with(bearerToken("token")));
 		verifyBean(AuthenticationEventPublisher.class)
-				.publishAuthenticationFailure(any(OAuth2AuthenticationException.class), any(Authentication.class));
+			.publishAuthenticationFailure(any(OAuth2AuthenticationException.class), any(Authentication.class));
 	}
 
 	@Test
 	public void getWhenCustomJwtAuthenticationManagerThenUsed() throws Exception {
 		this.spring.register(JwtAuthenticationManagerConfig.class, BasicController.class).autowire();
 		given(bean(AuthenticationProvider.class).authenticate(any(Authentication.class)))
-				.willReturn(JWT_AUTHENTICATION_TOKEN);
+			.willReturn(JWT_AUTHENTICATION_TOKEN);
 		// @formatter:off
 		this.mvc.perform(get("/authenticated").with(bearerToken("token")))
 				.andExpect(status().isOk())
@@ -1002,11 +1046,11 @@ public class OAuth2ResourceServerConfigurerTests {
 	public void getWhenDefaultAndCustomJwtAuthenticationManagerThenCustomUsed() throws Exception {
 		this.spring.register(DefaultAndJwtAuthenticationManagerConfig.class, BasicController.class).autowire();
 		DefaultAndJwtAuthenticationManagerConfig config = this.spring.getContext()
-				.getBean(DefaultAndJwtAuthenticationManagerConfig.class);
+			.getBean(DefaultAndJwtAuthenticationManagerConfig.class);
 		AuthenticationManager defaultAuthenticationManager = config.defaultAuthenticationManager();
 		AuthenticationManager jwtAuthenticationManager = config.jwtAuthenticationManager();
 		given(defaultAuthenticationManager.authenticate(any()))
-				.willThrow(new RuntimeException("should not interact with default auth manager"));
+			.willThrow(new RuntimeException("should not interact with default auth manager"));
 		given(jwtAuthenticationManager.authenticate(any())).willReturn(JWT_AUTHENTICATION_TOKEN);
 		// @formatter:off
 		this.mvc.perform(get("/authenticated").with(bearerToken("token")))
@@ -1019,7 +1063,7 @@ public class OAuth2ResourceServerConfigurerTests {
 	@Test
 	public void getWhenIntrospectingThenOk() throws Exception {
 		this.spring.register(RestOperationsConfig.class, OpaqueTokenConfig.class, BasicController.class).autowire();
-		mockRestOperations(json("Active"));
+		mockJsonRestOperations(json("Active"));
 		// @formatter:off
 		this.mvc.perform(get("/authenticated").with(bearerToken("token")))
 				.andExpect(status().isOk())
@@ -1030,8 +1074,8 @@ public class OAuth2ResourceServerConfigurerTests {
 	@Test
 	public void getWhenOpaqueTokenInLambdaAndIntrospectingThenOk() throws Exception {
 		this.spring.register(RestOperationsConfig.class, OpaqueTokenInLambdaConfig.class, BasicController.class)
-				.autowire();
-		mockRestOperations(json("Active"));
+			.autowire();
+		mockJsonRestOperations(json("Active"));
 		// @formatter:off
 		this.mvc.perform(get("/authenticated").with(bearerToken("token")))
 				.andExpect(status().isOk())
@@ -1042,7 +1086,7 @@ public class OAuth2ResourceServerConfigurerTests {
 	@Test
 	public void getWhenIntrospectionFailsThenUnauthorized() throws Exception {
 		this.spring.register(RestOperationsConfig.class, OpaqueTokenConfig.class).autowire();
-		mockRestOperations(json("Inactive"));
+		mockJsonRestOperations(json("Inactive"));
 		// @formatter:off
 		this.mvc.perform(get("/").with(bearerToken("token")))
 				.andExpect(status().isUnauthorized())
@@ -1053,7 +1097,7 @@ public class OAuth2ResourceServerConfigurerTests {
 	@Test
 	public void getWhenIntrospectionLacksScopeThenForbidden() throws Exception {
 		this.spring.register(RestOperationsConfig.class, OpaqueTokenConfig.class).autowire();
-		mockRestOperations(json("ActiveNoScopes"));
+		mockJsonRestOperations(json("ActiveNoScopes"));
 		// @formatter:off
 		this.mvc.perform(get("/requires-read-scope").with(bearerToken("token")))
 				.andExpect(status().isForbidden())
@@ -1065,7 +1109,7 @@ public class OAuth2ResourceServerConfigurerTests {
 	public void getWhenCustomIntrospectionAuthenticationManagerThenUsed() throws Exception {
 		this.spring.register(OpaqueTokenAuthenticationManagerConfig.class, BasicController.class).autowire();
 		given(bean(AuthenticationProvider.class).authenticate(any(Authentication.class)))
-				.willReturn(INTROSPECTION_AUTHENTICATION_TOKEN);
+			.willReturn(INTROSPECTION_AUTHENTICATION_TOKEN);
 		// @formatter:off
 		this.mvc.perform(get("/authenticated").with(bearerToken("token")))
 				.andExpect(status().isOk())
@@ -1078,11 +1122,11 @@ public class OAuth2ResourceServerConfigurerTests {
 	public void getWhenDefaultAndCustomIntrospectionAuthenticationManagerThenCustomUsed() throws Exception {
 		this.spring.register(DefaultAndOpaqueTokenAuthenticationManagerConfig.class, BasicController.class).autowire();
 		DefaultAndOpaqueTokenAuthenticationManagerConfig config = this.spring.getContext()
-				.getBean(DefaultAndOpaqueTokenAuthenticationManagerConfig.class);
+			.getBean(DefaultAndOpaqueTokenAuthenticationManagerConfig.class);
 		AuthenticationManager defaultAuthenticationManager = config.defaultAuthenticationManager();
 		AuthenticationManager opaqueTokenAuthenticationManager = config.opaqueTokenAuthenticationManager();
 		given(defaultAuthenticationManager.authenticate(any()))
-				.willThrow(new RuntimeException("should not interact with default auth manager"));
+			.willThrow(new RuntimeException("should not interact with default auth manager"));
 		given(opaqueTokenAuthenticationManager.authenticate(any())).willReturn(INTROSPECTION_AUTHENTICATION_TOKEN);
 		// @formatter:off
 		this.mvc.perform(get("/authenticated").with(bearerToken("token")))
@@ -1096,7 +1140,7 @@ public class OAuth2ResourceServerConfigurerTests {
 	public void getWhenCustomIntrospectionAuthenticationManagerInLambdaThenUsed() throws Exception {
 		this.spring.register(OpaqueTokenAuthenticationManagerInLambdaConfig.class, BasicController.class).autowire();
 		given(bean(AuthenticationProvider.class).authenticate(any(Authentication.class)))
-				.willReturn(INTROSPECTION_AUTHENTICATION_TOKEN);
+			.willReturn(INTROSPECTION_AUTHENTICATION_TOKEN);
 		// @formatter:off
 		this.mvc.perform(get("/authenticated").with(bearerToken("token")))
 				.andExpect(status().isOk())
@@ -1108,24 +1152,25 @@ public class OAuth2ResourceServerConfigurerTests {
 	@Test
 	public void configureWhenOnlyIntrospectionUrlThenException() {
 		assertThatExceptionOfType(BeanCreationException.class)
-				.isThrownBy(() -> this.spring.register(OpaqueTokenHalfConfiguredConfig.class).autowire());
+			.isThrownBy(() -> this.spring.register(OpaqueTokenHalfConfiguredConfig.class).autowire());
 	}
 
 	@Test
 	public void getIntrospectionClientWhenConfiguredWithClientAndIntrospectionUriThenLastOneWins() {
 		ApplicationContext context = mock(ApplicationContext.class);
-		OAuth2ResourceServerConfigurer.OpaqueTokenConfigurer opaqueTokenConfigurer = new OAuth2ResourceServerConfigurer(
-				context).opaqueToken();
 		OpaqueTokenIntrospector client = mock(OpaqueTokenIntrospector.class);
-		opaqueTokenConfigurer.introspectionUri(INTROSPECTION_URI);
-		opaqueTokenConfigurer.introspectionClientCredentials(CLIENT_ID, CLIENT_SECRET);
-		opaqueTokenConfigurer.introspector(client);
-		assertThat(opaqueTokenConfigurer.getIntrospector()).isEqualTo(client);
-		opaqueTokenConfigurer = new OAuth2ResourceServerConfigurer(context).opaqueToken();
-		opaqueTokenConfigurer.introspector(client);
-		opaqueTokenConfigurer.introspectionUri(INTROSPECTION_URI);
-		opaqueTokenConfigurer.introspectionClientCredentials(CLIENT_ID, CLIENT_SECRET);
-		assertThat(opaqueTokenConfigurer.getIntrospector()).isNotSameAs(client);
+		new OAuth2ResourceServerConfigurer<HttpSecurity>(context).opaqueToken((opaqueToken) -> {
+			opaqueToken.introspectionUri(INTROSPECTION_URI);
+			opaqueToken.introspectionClientCredentials(CLIENT_ID, CLIENT_SECRET);
+			opaqueToken.introspector(client);
+			assertThat(opaqueToken.getIntrospector()).isEqualTo(client);
+		});
+		new OAuth2ResourceServerConfigurer<HttpSecurity>(context).opaqueToken((opaqueToken) -> {
+			opaqueToken.introspector(client);
+			opaqueToken.introspectionUri(INTROSPECTION_URI);
+			opaqueToken.introspectionClientCredentials(CLIENT_ID, CLIENT_SECRET);
+			assertThat(opaqueToken.getIntrospector()).isNotSameAs(client);
+		});
 	}
 
 	@Test
@@ -1133,11 +1178,11 @@ public class OAuth2ResourceServerConfigurerTests {
 		GenericApplicationContext context = new GenericApplicationContext();
 		registerMockBean(context, "introspectionClientOne", OpaqueTokenIntrospector.class);
 		registerMockBean(context, "introspectionClientTwo", OpaqueTokenIntrospector.class);
-		OAuth2ResourceServerConfigurer.OpaqueTokenConfigurer opaqueToken = new OAuth2ResourceServerConfigurer(context)
-				.opaqueToken();
-		opaqueToken.introspectionUri(INTROSPECTION_URI);
-		opaqueToken.introspectionClientCredentials(CLIENT_ID, CLIENT_SECRET);
-		assertThat(opaqueToken.getIntrospector()).isNotNull();
+		new OAuth2ResourceServerConfigurer<HttpSecurity>(context).opaqueToken((opaqueToken) -> {
+			opaqueToken.introspectionUri(INTROSPECTION_URI);
+			opaqueToken.introspectionClientCredentials(CLIENT_ID, CLIENT_SECRET);
+			assertThat(opaqueToken.getIntrospector()).isNotNull();
+		});
 	}
 
 	@Test
@@ -1191,8 +1236,8 @@ public class OAuth2ResourceServerConfigurerTests {
 	@Test
 	public void requestWhenDefaultAndResourceServerAccessDeniedHandlersThenMatchedByRequest() throws Exception {
 		this.spring
-				.register(ExceptionHandlingAndResourceServerWithAccessDeniedHandlerConfig.class, JwtDecoderConfig.class)
-				.autowire();
+			.register(ExceptionHandlingAndResourceServerWithAccessDeniedHandlerConfig.class, JwtDecoderConfig.class)
+			.autowire();
 		JwtDecoder decoder = this.spring.getContext().getBean(JwtDecoder.class);
 		given(decoder.decode(anyString())).willReturn(JWT);
 		// @formatter:off
@@ -1208,8 +1253,8 @@ public class OAuth2ResourceServerConfigurerTests {
 	@Test
 	public void getWhenAlsoUsingHttpBasicThenCorrectProviderEngages() throws Exception {
 		this.spring.register(RestOperationsConfig.class, BasicAndResourceServerConfig.class, BasicController.class)
-				.autowire();
-		mockRestOperations(jwks("Default"));
+			.autowire();
+		mockJwksRestOperations(jwks("Default"));
 		String token = this.token("ValidNoScopes");
 		// @formatter:off
 		this.mvc.perform(get("/authenticated").with(bearerToken(token)))
@@ -1224,16 +1269,16 @@ public class OAuth2ResourceServerConfigurerTests {
 	@Test
 	public void getAuthenticationManagerWhenConfiguredAuthenticationManagerThenTakesPrecedence() {
 		ApplicationContext context = mock(ApplicationContext.class);
-		HttpSecurityBuilder http = mock(HttpSecurityBuilder.class);
-		OAuth2ResourceServerConfigurer oauth2ResourceServer = new OAuth2ResourceServerConfigurer(context);
+		OAuth2ResourceServerConfigurer<HttpSecurity> oauth2ResourceServer = new OAuth2ResourceServerConfigurer<>(
+				context);
 		AuthenticationManager authenticationManager = mock(AuthenticationManager.class);
-		oauth2ResourceServer.jwt().authenticationManager(authenticationManager).decoder(mock(JwtDecoder.class));
-		assertThat(oauth2ResourceServer.getAuthenticationManager(http)).isSameAs(authenticationManager);
-		oauth2ResourceServer = new OAuth2ResourceServerConfigurer(context);
-		oauth2ResourceServer.opaqueToken().authenticationManager(authenticationManager)
-				.introspector(mock(OpaqueTokenIntrospector.class));
-		assertThat(oauth2ResourceServer.getAuthenticationManager(http)).isSameAs(authenticationManager);
-		verify(http, never()).authenticationProvider(any(AuthenticationProvider.class));
+		oauth2ResourceServer
+			.jwt((jwt) -> jwt.authenticationManager(authenticationManager).decoder(mock(JwtDecoder.class)));
+		assertThat(oauth2ResourceServer.getAuthenticationManager(null)).isSameAs(authenticationManager);
+		oauth2ResourceServer = new OAuth2ResourceServerConfigurer<>(context);
+		oauth2ResourceServer.opaqueToken((opaqueToken) -> opaqueToken.authenticationManager(authenticationManager)
+			.introspector(mock(OpaqueTokenIntrospector.class)));
+		assertThat(oauth2ResourceServer.getAuthenticationManager(null)).isSameAs(authenticationManager);
 	}
 
 	@Test
@@ -1275,36 +1320,37 @@ public class OAuth2ResourceServerConfigurerTests {
 	@Test
 	public void configuredWhenMissingJwtAuthenticationProviderThenWiringException() {
 		assertThatExceptionOfType(BeanCreationException.class)
-				.isThrownBy(() -> this.spring.register(JwtlessConfig.class).autowire())
-				.withMessageContaining("neither was found");
+			.isThrownBy(() -> this.spring.register(JwtlessConfig.class).autowire())
+			.withMessageContaining("neither was found");
 	}
 
 	@Test
 	public void configureWhenMissingJwkSetUriThenWiringException() {
 		assertThatExceptionOfType(BeanCreationException.class)
-				.isThrownBy(() -> this.spring.register(JwtHalfConfiguredConfig.class).autowire())
-				.withMessageContaining("No qualifying bean of type");
+			.isThrownBy(() -> this.spring.register(JwtHalfConfiguredConfig.class).autowire())
+			.withMessageContaining("No qualifying bean of type");
 	}
 
 	@Test
 	public void configureWhenUsingBothJwtAndOpaqueThenWiringException() {
 		assertThatExceptionOfType(BeanCreationException.class)
-				.isThrownBy(() -> this.spring.register(OpaqueAndJwtConfig.class).autowire())
-				.withMessageContaining("Spring Security only supports JWTs or Opaque Tokens");
+			.isThrownBy(() -> this.spring.register(OpaqueAndJwtConfig.class).autowire())
+			.withMessageContaining("Spring Security only supports JWTs or Opaque Tokens");
 	}
 
 	@Test
 	public void configureWhenUsingBothAuthenticationManagerResolverAndOpaqueThenWiringException() {
 		assertThatExceptionOfType(BeanCreationException.class)
-				.isThrownBy(() -> this.spring.register(AuthenticationManagerResolverPlusOtherConfig.class).autowire())
-				.withMessageContaining("authenticationManagerResolver");
+			.isThrownBy(() -> this.spring.register(AuthenticationManagerResolverPlusOtherConfig.class).autowire())
+			.withMessageContaining("authenticationManagerResolver");
 	}
 
 	@Test
 	public void getJwtAuthenticationConverterWhenNoConverterSpecifiedThenTheDefaultIsUsed() {
 		ApplicationContext context = this.spring.context(new GenericWebApplicationContext()).getContext();
-		OAuth2ResourceServerConfigurer.JwtConfigurer jwtConfigurer = new OAuth2ResourceServerConfigurer(context).jwt();
-		assertThat(jwtConfigurer.getJwtAuthenticationConverter()).isInstanceOf(JwtAuthenticationConverter.class);
+		new OAuth2ResourceServerConfigurer<HttpSecurity>(context)
+			.jwt((jwt) -> assertThat(jwt.getJwtAuthenticationConverter())
+				.isInstanceOf(JwtAuthenticationConverter.class));
 	}
 
 	@Test
@@ -1313,8 +1359,8 @@ public class OAuth2ResourceServerConfigurerTests {
 		GenericWebApplicationContext context = new GenericWebApplicationContext();
 		context.registerBean(JwtAuthenticationConverter.class, () -> converterBean);
 		this.spring.context(context).autowire();
-		OAuth2ResourceServerConfigurer.JwtConfigurer jwtConfigurer = new OAuth2ResourceServerConfigurer(context).jwt();
-		assertThat(jwtConfigurer.getJwtAuthenticationConverter()).isEqualTo(converterBean);
+		new OAuth2ResourceServerConfigurer<HttpSecurity>(context)
+			.jwt((jwt) -> assertThat(jwt.getJwtAuthenticationConverter()).isEqualTo(converterBean));
 	}
 
 	@Test
@@ -1324,9 +1370,10 @@ public class OAuth2ResourceServerConfigurerTests {
 		GenericWebApplicationContext context = new GenericWebApplicationContext();
 		context.registerBean(JwtAuthenticationConverter.class, () -> converterBean);
 		this.spring.context(context).autowire();
-		OAuth2ResourceServerConfigurer.JwtConfigurer jwtConfigurer = new OAuth2ResourceServerConfigurer(context).jwt();
-		jwtConfigurer.jwtAuthenticationConverter(converter);
-		assertThat(jwtConfigurer.getJwtAuthenticationConverter()).isEqualTo(converter);
+		new OAuth2ResourceServerConfigurer<HttpSecurity>(context).jwt((jwt) -> {
+			jwt.jwtAuthenticationConverter(converter);
+			assertThat(jwt.getJwtAuthenticationConverter()).isEqualTo(converter);
+		});
 	}
 
 	@Test
@@ -1337,9 +1384,10 @@ public class OAuth2ResourceServerConfigurerTests {
 		context.registerBean("converterOne", JwtAuthenticationConverter.class, () -> converterBean);
 		context.registerBean("converterTwo", JwtAuthenticationConverter.class, () -> converterBean);
 		this.spring.context(context).autowire();
-		OAuth2ResourceServerConfigurer.JwtConfigurer jwtConfigurer = new OAuth2ResourceServerConfigurer(context).jwt();
-		jwtConfigurer.jwtAuthenticationConverter(converter);
-		assertThat(jwtConfigurer.getJwtAuthenticationConverter()).isEqualTo(converter);
+		new OAuth2ResourceServerConfigurer<HttpSecurity>(context).jwt((jwt) -> {
+			jwt.jwtAuthenticationConverter(converter);
+			assertThat(jwt.getJwtAuthenticationConverter()).isEqualTo(converter);
+		});
 	}
 
 	@Test
@@ -1349,9 +1397,67 @@ public class OAuth2ResourceServerConfigurerTests {
 		context.registerBean("converterOne", JwtAuthenticationConverter.class, () -> converterBean);
 		context.registerBean("converterTwo", JwtAuthenticationConverter.class, () -> converterBean);
 		this.spring.context(context).autowire();
-		OAuth2ResourceServerConfigurer.JwtConfigurer jwtConfigurer = new OAuth2ResourceServerConfigurer(context).jwt();
-		assertThatExceptionOfType(NoUniqueBeanDefinitionException.class)
-				.isThrownBy(jwtConfigurer::getJwtAuthenticationConverter);
+		new OAuth2ResourceServerConfigurer<HttpSecurity>(context)
+			.jwt((jwt) -> assertThatExceptionOfType(NoUniqueBeanDefinitionException.class)
+				.isThrownBy(jwt::getJwtAuthenticationConverter));
+	}
+
+	@Test
+	public void getWhenCustomAuthenticationConverterThenUsed() throws Exception {
+		this.spring
+			.register(RestOperationsConfig.class, OpaqueTokenAuthenticationConverterConfig.class, BasicController.class)
+			.autowire();
+		OpaqueTokenAuthenticationConverter authenticationConverter = bean(OpaqueTokenAuthenticationConverter.class);
+		given(authenticationConverter.convert(anyString(), any(OAuth2AuthenticatedPrincipal.class)))
+			.willReturn(new TestingAuthenticationToken("jdoe", null, Collections.emptyList()));
+		mockJsonRestOperations(json("Active"));
+		// @formatter:off
+		this.mvc.perform(get("/authenticated").with(bearerToken("token")))
+				.andExpect(status().isOk())
+				.andExpect(content().string("jdoe"));
+		// @formatter:on
+		verify(authenticationConverter).convert(any(), any());
+	}
+
+	@Test
+	public void getAuthenticationConverterWhenDuplicateConverterBeansAndAnotherOnTheDslThenTheDslOneIsUsed() {
+		AuthenticationConverter converter = mock(AuthenticationConverter.class);
+		AuthenticationConverter converterBean = mock(AuthenticationConverter.class);
+		GenericWebApplicationContext context = new GenericWebApplicationContext();
+		context.registerBean("converterOne", AuthenticationConverter.class, () -> converterBean);
+		context.registerBean("converterTwo", AuthenticationConverter.class, () -> converterBean);
+		this.spring.context(context).autowire();
+		OAuth2ResourceServerConfigurer oauth2 = new OAuth2ResourceServerConfigurer(context);
+		oauth2.authenticationConverter(converter);
+		assertThat(oauth2.getAuthenticationConverter()).isEqualTo(converter);
+	}
+
+	@Test
+	public void getAuthenticationConverterWhenConverterBeanAndAnotherOnTheDslThenTheDslOneIsUsed() {
+		AuthenticationConverter converter = mock(AuthenticationConverter.class);
+		AuthenticationConverter converterBean = mock(AuthenticationConverter.class);
+		GenericWebApplicationContext context = new GenericWebApplicationContext();
+		context.registerBean(AuthenticationConverter.class, () -> converterBean);
+		this.spring.context(context).autowire();
+		OAuth2ResourceServerConfigurer oauth2 = new OAuth2ResourceServerConfigurer(context);
+		oauth2.authenticationConverter(converter);
+		assertThat(oauth2.getAuthenticationConverter()).isEqualTo(converter);
+	}
+
+	@Test
+	public void getAuthenticationConverterWhenDuplicateConverterBeansThenWiringException() {
+		assertThatExceptionOfType(BeanCreationException.class)
+			.isThrownBy(
+					() -> this.spring.register(MultipleAuthenticationConverterBeansConfig.class, JwtDecoderConfig.class)
+						.autowire())
+			.withRootCauseInstanceOf(NoUniqueBeanDefinitionException.class);
+	}
+
+	@Test
+	public void getAuthenticationConverterWhenNoConverterSpecifiedThenTheDefaultIsUsed() {
+		ApplicationContext context = this.spring.context(new GenericWebApplicationContext()).getContext();
+		OAuth2ResourceServerConfigurer oauth2 = new OAuth2ResourceServerConfigurer(context);
+		assertThat(oauth2.getAuthenticationConverter()).isInstanceOf(BearerTokenAuthenticationConverter.class);
 	}
 
 	private static <T> void registerMockBean(GenericApplicationContext context, String name, Class<T> clazz) {
@@ -1399,7 +1505,8 @@ public class OAuth2ResourceServerConfigurerTests {
 
 	private void mockWebServer(String response) {
 		this.web.enqueue(new MockResponse().setResponseCode(200)
-				.setHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE).setBody(response));
+			.setHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+			.setBody(response));
 	}
 
 	private void mockRestOperations(String response) {
@@ -1410,12 +1517,39 @@ public class OAuth2ResourceServerConfigurerTests {
 		given(rest.exchange(any(RequestEntity.class), eq(String.class))).willReturn(entity);
 	}
 
+	private void mockJwksRestOperations(String response) {
+		RestOperations rest = this.spring.getContext().getBean(RestOperations.class);
+		HttpHeaders headers = new HttpHeaders();
+		headers.setContentType(MediaType.APPLICATION_JSON);
+		ResponseEntity<String> entity = new ResponseEntity<>(response, headers, HttpStatus.OK);
+		given(rest.exchange(any(RequestEntity.class), eq(String.class))).willReturn(entity);
+	}
+
+	private void mockJsonRestOperations(String response) {
+		try {
+			RestOperations rest = this.spring.getContext().getBean(RestOperations.class);
+			HttpHeaders headers = new HttpHeaders();
+			headers.setContentType(MediaType.APPLICATION_JSON);
+			ResponseEntity<Map<String, Object>> entity = new ResponseEntity<>(JSONObjectUtils.parse(response), headers,
+					HttpStatus.OK);
+			given(rest.exchange(any(RequestEntity.class), eq(new ParameterizedTypeReference<Map<String, Object>>() {
+			}))).willReturn(entity);
+		}
+		catch (Exception ex) {
+			throw new IllegalArgumentException(ex);
+		}
+	}
+
 	private <T> T bean(Class<T> beanClass) {
 		return this.spring.getContext().getBean(beanClass);
 	}
 
 	private <T> T verifyBean(Class<T> beanClass) {
 		return verify(this.spring.getContext().getBean(beanClass));
+	}
+
+	private <T> T verifyBean(Class<T> beanClass, VerificationMode mode) {
+		return verify(this.spring.getContext().getBean(beanClass), mode);
 	}
 
 	private String json(String name) throws IOException {
@@ -1438,182 +1572,194 @@ public class OAuth2ResourceServerConfigurerTests {
 		}
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class DefaultConfig extends WebSecurityConfigurerAdapter {
+	@EnableWebMvc
+	static class DefaultConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.authorizeRequests()
-					.antMatchers("/requires-read-scope").access("hasAuthority('SCOPE_message:read')")
-					.anyRequest().authenticated()
-					.and()
-				.oauth2ResourceServer()
-					.jwt();
+				.authorizeHttpRequests((requests) -> requests
+					.requestMatchers("/requires-read-scope").hasAuthority("SCOPE_message:read")
+					.anyRequest().authenticated())
+				.oauth2ResourceServer((server) -> server
+					.jwt(Customizer.withDefaults()));
+			return http.build();
 			// @formatter:on
 		}
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class DefaultInLambdaConfig extends WebSecurityConfigurerAdapter {
+	@EnableWebMvc
+	static class DefaultInLambdaConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.authorizeRequests((authorizeRequests) ->
-					authorizeRequests
-						.antMatchers("/requires-read-scope").access("hasAuthority('SCOPE_message:read')")
+				.authorizeHttpRequests((authorize) -> authorize
+						.requestMatchers("/requires-read-scope").hasAuthority("SCOPE_message:read")
 						.anyRequest().authenticated()
 				)
-				.oauth2ResourceServer((oauth2ResourceServer) ->
-					oauth2ResourceServer
+				.oauth2ResourceServer((oauth2) -> oauth2
 						.jwt(withDefaults())
 				);
+			return http.build();
 			// @formatter:on
 		}
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class JwkSetUriConfig extends WebSecurityConfigurerAdapter {
+	@EnableWebMvc
+	static class JwkSetUriConfig {
 
 		@Value("${mockwebserver.url:https://example.org}")
 		String jwkSetUri;
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
+			DefaultBearerTokenResolver defaultBearerTokenResolver = new DefaultBearerTokenResolver();
+			defaultBearerTokenResolver.setAllowUriQueryParameter(true);
 			http
-				.authorizeRequests()
-					.antMatchers("/requires-read-scope").access("hasAuthority('SCOPE_message:read')")
-					.anyRequest().authenticated()
-					.and()
-				.oauth2ResourceServer()
-					.jwt()
-						.jwkSetUri(this.jwkSetUri);
+				.authorizeHttpRequests((requests) -> requests
+					.requestMatchers("/requires-read-scope").hasAuthority("SCOPE_message:read")
+					.anyRequest().authenticated())
+				.oauth2ResourceServer((server) -> server
+					.bearerTokenResolver(defaultBearerTokenResolver)
+					.jwt((jwt) -> jwt.jwkSetUri(this.jwkSetUri)));
+			return http.build();
 			// @formatter:on
 		}
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class JwkSetUriInLambdaConfig extends WebSecurityConfigurerAdapter {
+	@EnableWebMvc
+	static class JwkSetUriInLambdaConfig {
 
 		@Value("${mockwebserver.url:https://example.org}")
 		String jwkSetUri;
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.authorizeRequests((authorizeRequests) ->
-					authorizeRequests
-						.antMatchers("/requires-read-scope").access("hasAuthority('SCOPE_message:read')")
+				.authorizeHttpRequests((authorize) -> authorize
+						.requestMatchers("/requires-read-scope").hasAuthority("SCOPE_message:read")
 						.anyRequest().authenticated()
 				)
-				.oauth2ResourceServer((oauth2ResourceServer) ->
-					oauth2ResourceServer
-						.jwt((jwt) ->
-							jwt
+				.oauth2ResourceServer((oauth2) -> oauth2
+						.jwt((jwt) -> jwt
 								.jwkSetUri(this.jwkSetUri)
 						)
 				);
+			return http.build();
 			// @formatter:on
 		}
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class CsrfDisabledConfig extends WebSecurityConfigurerAdapter {
+	@EnableWebMvc
+	static class CsrfDisabledConfig {
 
 		@Value("${mockwebserver.url:https://example.org}")
 		String jwkSetUri;
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.authorizeRequests()
-					.antMatchers("/requires-read-scope").access("hasAuthority('SCOPE_message:read')")
-					.anyRequest().authenticated()
-					.and()
-				.csrf().disable()
-				.oauth2ResourceServer()
-					.jwt()
-						.jwkSetUri(this.jwkSetUri);
+				.authorizeHttpRequests((requests) -> requests
+					.requestMatchers("/requires-read-scope").hasAuthority("SCOPE_message:read")
+					.anyRequest().authenticated())
+				.csrf((csrf) -> csrf.disable())
+				.oauth2ResourceServer((server) -> server
+					.jwt((jwt) -> jwt.jwkSetUri(this.jwkSetUri)));
+			return http.build();
 			// @formatter:on
 		}
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class AnonymousDisabledConfig extends WebSecurityConfigurerAdapter {
+	static class AnonymousDisabledConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.authorizeRequests()
-					.anyRequest().authenticated()
-					.and()
-				.anonymous().disable()
-				.oauth2ResourceServer()
-					.jwt();
+				.authorizeHttpRequests((requests) -> requests
+					.anyRequest().authenticated())
+				.anonymous((anonymous) -> anonymous.disable())
+				.oauth2ResourceServer((server) -> server
+					.jwt(Customizer.withDefaults()));
+			return http.build();
 			// @formatter:on
 		}
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
 	@EnableGlobalMethodSecurity(prePostEnabled = true)
-	static class MethodSecurityConfig extends WebSecurityConfigurerAdapter {
+	static class MethodSecurityConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.authorizeRequests()
-					.anyRequest().authenticated()
-					.and()
-				.oauth2ResourceServer()
-					.jwt();
+				.authorizeHttpRequests((requests) -> requests
+					.anyRequest().authenticated())
+				.oauth2ResourceServer((server) -> server
+					.jwt(Customizer.withDefaults()));
+			return http.build();
 			// @formatter:on
 		}
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class JwtlessConfig extends WebSecurityConfigurerAdapter {
+	static class JwtlessConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.authorizeRequests()
-					.anyRequest().authenticated()
-					.and()
-				.oauth2ResourceServer();
+				.authorizeHttpRequests((requests) -> requests
+					.anyRequest().authenticated())
+				.oauth2ResourceServer(withDefaults());
+			return http.build();
 			// @formatter:on
 		}
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class RealmNameConfiguredOnEntryPoint extends WebSecurityConfigurerAdapter {
+	static class RealmNameConfiguredOnEntryPoint {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.authorizeRequests()
-					.anyRequest().authenticated()
-					.and()
-				.oauth2ResourceServer()
+				.authorizeHttpRequests((requests) -> requests
+					.anyRequest().authenticated())
+				.oauth2ResourceServer((server) -> server
 					.authenticationEntryPoint(authenticationEntryPoint())
-					.jwt();
+					.jwt(Customizer.withDefaults()));
+			return http.build();
 			// @formatter:on
 		}
 
@@ -1625,19 +1771,20 @@ public class OAuth2ResourceServerConfigurerTests {
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class RealmNameConfiguredOnAccessDeniedHandler extends WebSecurityConfigurerAdapter {
+	static class RealmNameConfiguredOnAccessDeniedHandler {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.authorizeRequests()
-					.anyRequest().denyAll()
-					.and()
-				.oauth2ResourceServer()
+				.authorizeHttpRequests((requests) -> requests
+					.anyRequest().denyAll())
+				.oauth2ResourceServer((server) -> server
 					.accessDeniedHandler(accessDeniedHandler())
-					.jwt();
+					.jwt(Customizer.withDefaults()));
+			return http.build();
 			// @formatter:on
 		}
 
@@ -1649,29 +1796,27 @@ public class OAuth2ResourceServerConfigurerTests {
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class ExceptionHandlingAndResourceServerWithAccessDeniedHandlerConfig extends WebSecurityConfigurerAdapter {
+	static class ExceptionHandlingAndResourceServerWithAccessDeniedHandlerConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.authorizeRequests()
-					.anyRequest().denyAll()
-					.and()
-				.exceptionHandling()
-					.defaultAccessDeniedHandlerFor(new AccessDeniedHandlerImpl(), (request) -> false)
-					.and()
-				.httpBasic()
-					.and()
-				.oauth2ResourceServer()
-					.jwt();
+				.authorizeHttpRequests((requests) -> requests
+					.anyRequest().denyAll())
+				.exceptionHandling((handling) -> handling
+					.defaultAccessDeniedHandlerFor(new AccessDeniedHandlerImpl(), (request) -> false))
+				.httpBasic(withDefaults())
+				.oauth2ResourceServer((server) -> server
+					.jwt(Customizer.withDefaults()));
+			return http.build();
 			// @formatter:on
 		}
 
-		@Override
 		@Bean
-		public UserDetailsService userDetailsService() {
+		UserDetailsService userDetailsService() {
 			return new InMemoryUserDetailsManager(
 			// @formatter:off
 					org.springframework.security.core.userdetails.User.withDefaultPasswordEncoder()
@@ -1684,21 +1829,22 @@ public class OAuth2ResourceServerConfigurerTests {
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class JwtAuthenticationConverterConfiguredOnDsl extends WebSecurityConfigurerAdapter {
+	static class JwtAuthenticationConverterConfiguredOnDsl {
 
 		private final Converter<Jwt, JwtAuthenticationToken> jwtAuthenticationConverter = mock(Converter.class);
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.authorizeRequests()
-					.anyRequest().authenticated()
-					.and()
-				.oauth2ResourceServer()
-					.jwt()
-						.jwtAuthenticationConverter(getJwtAuthenticationConverter());
+				.authorizeHttpRequests((requests) -> requests
+					.anyRequest().authenticated())
+				.oauth2ResourceServer((server) -> server
+					.jwt((jwt) -> jwt
+						.jwtAuthenticationConverter(getJwtAuthenticationConverter())));
+			return http.build();
 			// @formatter:on
 		}
 
@@ -1708,19 +1854,21 @@ public class OAuth2ResourceServerConfigurerTests {
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class CustomAuthorityMappingConfig extends WebSecurityConfigurerAdapter {
+	@EnableWebMvc
+	static class CustomAuthorityMappingConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.authorizeRequests()
-					.antMatchers("/requires-read-scope").access("hasAuthority('message:read')")
-					.and()
-				.oauth2ResourceServer()
-					.jwt()
-						.jwtAuthenticationConverter(getJwtAuthenticationConverter());
+				.authorizeHttpRequests((requests) -> requests
+					.requestMatchers("/requires-read-scope").hasAuthority("message:read"))
+				.oauth2ResourceServer((server) -> server
+					.jwt((jwt) -> jwt
+						.jwtAuthenticationConverter(getJwtAuthenticationConverter())));
+			return http.build();
 			// @formatter:on
 		}
 
@@ -1733,26 +1881,25 @@ public class OAuth2ResourceServerConfigurerTests {
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class BasicAndResourceServerConfig extends WebSecurityConfigurerAdapter {
+	static class BasicAndResourceServerConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.authorizeRequests()
-					.anyRequest().authenticated()
-					.and()
-				.httpBasic()
-					.and()
-				.oauth2ResourceServer()
-					.jwt();
+				.authorizeHttpRequests((requests) -> requests
+					.anyRequest().authenticated())
+				.httpBasic(withDefaults())
+				.oauth2ResourceServer((server) -> server
+					.jwt(Customizer.withDefaults()));
+			return http.build();
 			// @formatter:on
 		}
 
-		@Override
 		@Bean
-		public UserDetailsService userDetailsService() {
+		UserDetailsService userDetailsService() {
 			return new InMemoryUserDetailsManager(
 			// @formatter:off
 					org.springframework.security.core.userdetails.User.withDefaultPasswordEncoder()
@@ -1765,39 +1912,39 @@ public class OAuth2ResourceServerConfigurerTests {
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class FormAndResourceServerConfig extends WebSecurityConfigurerAdapter {
+	static class FormAndResourceServerConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.authorizeRequests()
-					.anyRequest().authenticated()
-					.and()
-				.formLogin()
-					.and()
-				.oauth2ResourceServer()
-					.jwt();
+				.authorizeHttpRequests((requests) -> requests
+					.anyRequest().authenticated())
+				.formLogin(withDefaults())
+				.oauth2ResourceServer((server) -> server
+					.jwt(Customizer.withDefaults()));
+			return http.build();
 			// @formatter:on
 		}
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class OAuth2LoginAndResourceServerConfig extends WebSecurityConfigurerAdapter {
+	static class OAuth2LoginAndResourceServerConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.authorizeRequests((authz) -> authz
+				.authorizeHttpRequests((authz) -> authz
 					.anyRequest().authenticated()
 				)
 				.oauth2Login(withDefaults())
-				.oauth2ResourceServer((oauth2) -> oauth2
-					.jwt()
-				);
+				.oauth2ResourceServer((oauth2) -> oauth2.jwt(withDefaults()));
+			return http.build();
 			// @formatter:on
 		}
 
@@ -1809,53 +1956,56 @@ public class OAuth2ResourceServerConfigurerTests {
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class JwtHalfConfiguredConfig extends WebSecurityConfigurerAdapter {
+	static class JwtHalfConfiguredConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.authorizeRequests()
-					.anyRequest().authenticated()
-					.and()
-				.oauth2ResourceServer()
-					.jwt(); // missing key configuration, e.g. jwkSetUri
+				.authorizeHttpRequests((requests) -> requests
+					.anyRequest().authenticated())
+				.oauth2ResourceServer((server) -> server
+					.jwt(Customizer.withDefaults()));
+			return http.build(); // missing key configuration, e.g. jwkSetUri
 			// @formatter:on
 		}
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class AlwaysSessionCreationConfig extends WebSecurityConfigurerAdapter {
+	static class AlwaysSessionCreationConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.sessionManagement()
-					.sessionCreationPolicy(SessionCreationPolicy.ALWAYS)
-					.and()
-				.oauth2ResourceServer()
-					.jwt();
+				.sessionManagement((management) -> management
+					.sessionCreationPolicy(SessionCreationPolicy.ALWAYS))
+				.oauth2ResourceServer((server) -> server
+					.jwt(Customizer.withDefaults()));
+			return http.build();
 			// @formatter:on
 		}
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class AllowBearerTokenInRequestBodyConfig extends WebSecurityConfigurerAdapter {
+	static class AllowBearerTokenInRequestBodyConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.authorizeRequests()
-					.anyRequest().authenticated()
-					.and()
-				.oauth2ResourceServer()
+				.authorizeHttpRequests((requests) -> requests
+					.anyRequest().authenticated())
+				.oauth2ResourceServer((server) -> server
 					.bearerTokenResolver(allowRequestBody())
-					.jwt();
+					.jwt(Customizer.withDefaults()));
+			return http.build();
 			// @formatter:on
 		}
 
@@ -1867,18 +2017,19 @@ public class OAuth2ResourceServerConfigurerTests {
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class AllowBearerTokenAsQueryParameterConfig extends WebSecurityConfigurerAdapter {
+	static class AllowBearerTokenAsQueryParameterConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.authorizeRequests()
-					.anyRequest().authenticated()
-					.and()
-				.oauth2ResourceServer()
-					.jwt();
+				.authorizeHttpRequests((requests) -> requests
+					.anyRequest().authenticated())
+				.oauth2ResourceServer((server) -> server
+					.jwt(Customizer.withDefaults()));
+			return http.build();
 			// @formatter:on
 		}
 
@@ -1891,18 +2042,19 @@ public class OAuth2ResourceServerConfigurerTests {
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class MultipleBearerTokenResolverBeansConfig extends WebSecurityConfigurerAdapter {
+	static class MultipleBearerTokenResolverBeansConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.authorizeRequests()
-					.anyRequest().authenticated()
-					.and()
-				.oauth2ResourceServer()
-					.jwt();
+				.authorizeHttpRequests((requests) -> requests
+					.anyRequest().authenticated())
+				.oauth2ResourceServer((server) -> server
+					.jwt(Customizer.withDefaults()));
+			return http.build();
 			// @formatter:on
 		}
 
@@ -1922,6 +2074,7 @@ public class OAuth2ResourceServerConfigurerTests {
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
 	static class CustomAuthenticationDetailsSource {
 
@@ -1932,7 +2085,7 @@ public class OAuth2ResourceServerConfigurerTests {
 		SecurityFilterChain web(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.authorizeRequests((authorize) -> authorize
+				.authorizeHttpRequests((authorize) -> authorize
 					.anyRequest().authenticated()
 				)
 				.oauth2ResourceServer((oauth2) -> oauth2
@@ -1954,21 +2107,21 @@ public class OAuth2ResourceServerConfigurerTests {
 		}
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class CustomJwtDecoderOnDsl extends WebSecurityConfigurerAdapter {
+	static class CustomJwtDecoderOnDsl {
 
 		JwtDecoder decoder = mock(JwtDecoder.class);
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.authorizeRequests()
-					.anyRequest().authenticated()
-					.and()
-				.oauth2ResourceServer()
-					.jwt()
-						.decoder(decoder());
+				.authorizeHttpRequests((requests) -> requests
+					.anyRequest().authenticated())
+				.oauth2ResourceServer((server) -> server
+					.jwt((jwt) -> jwt.decoder(decoder())));
+			return http.build();
 			// @formatter:on
 		}
 
@@ -1978,26 +2131,25 @@ public class OAuth2ResourceServerConfigurerTests {
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class CustomJwtDecoderInLambdaOnDsl extends WebSecurityConfigurerAdapter {
+	static class CustomJwtDecoderInLambdaOnDsl {
 
 		JwtDecoder decoder = mock(JwtDecoder.class);
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.authorizeRequests((authorizeRequests) ->
-					authorizeRequests
+				.authorizeHttpRequests((authorize) -> authorize
 						.anyRequest().authenticated()
 				)
-				.oauth2ResourceServer((oauth2ResourceServer) ->
-					oauth2ResourceServer
-						.jwt((jwt) ->
-							jwt
+				.oauth2ResourceServer((oauth2) -> oauth2
+						.jwt((jwt) -> jwt
 								.decoder(decoder())
 						)
 				);
+			return http.build();
 			// @formatter:on
 		}
 
@@ -2007,18 +2159,19 @@ public class OAuth2ResourceServerConfigurerTests {
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class CustomJwtDecoderAsBean extends WebSecurityConfigurerAdapter {
+	static class CustomJwtDecoderAsBean {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.authorizeRequests()
-					.anyRequest().authenticated()
-					.and()
-				.oauth2ResourceServer()
-					.jwt();
+				.authorizeHttpRequests((requests) -> requests
+					.anyRequest().authenticated())
+				.oauth2ResourceServer((server) -> server
+					.jwt(Customizer.withDefaults()));
+			return http.build();
 			// @formatter:on
 		}
 
@@ -2029,19 +2182,20 @@ public class OAuth2ResourceServerConfigurerTests {
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class JwtAuthenticationManagerConfig extends WebSecurityConfigurerAdapter {
+	static class JwtAuthenticationManagerConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.authorizeRequests()
-					.anyRequest().authenticated()
-					.and()
-				.oauth2ResourceServer()
-					.jwt()
-						.authenticationManager(authenticationProvider()::authenticate);
+				.authorizeHttpRequests((requests) -> requests
+					.anyRequest().authenticated())
+				.oauth2ResourceServer((server) -> server
+					.jwt((jwt) -> jwt
+						.authenticationManager(authenticationProvider()::authenticate)));
+			return http.build();
 			// @formatter:on
 		}
 
@@ -2052,19 +2206,20 @@ public class OAuth2ResourceServerConfigurerTests {
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class DefaultAndJwtAuthenticationManagerConfig extends WebSecurityConfigurerAdapter {
+	static class DefaultAndJwtAuthenticationManagerConfig {
 
 		AuthenticationManager defaultAuthenticationManager = mock(AuthenticationManager.class);
 
 		AuthenticationManager jwtAuthenticationManager = mock(AuthenticationManager.class);
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
 					.authenticationManager(this.defaultAuthenticationManager)
-					.authorizeRequests((authz) -> authz
+					.authorizeHttpRequests((authz) -> authz
 							.anyRequest().authenticated()
 					)
 					.oauth2ResourceServer((oauth2) -> oauth2
@@ -2072,6 +2227,7 @@ public class OAuth2ResourceServerConfigurerTests {
 									.authenticationManager(this.jwtAuthenticationManager)
 							)
 					);
+			return http.build();
 			// @formatter:on
 		}
 
@@ -2085,21 +2241,23 @@ public class OAuth2ResourceServerConfigurerTests {
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class CustomJwtValidatorConfig extends WebSecurityConfigurerAdapter {
+	static class CustomJwtValidatorConfig {
 
 		@Autowired
 		NimbusJwtDecoder jwtDecoder;
 
 		private final OAuth2TokenValidator<Jwt> jwtValidator = mock(OAuth2TokenValidator.class);
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			this.jwtDecoder.setJwtValidator(this.jwtValidator);
 			// @formatter:off
 			http
-				.oauth2ResourceServer()
-					.jwt();
+				.oauth2ResourceServer((server) -> server
+					.jwt(Customizer.withDefaults()));
+			return http.build();
 			// @formatter:on
 		}
 
@@ -2109,14 +2267,15 @@ public class OAuth2ResourceServerConfigurerTests {
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class UnexpiredJwtClockSkewConfig extends WebSecurityConfigurerAdapter {
+	static class UnexpiredJwtClockSkewConfig {
 
 		@Autowired
 		NimbusJwtDecoder jwtDecoder;
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			Clock nearlyAnHourFromTokenExpiry = Clock.fixed(Instant.ofEpochMilli(4687181540000L),
 					ZoneId.systemDefault());
 			JwtTimestampValidator jwtValidator = new JwtTimestampValidator(Duration.ofHours(1));
@@ -2124,21 +2283,23 @@ public class OAuth2ResourceServerConfigurerTests {
 			this.jwtDecoder.setJwtValidator(jwtValidator);
 			// @formatter:off
 			http
-				.oauth2ResourceServer()
-					.jwt();
+				.oauth2ResourceServer((server) -> server
+					.jwt(Customizer.withDefaults()));
+			return http.build();
 			// @formatter:on
 		}
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class ExpiredJwtClockSkewConfig extends WebSecurityConfigurerAdapter {
+	static class ExpiredJwtClockSkewConfig {
 
 		@Autowired
 		NimbusJwtDecoder jwtDecoder;
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			Clock justOverOneHourAfterExpiry = Clock.fixed(Instant.ofEpochMilli(4687181595000L),
 					ZoneId.systemDefault());
 			JwtTimestampValidator jwtValidator = new JwtTimestampValidator(Duration.ofHours(1));
@@ -2146,12 +2307,14 @@ public class OAuth2ResourceServerConfigurerTests {
 			this.jwtDecoder.setJwtValidator(jwtValidator);
 			// @formatter:off
 			http
-				.oauth2ResourceServer()
-					.jwt();
+				.oauth2ResourceServer((server) -> server
+					.jwt(Customizer.withDefaults()));
+			return http.build();
 		}
 	}
+	@Configuration
 	@EnableWebSecurity
-	static class SingleKeyConfig extends WebSecurityConfigurerAdapter {
+	static class SingleKeyConfig {
 		byte[] spec = Base64.getDecoder().decode(
 				"MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAoXJ8OyOv/eRnce4akdan" +
 				"R4KYRfnC2zLV4uYNQpcFn6oHL0dj7D6kxQmsXoYgJV8ZVDn71KGmuLvolxsDncc2" +
@@ -2160,39 +2323,41 @@ public class OAuth2ResourceServerConfigurerTests {
 				"iZCtPzL/IffDUcfhLQteGebhW8A6eUHgpD5A1PQ+JCw/G7UOzZAjjDjtNM2eqm8j" +
 				"+Ms/gqnm4MiCZ4E+9pDN77CAAPVN7kuX6ejs9KBXpk01z48i9fORYk9u7rAkh1Hu" +
 				"QwIDAQAB");
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.authorizeRequests()
-					.anyRequest().authenticated()
-					.and()
-				.oauth2ResourceServer()
-					.jwt();
+				.authorizeHttpRequests((requests) -> requests
+					.anyRequest().authenticated())
+				.oauth2ResourceServer((server) -> server
+					.jwt(Customizer.withDefaults()));
+			return http.build();
 			// @formatter:on
 		}
 
 		@Bean
 		JwtDecoder decoder() throws Exception {
 			RSAPublicKey publicKey = (RSAPublicKey) KeyFactory.getInstance("RSA")
-					.generatePublic(new X509EncodedKeySpec(this.spec));
+				.generatePublic(new X509EncodedKeySpec(this.spec));
 			return NimbusJwtDecoder.withPublicKey(publicKey).build();
 		}
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class CustomAuthenticationEventPublisher extends WebSecurityConfigurerAdapter {
+	static class CustomAuthenticationEventPublisher {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.authorizeRequests()
-					.anyRequest().authenticated()
-					.and()
-				.oauth2ResourceServer()
-					.jwt();
+				.authorizeHttpRequests((requests) -> requests
+					.anyRequest().authenticated())
+				.oauth2ResourceServer((server) -> server
+					.jwt(Customizer.withDefaults()));
+			return http.build();
 			// @formatter:on
 		}
 
@@ -2208,58 +2373,62 @@ public class OAuth2ResourceServerConfigurerTests {
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class OpaqueTokenConfig extends WebSecurityConfigurerAdapter {
+	@EnableWebMvc
+	static class OpaqueTokenConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.authorizeRequests()
-					.antMatchers("/requires-read-scope").hasAuthority("SCOPE_message:read")
-					.anyRequest().authenticated()
-					.and()
-				.oauth2ResourceServer()
-					.opaqueToken();
+				.authorizeHttpRequests((requests) -> requests
+					.requestMatchers("/requires-read-scope").hasAuthority("SCOPE_message:read")
+					.anyRequest().authenticated())
+				.oauth2ResourceServer((server) -> server
+					.opaqueToken(Customizer.withDefaults()));
+			return http.build();
 			// @formatter:on
 		}
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class OpaqueTokenInLambdaConfig extends WebSecurityConfigurerAdapter {
+	@EnableWebMvc
+	static class OpaqueTokenInLambdaConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.authorizeRequests((authorizeRequests) ->
-					authorizeRequests
-						.antMatchers("/requires-read-scope").hasAuthority("SCOPE_message:read")
+				.authorizeHttpRequests((authorize) -> authorize
+						.requestMatchers("/requires-read-scope").hasAuthority("SCOPE_message:read")
 						.anyRequest().authenticated()
 				)
-				.oauth2ResourceServer((oauth2ResourceServer) ->
-					oauth2ResourceServer
+				.oauth2ResourceServer((oauth2) -> oauth2
 						.opaqueToken(withDefaults())
 				);
+			return http.build();
 			// @formatter:on
 		}
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class OpaqueTokenAuthenticationManagerConfig extends WebSecurityConfigurerAdapter {
+	static class OpaqueTokenAuthenticationManagerConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.authorizeRequests()
-					.anyRequest().authenticated()
-					.and()
-				.oauth2ResourceServer()
-					.opaqueToken()
-						.authenticationManager(authenticationProvider()::authenticate);
+				.authorizeHttpRequests((requests) -> requests
+					.anyRequest().authenticated())
+				.oauth2ResourceServer((server) -> server
+					.opaqueToken((opaqueToken) -> opaqueToken
+						.authenticationManager(authenticationProvider()::authenticate)));
+			return http.build();
 			// @formatter:on
 		}
 
@@ -2270,24 +2439,23 @@ public class OAuth2ResourceServerConfigurerTests {
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class OpaqueTokenAuthenticationManagerInLambdaConfig extends WebSecurityConfigurerAdapter {
+	static class OpaqueTokenAuthenticationManagerInLambdaConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.authorizeRequests((authorizeRequests) ->
-					authorizeRequests
+				.authorizeHttpRequests((authorize) -> authorize
 						.anyRequest().authenticated()
 				)
-				.oauth2ResourceServer((oauth2ResourceServer) ->
-					oauth2ResourceServer
-						.opaqueToken((opaqueToken) ->
-							opaqueToken
+				.oauth2ResourceServer((oauth2) -> oauth2
+						.opaqueToken((opaqueToken) -> opaqueToken
 								.authenticationManager(authenticationProvider()::authenticate)
 						)
 				);
+			return http.build();
 			// @formatter:on
 		}
 
@@ -2298,19 +2466,20 @@ public class OAuth2ResourceServerConfigurerTests {
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class DefaultAndOpaqueTokenAuthenticationManagerConfig extends WebSecurityConfigurerAdapter {
+	static class DefaultAndOpaqueTokenAuthenticationManagerConfig {
 
 		AuthenticationManager defaultAuthenticationManager = mock(AuthenticationManager.class);
 
 		AuthenticationManager opaqueTokenAuthenticationManager = mock(AuthenticationManager.class);
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
 					.authenticationManager(this.defaultAuthenticationManager)
-					.authorizeRequests((authz) -> authz
+					.authorizeHttpRequests((authz) -> authz
 							.anyRequest().authenticated()
 					)
 					.oauth2ResourceServer((oauth2) -> oauth2
@@ -2318,6 +2487,7 @@ public class OAuth2ResourceServerConfigurerTests {
 									.authenticationManager(this.opaqueTokenAuthenticationManager)
 							)
 					);
+			return http.build();
 			// @formatter:on
 		}
 
@@ -2331,75 +2501,143 @@ public class OAuth2ResourceServerConfigurerTests {
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class OpaqueAndJwtConfig extends WebSecurityConfigurerAdapter {
+	static class OpaqueAndJwtConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.oauth2ResourceServer()
-					.jwt()
-						.and()
-					.opaqueToken();
+				.oauth2ResourceServer((server) -> server
+					.jwt(Customizer.withDefaults())
+					.opaqueToken(Customizer.withDefaults()));
+			return http.build();
 			// @formatter:on
 		}
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class OpaqueTokenHalfConfiguredConfig extends WebSecurityConfigurerAdapter {
+	static class OpaqueTokenHalfConfiguredConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.authorizeRequests()
-					.anyRequest().authenticated()
-					.and()
-				.oauth2ResourceServer()
-					.opaqueToken()
-						.introspectionUri("https://idp.example.com"); // missing credentials
+				.authorizeHttpRequests((requests) -> requests
+					.anyRequest().authenticated())
+				.oauth2ResourceServer((server) -> server
+					.opaqueToken((opaqueToken) -> opaqueToken
+						.introspectionUri("https://idp.example.com")));
+			return http.build(); // missing credentials
 			// @formatter:on
 		}
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class MultipleIssuersConfig extends WebSecurityConfigurerAdapter {
+	static class MultipleAuthenticationConverterBeansConfig {
+
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+			// @formatter:off
+			http
+				.authorizeHttpRequests((requests) -> requests
+					.anyRequest().authenticated())
+				.oauth2ResourceServer((server) -> server
+					.jwt(Customizer.withDefaults()));
+			return http.build();
+			// @formatter:on
+		}
+
+		@Bean
+		AuthenticationConverter authenticationConverterOne() {
+			DefaultBearerTokenResolver resolver = new DefaultBearerTokenResolver();
+			resolver.setAllowUriQueryParameter(true);
+			BearerTokenAuthenticationConverter authenticationConverter = new BearerTokenAuthenticationConverter();
+			authenticationConverter.setBearerTokenResolver(resolver);
+			return authenticationConverter;
+		}
+
+		@Bean
+		AuthenticationConverter authenticationConverterTwo() {
+			DefaultBearerTokenResolver resolver = new DefaultBearerTokenResolver();
+			resolver.setAllowUriQueryParameter(true);
+			BearerTokenAuthenticationConverter authenticationConverter = new BearerTokenAuthenticationConverter();
+			authenticationConverter.setBearerTokenResolver(resolver);
+			return authenticationConverter;
+		}
+
+	}
+
+	@Configuration
+	@EnableWebSecurity
+	static class MultipleIssuersConfig {
 
 		@Autowired
 		MockWebServer web;
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			String issuerOne = this.web.url("/issuerOne").toString();
 			String issuerTwo = this.web.url("/issuerTwo").toString();
-			JwtIssuerAuthenticationManagerResolver authenticationManagerResolver = new JwtIssuerAuthenticationManagerResolver(
-					issuerOne, issuerTwo);
+			JwtIssuerAuthenticationManagerResolver authenticationManagerResolver = JwtIssuerAuthenticationManagerResolver
+				.fromTrustedIssuers(issuerOne, issuerTwo);
 			// @formatter:off
 			http
-				.oauth2ResourceServer()
-					.authenticationManagerResolver(authenticationManagerResolver);
+				.oauth2ResourceServer((server) -> server
+					.authenticationManagerResolver(authenticationManagerResolver))
+				.anonymous(AbstractHttpConfigurer::disable);
+			return http.build();
 			// @formatter:on
 		}
 
 	}
 
+	@Configuration
 	@EnableWebSecurity
-	static class AuthenticationManagerResolverPlusOtherConfig extends WebSecurityConfigurerAdapter {
+	static class AuthenticationManagerResolverPlusOtherConfig {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 			// @formatter:off
 			http
-				.authorizeRequests()
-					.anyRequest().authenticated()
-					.and()
-				.oauth2ResourceServer()
+				.authorizeHttpRequests((requests) -> requests
+					.anyRequest().authenticated())
+				.oauth2ResourceServer((server) -> server
 					.authenticationManagerResolver(mock(AuthenticationManagerResolver.class))
-					.opaqueToken();
+					.opaqueToken(Customizer.withDefaults()));
+			return http.build();
 			// @formatter:on
+		}
+
+	}
+
+	@Configuration
+	@EnableWebSecurity
+	@EnableWebMvc
+	static class OpaqueTokenAuthenticationConverterConfig {
+
+		@Bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+			// @formatter:off
+			http
+				.authorizeHttpRequests((requests) -> requests
+					.requestMatchers("/requires-read-scope").hasAuthority("SCOPE_message:read")
+					.anyRequest().authenticated())
+				.oauth2ResourceServer((server) -> server
+					.opaqueToken((opaqueToken) -> opaqueToken
+						.authenticationConverter(authenticationConverter())));
+			return http.build();
+			// @formatter:on
+		}
+
+		@Bean
+		OpaqueTokenAuthenticationConverter authenticationConverter() {
+			return mock(OpaqueTokenAuthenticationConverter.class);
 		}
 
 	}
@@ -2434,8 +2672,11 @@ public class OAuth2ResourceServerConfigurerTests {
 
 		@GetMapping("/requires-read-scope")
 		String requiresReadScope(JwtAuthenticationToken token) {
-			return token.getAuthorities().stream().map(GrantedAuthority::getAuthority).collect(Collectors.toList())
-					.toString();
+			return token.getAuthorities()
+				.stream()
+				.map(GrantedAuthority::getAuthority)
+				.collect(Collectors.toList())
+				.toString();
 		}
 
 		@GetMapping("/ms-requires-read-scope")
@@ -2466,7 +2707,7 @@ public class OAuth2ResourceServerConfigurerTests {
 		public void setEnvironment(Environment environment) {
 			if (environment instanceof ConfigurableEnvironment) {
 				((ConfigurableEnvironment) environment).getPropertySources()
-						.addFirst(new MockWebServerPropertySource());
+					.addFirst(new MockWebServerPropertySource());
 			}
 		}
 
@@ -2507,13 +2748,14 @@ public class OAuth2ResourceServerConfigurerTests {
 
 		@Bean
 		NimbusJwtDecoder jwtDecoder() {
-			return NimbusJwtDecoder.withJwkSetUri("https://example.org/.well-known/jwks.json").restOperations(this.rest)
-					.build();
+			return NimbusJwtDecoder.withJwkSetUri("https://example.org/.well-known/jwks.json")
+				.restOperations(this.rest)
+				.build();
 		}
 
 		@Bean
-		NimbusOpaqueTokenIntrospector tokenIntrospectionClient() {
-			return new NimbusOpaqueTokenIntrospector("https://example.org/introspect", this.rest);
+		OpaqueTokenIntrospector tokenIntrospectionClient() {
+			return new SpringOpaqueTokenIntrospector("https://example.org/introspect", this.rest);
 		}
 
 	}

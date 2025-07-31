@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2025 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,11 +18,10 @@ package org.springframework.security.saml2.provider.service.web.authentication.l
 
 import java.io.IOException;
 
-import javax.servlet.FilterChain;
-import javax.servlet.ServletException;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -36,13 +35,17 @@ import org.springframework.security.saml2.provider.service.authentication.logout
 import org.springframework.security.saml2.provider.service.authentication.logout.Saml2LogoutResponseValidatorParameters;
 import org.springframework.security.saml2.provider.service.authentication.logout.Saml2LogoutValidatorResult;
 import org.springframework.security.saml2.provider.service.registration.RelyingPartyRegistration;
+import org.springframework.security.saml2.provider.service.registration.RelyingPartyRegistrationRepository;
 import org.springframework.security.saml2.provider.service.registration.Saml2MessageBinding;
+import org.springframework.security.saml2.provider.service.web.RelyingPartyRegistrationPlaceholderResolvers;
+import org.springframework.security.saml2.provider.service.web.RelyingPartyRegistrationPlaceholderResolvers.UriResolver;
 import org.springframework.security.saml2.provider.service.web.RelyingPartyRegistrationResolver;
 import org.springframework.security.web.authentication.logout.LogoutSuccessHandler;
-import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 import org.springframework.security.web.util.matcher.RequestMatcher;
 import org.springframework.util.Assert;
 import org.springframework.web.filter.OncePerRequestFilter;
+
+import static org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher.pathPattern;
 
 /**
  * A filter for handling a &lt;saml2:LogoutResponse&gt; sent from the asserting party. A
@@ -70,7 +73,19 @@ public final class Saml2LogoutResponseFilter extends OncePerRequestFilter {
 
 	private Saml2LogoutRequestRepository logoutRequestRepository = new HttpSessionLogoutRequestRepository();
 
-	private RequestMatcher logoutRequestMatcher = new AntPathRequestMatcher("/logout/saml2/slo");
+	private RequestMatcher logoutRequestMatcher = pathPattern("/logout/saml2/slo");
+
+	public Saml2LogoutResponseFilter(RelyingPartyRegistrationRepository registrations,
+			Saml2LogoutResponseValidator logoutResponseValidator, LogoutSuccessHandler logoutSuccessHandler) {
+		this.relyingPartyRegistrationResolver = (request, id) -> {
+			if (id == null) {
+				return null;
+			}
+			return registrations.findByRegistrationId(id);
+		};
+		this.logoutResponseValidator = logoutResponseValidator;
+		this.logoutSuccessHandler = logoutSuccessHandler;
+	}
 
 	/**
 	 * Constructs a {@link Saml2LogoutResponseFilter} for accepting SAML 2.0 Logout
@@ -114,7 +129,7 @@ public final class Saml2LogoutResponseFilter extends OncePerRequestFilter {
 				logoutRequest.getRelyingPartyRegistrationId());
 		if (registration == null) {
 			this.logger
-					.trace("Did not process logout response since failed to find associated RelyingPartyRegistration");
+				.trace("Did not process logout response since failed to find associated RelyingPartyRegistration");
 			Saml2Error error = new Saml2Error(Saml2ErrorCodes.RELYING_PARTY_REGISTRATION_NOT_FOUND,
 					"Failed to find associated RelyingPartyRegistration");
 			response.sendError(HttpServletResponse.SC_BAD_REQUEST, error.toString());
@@ -126,22 +141,34 @@ public final class Saml2LogoutResponseFilter extends OncePerRequestFilter {
 			response.sendError(HttpServletResponse.SC_UNAUTHORIZED);
 			return;
 		}
-		if (!isCorrectBinding(request, registration)) {
-			this.logger.trace("Did not process logout request since used incorrect binding");
+		UriResolver uriResolver = RelyingPartyRegistrationPlaceholderResolvers.uriResolver(request, registration);
+		String entityId = uriResolver.resolve(registration.getEntityId());
+		String logoutLocation = uriResolver.resolve(registration.getSingleLogoutServiceLocation());
+		String logoutResponseLocation = uriResolver.resolve(registration.getSingleLogoutServiceResponseLocation());
+		registration = registration.mutate()
+			.entityId(entityId)
+			.singleLogoutServiceLocation(logoutLocation)
+			.singleLogoutServiceResponseLocation(logoutResponseLocation)
+			.build();
+		Saml2MessageBinding saml2MessageBinding = Saml2MessageBindingUtils.resolveBinding(request);
+		if (!registration.getSingleLogoutServiceBindings().contains(saml2MessageBinding)) {
+			this.logger.trace("Did not process logout response since used incorrect binding");
 			response.sendError(HttpServletResponse.SC_UNAUTHORIZED);
 			return;
 		}
 
 		String serialized = request.getParameter(Saml2ParameterNames.SAML_RESPONSE);
 		Saml2LogoutResponse logoutResponse = Saml2LogoutResponse.withRelyingPartyRegistration(registration)
-				.samlResponse(serialized).relayState(request.getParameter(Saml2ParameterNames.RELAY_STATE))
-				.binding(registration.getSingleLogoutServiceBinding())
-				.location(registration.getSingleLogoutServiceResponseLocation())
-				.parameters((params) -> params.put(Saml2ParameterNames.SIG_ALG,
-						request.getParameter(Saml2ParameterNames.SIG_ALG)))
-				.parameters((params) -> params.put(Saml2ParameterNames.SIGNATURE,
-						request.getParameter(Saml2ParameterNames.SIGNATURE)))
-				.build();
+			.samlResponse(serialized)
+			.relayState(request.getParameter(Saml2ParameterNames.RELAY_STATE))
+			.binding(saml2MessageBinding)
+			.location(registration.getSingleLogoutServiceResponseLocation())
+			.parameters((params) -> params.put(Saml2ParameterNames.SIG_ALG,
+					request.getParameter(Saml2ParameterNames.SIG_ALG)))
+			.parameters((params) -> params.put(Saml2ParameterNames.SIGNATURE,
+					request.getParameter(Saml2ParameterNames.SIGNATURE)))
+			.parametersQuery((params) -> request.getQueryString())
+			.build();
 		Saml2LogoutResponseValidatorParameters parameters = new Saml2LogoutResponseValidatorParameters(logoutResponse,
 				logoutRequest, registration);
 		Saml2LogoutValidatorResult result = this.logoutResponseValidator.validate(parameters);
@@ -166,14 +193,6 @@ public final class Saml2LogoutResponseFilter extends OncePerRequestFilter {
 	public void setLogoutRequestRepository(Saml2LogoutRequestRepository logoutRequestRepository) {
 		Assert.notNull(logoutRequestRepository, "logoutRequestRepository cannot be null");
 		this.logoutRequestRepository = logoutRequestRepository;
-	}
-
-	private boolean isCorrectBinding(HttpServletRequest request, RelyingPartyRegistration registration) {
-		Saml2MessageBinding requiredBinding = registration.getSingleLogoutServiceBinding();
-		if (requiredBinding == Saml2MessageBinding.POST) {
-			return "POST".equals(request.getMethod());
-		}
-		return "GET".equals(request.getMethod());
 	}
 
 }

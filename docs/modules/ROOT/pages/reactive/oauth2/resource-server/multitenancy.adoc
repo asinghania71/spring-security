@@ -1,21 +1,21 @@
-= OAuth 2.0 Resource Server Multitenancy
+= OAuth 2.0 Resource Server Multi-tenancy
 
 [[webflux-oauth2resourceserver-multitenancy]]
 == Multi-tenancy
 
 A resource server is considered multi-tenant when there are multiple strategies for verifying a bearer token, keyed by some tenant identifier.
 
-For example, your resource server may accept bearer tokens from two different authorization servers.
-Or, your authorization server may represent a multiplicity of issuers.
+For example, your resource server can accept bearer tokens from two different authorization servers.
+Alternately, your authorization server can represent a multiplicity of issuers.
 
-In each case, there are two things that need to be done and trade-offs associated with how you choose to do them:
+In each case, two things need to be done and trade-offs are associated with how you choose to do them:
 
-1. Resolve the tenant
-2. Propagate the tenant
+. Resolve the tenant.
+. Propagate the tenant.
 
 === Resolving the Tenant By Claim
 
-One way to differentiate tenants is by the issuer claim. Since the issuer claim accompanies signed JWTs, this can be done with the `JwtIssuerReactiveAuthenticationManagerResolver`, like so:
+One way to differentiate tenants is by the issuer claim. Since the issuer claim accompanies signed JWTs, you can do so with the `JwtIssuerReactiveAuthenticationManagerResolver`:
 
 [tabs]
 ======
@@ -23,14 +23,14 @@ Java::
 +
 [source,java,role="primary"]
 ----
-JwtIssuerReactiveAuthenticationManagerResolver authenticationManagerResolver = new JwtIssuerReactiveAuthenticationManagerResolver
-    ("https://idp.example.org/issuerOne", "https://idp.example.org/issuerTwo");
+JwtIssuerReactiveAuthenticationManagerResolver authenticationManagerResolver = JwtIssuerReactiveAuthenticationManagerResolver
+    .fromTrustedIssuers("https://idp.example.org/issuerOne", "https://idp.example.org/issuerTwo");
 
 http
-    .authorizeExchange(exchanges -> exchanges
+    .authorizeExchange((authorize) -> authorize
         .anyExchange().authenticated()
     )
-    .oauth2ResourceServer(oauth2 -> oauth2
+    .oauth2ResourceServer((oauth2) -> oauth2
         .authenticationManagerResolver(authenticationManagerResolver)
     );
 ----
@@ -39,7 +39,8 @@ Kotlin::
 +
 [source,kotlin,role="secondary"]
 ----
-val customAuthenticationManagerResolver = JwtIssuerReactiveAuthenticationManagerResolver("https://idp.example.org/issuerOne", "https://idp.example.org/issuerTwo")
+val customAuthenticationManagerResolver = JwtIssuerReactiveAuthenticationManagerResolver
+    .fromTrustedIssuers("https://idp.example.org/issuerOne", "https://idp.example.org/issuerTwo")
 
 return http {
     authorizeExchange {
@@ -58,8 +59,8 @@ This allows for an application startup that is independent from those authorizat
 
 ==== Dynamic Tenants
 
-Of course, you may not want to restart the application each time a new tenant is added.
-In this case, you can configure the `JwtIssuerReactiveAuthenticationManagerResolver` with a repository of `ReactiveAuthenticationManager` instances, which you can edit at runtime, like so:
+You may not want to restart the application each time a new tenant is added.
+In this case, you can configure the `JwtIssuerReactiveAuthenticationManagerResolver` with a repository of `ReactiveAuthenticationManager` instances, which you can edit at runtime:
 
 [tabs]
 ======
@@ -73,7 +74,7 @@ private Mono<ReactiveAuthenticationManager> addManager(
 	return Mono.fromCallable(() -> ReactiveJwtDecoders.fromIssuerLocation(issuer))
             .subscribeOn(Schedulers.boundedElastic())
             .map(JwtReactiveAuthenticationManager::new)
-            .doOnNext(authenticationManager -> authenticationManagers.put(issuer, authenticationManager));
+            .doOnNext((authenticationManager) -> authenticationManager.put(issuer, authenticationManager));
 }
 
 // ...
@@ -82,10 +83,10 @@ JwtIssuerReactiveAuthenticationManagerResolver authenticationManagerResolver =
         new JwtIssuerReactiveAuthenticationManagerResolver(authenticationManagers::get);
 
 http
-    .authorizeExchange(exchanges -> exchanges
+    .authorizeExchange((authorize) -> authorize
         .anyExchange().authenticated()
     )
-    .oauth2ResourceServer(oauth2 -> oauth2
+    .oauth2ResourceServer((oauth2) -> oauth2
         .authenticationManagerResolver(authenticationManagerResolver)
     );
 ----
@@ -116,8 +117,11 @@ return http {
 ----
 ======
 
-In this case, you construct `JwtIssuerReactiveAuthenticationManagerResolver` with a strategy for obtaining the `ReactiveAuthenticationManager` given the issuer.
-This approach allows us to add and remove elements from the repository (shown as a `Map` in the snippet) at runtime.
+In this case, you construct `JwtIssuerReactiveAuthenticationManagerResolver` with a strategy for obtaining the `ReactiveAuthenticationManager` given to the issuer.
+This approach lets us add and remove elements from the repository (shown as a `Map` in the preceding snippet) at runtime.
 
-NOTE: It would be unsafe to simply take any issuer and construct an `ReactiveAuthenticationManager` from it.
-The issuer should be one that the code can verify from a trusted source like an allowed list of issuers.
+[NOTE]
+====
+It would be unsafe to simply take any issuer and construct an `ReactiveAuthenticationManager` from it.
+The issuer should be one that the code can verify from a trusted source, such as an allowed list of issuers.
+====

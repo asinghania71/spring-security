@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2016 the original author or authors.
+ * Copyright 2002-2025 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@ import org.junit.jupiter.api.Test;
 
 import org.springframework.ldap.core.DirContextAdapter;
 import org.springframework.ldap.core.DirContextOperations;
-import org.springframework.ldap.core.DistinguishedName;
+import org.springframework.ldap.support.LdapNameBuilder;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.AuthorityUtils;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -43,7 +43,7 @@ public class LdapUserDetailsServiceTests {
 	@Test
 	public void rejectsNullSearchObject() {
 		assertThatIllegalArgumentException()
-				.isThrownBy(() -> new LdapUserDetailsService(null, new NullLdapAuthoritiesPopulator()));
+			.isThrownBy(() -> new LdapUserDetailsService(null, new NullLdapAuthoritiesPopulator()));
 	}
 
 	@Test
@@ -53,19 +53,19 @@ public class LdapUserDetailsServiceTests {
 
 	@Test
 	public void correctAuthoritiesAreReturned() {
-		DirContextAdapter userData = new DirContextAdapter(new DistinguishedName("uid=joe"));
+		DirContextAdapter userData = new DirContextAdapter(LdapNameBuilder.newInstance("uid=joe").build());
 		LdapUserDetailsService service = new LdapUserDetailsService(new MockUserSearch(userData),
 				new MockAuthoritiesPopulator());
 		service.setUserDetailsMapper(new LdapUserDetailsMapper());
 		UserDetails user = service.loadUserByUsername("doesntmatterwegetjoeanyway");
 		Set<String> authorities = AuthorityUtils.authorityListToSet(user.getAuthorities());
 		assertThat(authorities).hasSize(1);
-		assertThat(authorities.contains("ROLE_FROM_POPULATOR")).isTrue();
+		assertThat(authorities).contains("ROLE_FROM_POPULATOR");
 	}
 
 	@Test
 	public void nullPopulatorConstructorReturnsEmptyAuthoritiesList() {
-		DirContextAdapter userData = new DirContextAdapter(new DistinguishedName("uid=joe"));
+		DirContextAdapter userData = new DirContextAdapter(LdapNameBuilder.newInstance("uid=joe").build());
 		LdapUserDetailsService service = new LdapUserDetailsService(new MockUserSearch(userData));
 		UserDetails user = service.loadUserByUsername("doesntmatterwegetjoeanyway");
 		assertThat(user.getAuthorities()).isEmpty();

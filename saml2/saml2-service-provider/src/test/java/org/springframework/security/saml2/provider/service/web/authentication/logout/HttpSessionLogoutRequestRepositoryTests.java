@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,11 @@
 
 package org.springframework.security.saml2.provider.service.web.authentication.logout;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -78,6 +83,23 @@ public class HttpSessionLogoutRequestRepositoryTests {
 	}
 
 	@Test
+	void serializeAndDeserializeSaml2LogoutRequest() throws IOException, ClassNotFoundException {
+		Saml2LogoutRequest requestToSerialize = createLogoutRequest().relayState("state-serialized").build();
+		byte[] data;
+		try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+				ObjectOutputStream objectOutputStream = new ObjectOutputStream(outputStream)) {
+			objectOutputStream.writeObject(requestToSerialize);
+			data = outputStream.toByteArray();
+		}
+
+		try (ByteArrayInputStream inputStream = new ByteArrayInputStream(data);
+				ObjectInputStream objectInputStream = new ObjectInputStream(inputStream)) {
+			Saml2LogoutRequest deserializedRequest = (Saml2LogoutRequest) objectInputStream.readObject();
+			assertThat(requestToSerialize.getRelayState()).isEqualTo(deserializedRequest.getRelayState());
+		}
+	}
+
+	@Test
 	public void loadLogoutRequestWhenSavedAndStateParameterNullThenReturnNull() {
 		MockHttpServletRequest request = new MockHttpServletRequest();
 		Saml2LogoutRequest logoutRequest = createLogoutRequest().build();
@@ -89,21 +111,21 @@ public class HttpSessionLogoutRequestRepositoryTests {
 	public void saveLogoutRequestWhenHttpServletRequestIsNullThenThrowIllegalArgumentException() {
 		Saml2LogoutRequest logoutRequest = createLogoutRequest().build();
 		assertThatIllegalArgumentException().isThrownBy(() -> this.logoutRequestRepository
-				.saveLogoutRequest(logoutRequest, null, new MockHttpServletResponse()));
+			.saveLogoutRequest(logoutRequest, null, new MockHttpServletResponse()));
 	}
 
 	@Test
 	public void saveLogoutRequestWhenHttpServletResponseIsNullThenThrowIllegalArgumentException() {
 		Saml2LogoutRequest logoutRequest = createLogoutRequest().build();
 		assertThatIllegalArgumentException().isThrownBy(() -> this.logoutRequestRepository
-				.saveLogoutRequest(logoutRequest, new MockHttpServletRequest(), null));
+			.saveLogoutRequest(logoutRequest, new MockHttpServletRequest(), null));
 	}
 
 	@Test
 	public void saveLogoutRequestWhenStateNullThenThrowIllegalArgumentException() {
 		Saml2LogoutRequest logoutRequest = createLogoutRequest().relayState(null).build();
 		assertThatIllegalArgumentException().isThrownBy(() -> this.logoutRequestRepository
-				.saveLogoutRequest(logoutRequest, new MockHttpServletRequest(), new MockHttpServletResponse()));
+			.saveLogoutRequest(logoutRequest, new MockHttpServletRequest(), new MockHttpServletResponse()));
 	}
 
 	@Test
@@ -154,14 +176,14 @@ public class HttpSessionLogoutRequestRepositoryTests {
 
 	@Test
 	public void removeLogoutRequestWhenHttpServletRequestIsNullThenThrowIllegalArgumentException() {
-		assertThatIllegalArgumentException().isThrownBy(
-				() -> this.logoutRequestRepository.removeLogoutRequest(null, new MockHttpServletResponse()));
+		assertThatIllegalArgumentException()
+			.isThrownBy(() -> this.logoutRequestRepository.removeLogoutRequest(null, new MockHttpServletResponse()));
 	}
 
 	@Test
 	public void removeLogoutRequestWhenHttpServletResponseIsNullThenThrowIllegalArgumentException() {
 		assertThatIllegalArgumentException()
-				.isThrownBy(() -> this.logoutRequestRepository.removeLogoutRequest(new MockHttpServletRequest(), null));
+			.isThrownBy(() -> this.logoutRequestRepository.removeLogoutRequest(new MockHttpServletRequest(), null));
 	}
 
 	@Test
@@ -202,8 +224,10 @@ public class HttpSessionLogoutRequestRepositoryTests {
 
 	private Saml2LogoutRequest.Builder createLogoutRequest() {
 		RelyingPartyRegistration registration = TestRelyingPartyRegistrations.full().build();
-		return Saml2LogoutRequest.withRelyingPartyRegistration(registration).samlRequest("request").id("id")
-				.parameters((params) -> params.put(Saml2ParameterNames.RELAY_STATE, "state-1234"));
+		return Saml2LogoutRequest.withRelyingPartyRegistration(registration)
+			.samlRequest("request")
+			.id("id")
+			.parameters((params) -> params.put(Saml2ParameterNames.RELAY_STATE, "state-1234"));
 	}
 
 	static class MockDistributedHttpSession extends MockHttpSession {

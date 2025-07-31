@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2017 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,17 +19,18 @@ package org.springframework.security.config.test;
 import java.io.Closeable;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
 
-import javax.servlet.Filter;
-import javax.servlet.FilterChain;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
+import jakarta.servlet.Filter;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 
 import org.springframework.beans.factory.annotation.AutowiredAnnotationBeanPostProcessor;
 import org.springframework.mock.web.MockServletConfig;
-import org.springframework.mock.web.MockServletContext;
 import org.springframework.security.config.BeanIds;
 import org.springframework.security.config.util.InMemoryXmlWebApplicationContext;
+import org.springframework.security.web.servlet.MockServletContext;
 import org.springframework.test.context.web.GenericXmlWebContextLoader;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
@@ -55,6 +56,10 @@ public class SpringTestContext implements Closeable {
 	private ConfigurableWebApplicationContext context;
 
 	private List<Filter> filters = new ArrayList<>();
+
+	private DeferAddFilter deferAddFilter = new DeferAddFilter();
+
+	private List<Consumer<ConfigurableWebApplicationContext>> postProcessors = new ArrayList<>();
 
 	public SpringTestContext(Object test) {
 		setTest(test);
@@ -104,24 +109,30 @@ public class SpringTestContext implements Closeable {
 		return this;
 	}
 
+	public SpringTestContext postProcessor(Consumer<ConfigurableWebApplicationContext> contextConsumer) {
+		this.postProcessors.add(contextConsumer);
+		return this;
+	}
+
 	public SpringTestContext mockMvcAfterSpringSecurityOk() {
-		return addFilter(new OncePerRequestFilter() {
+		this.deferAddFilter.addFilter(new OncePerRequestFilter() {
 			@Override
 			protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
 					FilterChain filterChain) {
 				response.setStatus(HttpServletResponse.SC_OK);
 			}
 		});
+		return this;
 	}
 
-	private SpringTestContext addFilter(Filter filter) {
+	public SpringTestContext addFilter(Filter filter) {
 		this.filters.add(filter);
 		return this;
 	}
 
 	public ConfigurableWebApplicationContext getContext() {
 		if (!this.context.isRunning()) {
-			this.context.setServletContext(new MockServletContext());
+			this.context.setServletContext(MockServletContext.mvc());
 			this.context.setServletConfig(new MockServletConfig());
 			this.context.refresh();
 		}
@@ -129,14 +140,18 @@ public class SpringTestContext implements Closeable {
 	}
 
 	public void autowire() {
-		this.context.setServletContext(new MockServletContext());
+		this.context.setServletContext(MockServletContext.mvc());
 		this.context.setServletConfig(new MockServletConfig());
+		for (Consumer<ConfigurableWebApplicationContext> postProcessor : this.postProcessors) {
+			postProcessor.accept(this.context);
+		}
 		this.context.refresh();
 		if (this.context.containsBean(BeanIds.SPRING_SECURITY_FILTER_CHAIN)) {
 			// @formatter:off
-			MockMvc mockMvc = MockMvcBuilders.webAppContextSetup(this.context).
-					apply(springSecurity())
-					.apply(new AddFilter())
+			MockMvc mockMvc = MockMvcBuilders.webAppContextSetup(this.context)
+					.addFilters(this.filters.toArray(new Filter[0]))
+					.apply(springSecurity())
+					.apply(this.deferAddFilter)
 					.build();
 			// @formatter:on
 			this.context.getBeanFactory().registerResolvableDependency(MockMvc.class, mockMvc);
@@ -146,12 +161,18 @@ public class SpringTestContext implements Closeable {
 		bpp.processInjection(this.test);
 	}
 
-	private class AddFilter implements MockMvcConfigurer {
+	private static class DeferAddFilter implements MockMvcConfigurer {
+
+		private List<Filter> filters = new ArrayList<>();
+
+		void addFilter(Filter filter) {
+			this.filters.add(filter);
+		}
 
 		@Override
 		public RequestPostProcessor beforeMockMvcCreated(ConfigurableMockMvcBuilder<?> builder,
 				WebApplicationContext context) {
-			builder.addFilters(SpringTestContext.this.filters.toArray(new Filter[0]));
+			builder.addFilters(this.filters.toArray(new Filter[0]));
 			return null;
 		}
 

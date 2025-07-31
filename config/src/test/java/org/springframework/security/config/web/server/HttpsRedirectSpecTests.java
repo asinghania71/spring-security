@@ -23,6 +23,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity;
 import org.springframework.security.config.test.SpringTestContext;
 import org.springframework.security.config.test.SpringTestContextExtension;
@@ -152,6 +153,7 @@ public class HttpsRedirectSpecTests {
 		// @formatter:on
 	}
 
+	@Configuration
 	@EnableWebFlux
 	@EnableWebFluxSecurity
 	static class RedirectToHttpConfig {
@@ -160,13 +162,14 @@ public class HttpsRedirectSpecTests {
 		SecurityWebFilterChain springSecurity(ServerHttpSecurity http) {
 			// @formatter:off
 			http
-				.redirectToHttps();
+				.redirectToHttps(withDefaults());
 			// @formatter:on
 			return http.build();
 		}
 
 	}
 
+	@Configuration
 	@EnableWebFlux
 	@EnableWebFluxSecurity
 	static class RedirectToHttpsInLambdaConfig {
@@ -182,6 +185,7 @@ public class HttpsRedirectSpecTests {
 
 	}
 
+	@Configuration
 	@EnableWebFlux
 	@EnableWebFluxSecurity
 	static class SometimesRedirectToHttpsConfig {
@@ -190,14 +194,15 @@ public class HttpsRedirectSpecTests {
 		SecurityWebFilterChain springSecurity(ServerHttpSecurity http) {
 			// @formatter:off
 			http
-				.redirectToHttps()
-					.httpsRedirectWhen(new PathPatternParserServerWebExchangeMatcher("/secure"));
+				.redirectToHttps((https) -> https
+					.httpsRedirectWhen(new PathPatternParserServerWebExchangeMatcher("/secure")));
 			// @formatter:on
 			return http.build();
 		}
 
 	}
 
+	@Configuration
 	@EnableWebFlux
 	@EnableWebFluxSecurity
 	static class SometimesRedirectToHttpsInLambdaConfig {
@@ -206,8 +211,7 @@ public class HttpsRedirectSpecTests {
 		SecurityWebFilterChain springSecurity(ServerHttpSecurity http) {
 			// @formatter:off
 			http
-				.redirectToHttps((redirectToHttps) ->
-					redirectToHttps
+				.redirectToHttps((redirectToHttps) -> redirectToHttps
 						.httpsRedirectWhen(new PathPatternParserServerWebExchangeMatcher("/secure"))
 				);
 			// @formatter:on
@@ -216,6 +220,7 @@ public class HttpsRedirectSpecTests {
 
 	}
 
+	@Configuration
 	@EnableWebFlux
 	@EnableWebFluxSecurity
 	static class RedirectToHttpsViaCustomPortsConfig {
@@ -224,8 +229,8 @@ public class HttpsRedirectSpecTests {
 		SecurityWebFilterChain springSecurity(ServerHttpSecurity http) {
 			// @formatter:off
 			http
-				.redirectToHttps()
-					.portMapper(portMapper());
+				.redirectToHttps((https) -> https
+					.portMapper(portMapper()));
 			// @formatter:on
 			return http.build();
 		}
@@ -237,6 +242,7 @@ public class HttpsRedirectSpecTests {
 
 	}
 
+	@Configuration
 	@EnableWebFlux
 	@EnableWebFluxSecurity
 	static class RedirectToHttpsViaCustomPortsInLambdaConfig {
@@ -245,8 +251,7 @@ public class HttpsRedirectSpecTests {
 		SecurityWebFilterChain springSecurity(ServerHttpSecurity http) {
 			// @formatter:off
 			http
-				.redirectToHttps((redirectToHttps) ->
-					redirectToHttps
+				.redirectToHttps((redirectToHttps) -> redirectToHttps
 						.portMapper(portMapper())
 				);
 			// @formatter:on

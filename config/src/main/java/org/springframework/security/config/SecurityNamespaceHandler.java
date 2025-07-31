@@ -1,5 +1,5 @@
 /*
- * Copyright 2009-2020 the original author or authors.
+ * Copyright 2002-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,6 +47,7 @@ import org.springframework.security.config.method.InterceptMethodsBeanDefinition
 import org.springframework.security.config.method.MethodSecurityBeanDefinitionParser;
 import org.springframework.security.config.method.MethodSecurityMetadataSourceBeanDefinitionParser;
 import org.springframework.security.config.oauth2.client.ClientRegistrationsBeanDefinitionParser;
+import org.springframework.security.config.saml2.RelyingPartyRegistrationsBeanDefinitionParser;
 import org.springframework.security.config.websocket.WebSocketMessageBrokerSecurityBeanDefinitionParser;
 import org.springframework.security.core.SpringSecurityCoreVersion;
 import org.springframework.util.ClassUtils;
@@ -84,17 +85,19 @@ public final class SecurityNamespaceHandler implements NamespaceHandler {
 		String version = pkg.getImplementationVersion();
 		this.logger.info("Spring Security 'config' module version is " + version);
 		if (version.compareTo(coreVersion) != 0) {
-			this.logger.error(
-					"You are running with different versions of the Spring Security 'core' and 'config' modules");
+			this.logger
+				.error("You are running with different versions of the Spring Security 'core' and 'config' modules");
 		}
 	}
 
 	@Override
 	public BeanDefinition parse(Element element, ParserContext pc) {
 		if (!namespaceMatchesVersion(element)) {
-			pc.getReaderContext().fatal("You cannot use a spring-security-2.0.xsd or spring-security-3.0.xsd or "
-					+ "spring-security-3.1.xsd schema or spring-security-3.2.xsd schema or spring-security-4.0.xsd schema "
-					+ "with Spring Security 5.6. Please update your schema declarations to the 5.6 schema.", element);
+			pc.getReaderContext()
+				.fatal("You cannot use a spring-security-2.0.xsd or spring-security-3.0.xsd or "
+						+ "spring-security-3.1.xsd schema or spring-security-3.2.xsd schema or spring-security-4.0.xsd schema "
+						+ "with Spring Security 7.0. Please update your schema declarations to the 7.0 schema.",
+						element);
 		}
 		String name = pc.getDelegate().getLocalName(element);
 		BeanDefinitionParser parser = this.parsers.get(name);
@@ -139,8 +142,9 @@ public final class SecurityNamespaceHandler implements NamespaceHandler {
 	}
 
 	private void reportUnsupportedNodeType(String name, ParserContext pc, Node node) {
-		pc.getReaderContext().fatal("Security namespace does not support decoration of "
-				+ ((node instanceof Element) ? "element" : "attribute") + " [" + name + "]", node);
+		pc.getReaderContext()
+			.fatal("Security namespace does not support decoration of "
+					+ ((node instanceof Element) ? "element" : "attribute") + " [" + name + "]", node);
 	}
 
 	private void reportMissingWebClasses(String nodeName, ParserContext pc, Node node) {
@@ -191,6 +195,7 @@ public final class SecurityNamespaceHandler implements NamespaceHandler {
 		this.parsers.put(Elements.FILTER_CHAIN, new FilterChainBeanDefinitionParser());
 		this.filterChainMapBDD = new FilterChainMapBeanDefinitionDecorator();
 		this.parsers.put(Elements.CLIENT_REGISTRATIONS, new ClientRegistrationsBeanDefinitionParser());
+		this.parsers.put(Elements.RELYING_PARTY_REGISTRATIONS, new RelyingPartyRegistrationsBeanDefinitionParser());
 	}
 
 	private void loadWebSocketParsers() {
@@ -216,7 +221,7 @@ public final class SecurityNamespaceHandler implements NamespaceHandler {
 
 	private boolean matchesVersionInternal(Element element) {
 		String schemaLocation = element.getAttributeNS("http://www.w3.org/2001/XMLSchema-instance", "schemaLocation");
-		return schemaLocation.matches("(?m).*spring-security-5\\.6.*.xsd.*")
+		return schemaLocation.matches("(?m).*spring-security-7\\.0.*.xsd.*")
 				|| schemaLocation.matches("(?m).*spring-security.xsd.*")
 				|| !schemaLocation.matches("(?m).*spring-security.*");
 	}

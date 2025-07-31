@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2019 the original author or authors.
+ * Copyright 2002-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,12 +20,13 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 
-import javax.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletRequest;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.AuthenticationDetailsSource;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.HttpSecurityBuilder;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.web.AuthenticationEntryPoint;
@@ -36,6 +37,8 @@ import org.springframework.security.web.authentication.WebAuthenticationDetailsS
 import org.springframework.security.web.authentication.logout.HttpStatusReturningLogoutSuccessHandler;
 import org.springframework.security.web.authentication.www.BasicAuthenticationEntryPoint;
 import org.springframework.security.web.authentication.www.BasicAuthenticationFilter;
+import org.springframework.security.web.context.RequestAttributeSecurityContextRepository;
+import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.security.web.util.matcher.AndRequestMatcher;
 import org.springframework.security.web.util.matcher.MediaTypeRequestMatcher;
 import org.springframework.security.web.util.matcher.NegatedRequestMatcher;
@@ -75,6 +78,7 @@ import org.springframework.web.accept.HeaderContentNegotiationStrategy;
  * </ul>
  *
  * @author Rob Winch
+ * @author Evgeniy Cheban
  * @since 3.2
  */
 public final class HttpBasicConfigurer<B extends HttpSecurityBuilder<B>>
@@ -91,9 +95,11 @@ public final class HttpBasicConfigurer<B extends HttpSecurityBuilder<B>>
 
 	private BasicAuthenticationEntryPoint basicAuthEntryPoint = new BasicAuthenticationEntryPoint();
 
+	private SecurityContextRepository securityContextRepository;
+
 	/**
 	 * Creates a new instance
-	 * @see HttpSecurity#httpBasic()
+	 * @see HttpSecurity#httpBasic(Customizer)
 	 */
 	public HttpBasicConfigurer() {
 		realmName(DEFAULT_REALM);
@@ -142,6 +148,19 @@ public final class HttpBasicConfigurer<B extends HttpSecurityBuilder<B>>
 		return this;
 	}
 
+	/**
+	 * Specifies a custom {@link SecurityContextRepository} to use for basic
+	 * authentication. The default is {@link RequestAttributeSecurityContextRepository}.
+	 * @param securityContextRepository the custom {@link SecurityContextRepository} to
+	 * use
+	 * @return {@link HttpBasicConfigurer} for additional customization
+	 * @since 6.1
+	 */
+	public HttpBasicConfigurer<B> securityContextRepository(SecurityContextRepository securityContextRepository) {
+		this.securityContextRepository = securityContextRepository;
+		return this;
+	}
+
 	@Override
 	public void init(B http) {
 		registerDefaults(http);
@@ -161,8 +180,7 @@ public final class HttpBasicConfigurer<B extends HttpSecurityBuilder<B>>
 		allMatcher.setUseEquals(true);
 		RequestMatcher notHtmlMatcher = new NegatedRequestMatcher(
 				new MediaTypeRequestMatcher(contentNegotiationStrategy, MediaType.TEXT_HTML));
-		RequestMatcher restNotHtmlMatcher = new AndRequestMatcher(
-				Arrays.<RequestMatcher>asList(notHtmlMatcher, restMatcher));
+		RequestMatcher restNotHtmlMatcher = new AndRequestMatcher(Arrays.asList(notHtmlMatcher, restMatcher));
 		RequestMatcher preferredMatcher = new OrRequestMatcher(
 				Arrays.asList(X_REQUESTED_WITH, restNotHtmlMatcher, allMatcher));
 		registerDefaultEntryPoint(http, preferredMatcher);
@@ -195,10 +213,14 @@ public final class HttpBasicConfigurer<B extends HttpSecurityBuilder<B>>
 		if (this.authenticationDetailsSource != null) {
 			basicAuthenticationFilter.setAuthenticationDetailsSource(this.authenticationDetailsSource);
 		}
+		if (this.securityContextRepository != null) {
+			basicAuthenticationFilter.setSecurityContextRepository(this.securityContextRepository);
+		}
 		RememberMeServices rememberMeServices = http.getSharedObject(RememberMeServices.class);
 		if (rememberMeServices != null) {
 			basicAuthenticationFilter.setRememberMeServices(rememberMeServices);
 		}
+		basicAuthenticationFilter.setSecurityContextHolderStrategy(getSecurityContextHolderStrategy());
 		basicAuthenticationFilter = postProcess(basicAuthenticationFilter);
 		http.addFilter(basicAuthenticationFilter);
 	}
